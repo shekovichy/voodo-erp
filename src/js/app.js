@@ -6522,7 +6522,67 @@ function renderHomeIcons() {
 
 
 // Override showPage to render home icons when navigating to home
-// Patch showPage: update badges + home icons (no hoisting issues)
+
+
+
+/* ═══════════════════════════════════════════════════
+   BRANCH USER ROLE RESTRICTIONS
+   ═══════════════════════════════════════════════════ */
+
+// Patch openExpenseRequestModal: auto-lock branch for non-admin users
+(function() {
+  var _origExpModal = openExpenseRequestModal;
+  window.openExpenseRequestModal = function() {
+    _origExpModal();
+    if (currentUser !== 'admin') {
+      var brSel = document.getElementById('expReqBranchId');
+      if (brSel) {
+        brSel.value = currentBranch;
+        var row = brSel.closest('div');
+        if (row) row.style.display = 'none';
+      }
+    }
+  };
+})();
+
+// Patch openLeaveRequestModal: show only employees of current branch
+(function() {
+  var _origLeaveModal = openLeaveRequestModal;
+  window.openLeaveRequestModal = function() {
+    _origLeaveModal();
+    if (currentUser !== 'admin') {
+      var empSel = document.getElementById('leaveReqEmpName');
+      if (empSel) {
+        var filtered = getSalespeople()
+          .filter(function(e) {
+            if (typeof e === 'string') return true;
+            return !e.branch || e.branch === currentBranch;
+          })
+          .map(function(e) { return typeof e === 'string' ? e : e.name; })
+          .filter(Boolean);
+        empSel.innerHTML = filtered.map(function(n) {
+          return '<option value="' + n + '">' + n + '</option>';
+        }).join('');
+      }
+    }
+  };
+})();
+
+// Reports page: restrict sections visible to branch users
+function applyBranchReportsFilter() {
+  var isAdmin = (currentUser === 'admin');
+  ['rpt-inventory', 'rpt-profit', 'rpt-kpi', 'rpt-returns'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = isAdmin ? '' : 'none';
+  });
+  var bf = document.getElementById('rptBranchFilter');
+  if (bf) {
+    bf.disabled = !isAdmin;
+    if (!isAdmin) bf.value = currentBranch;
+  }
+}
+
+// Unified showPage wrapper: badges + home icons + branch reports filter
 (function() {
   var _orig = showPage;
   window.showPage = function(page) {
@@ -6530,7 +6590,8 @@ function renderHomeIcons() {
     setTimeout(function() {
       try { updateExpReqBadge(); } catch(e) {}
       try { updateLeaveReqBadge(); } catch(e) {}
-      if (page === 'home') { try { renderHomeIcons(); } catch(e) {} }
+      if (page === 'home')    { try { renderHomeIcons(); } catch(e) {} }
+      if (page === 'reports') { try { applyBranchReportsFilter(); } catch(e) {} }
     }, 50);
   };
 })();
