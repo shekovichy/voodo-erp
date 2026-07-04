@@ -831,6 +831,7 @@ body.warehouse-mode #cartFab {
         <button id="approvalBellBtn" onclick="openApprovalsPanel()" title="طلبات تعديل الأسعار" style="display:none;position:relative;background:none;border:none;cursor:pointer;font-size:18px;padding:4px 6px;">
           🔔<span id="approvalBadge" style="display:none;position:absolute;top:-2px;right:-2px;background:#ef4444;color:white;border-radius:50%;font-size:10px;min-width:16px;height:16px;line-height:16px;text-align:center;padding:0 3px;">0</span>
         </button>
+        <button class="bell-btn" onclick="openPrinterSettings()" title="إعدادات الطابعة">🖨️</button>
         <button id="pwaInstallBtn" onclick="installPWA()"
           title="تثبيت التطبيق"
           style="display:none;align-items:center;gap:4px;background:var(--primary);color:white;border:none;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:600;transition:all .2s;">
@@ -1776,6 +1777,7 @@ body.warehouse-mode #cartFab {
           <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <select class="form-control" id="hrMonthFilter" onchange="renderHRPage();if(_hrActiveTab==='attendance')renderAttendancePane();if(_hrActiveTab==='payroll')renderPayrollPane();" style="width:auto;"><option value="">الشهر الحالي</option></select>
             <button class="btn btn-primary" onclick="openHRTargetModal()">🎯 تحديد الأهداف</button>
+            <button class="btn btn-outline" style="font-size:13px" onclick="openFingerprintModal()" title="استيراد بيانات البصمة">📲 استيراد البصمة</button>
           </div>
         </div>
         <!-- HR Tabs -->
@@ -1783,6 +1785,7 @@ body.warehouse-mode #cartFab {
           <button id="hrTab_targets" class="btn" style="font-size:13px;padding:6px 16px;border-radius:7px;background:white;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.1);" onclick="switchHRTab('targets')">🎯 الأهداف والعمولات</button>
           <button id="hrTab_attendance" class="btn" style="font-size:13px;padding:6px 16px;border-radius:7px;" onclick="switchHRTab('attendance')">📅 الحضور</button>
           <button id="hrTab_payroll" class="btn" style="font-size:13px;padding:6px 16px;border-radius:7px;" onclick="switchHRTab('payroll')">💰 الرواتب</button>
+          <button id="hrTab_leavereqs" class="btn" style="font-size:13px;padding:6px 16px;border-radius:7px;" onclick="switchHRTab('leavereqs')">📝 الإجازات <span id="leaveReqBadge" style="display:none;background:#dc3545;color:#fff;border-radius:50%;font-size:10px;min-width:16px;height:16px;line-height:16px;text-align:center;padding:0 3px;">0</span></button>
         </div>
         <!-- Pane: Targets -->
         <div id="hrPane_targets">
@@ -1798,6 +1801,14 @@ body.warehouse-mode #cartFab {
         <div id="hrPane_attendance" class="hidden"></div>
         <!-- Pane: Payroll -->
         <div id="hrPane_payroll" class="hidden" style="overflow-x:auto;"></div>
+        <!-- Pane: Leave Requests -->
+        <div id="hrPane_leavereqs" class="hidden" style="padding-top:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+            <div style="font-weight:700;font-size:15px">📋 طلبات الإجازات والأذونات</div>
+            <button id="leaveReqAddBtn" class="btn btn-primary" style="font-size:13px" onclick="openLeaveRequestModal()">➕ طلب إجازة / إذن</button>
+          </div>
+          <div id="leaveReqList"></div>
+        </div>
       </div>
 
       <!-- ══ ACCOUNTING ══ -->
@@ -1826,9 +1837,16 @@ body.warehouse-mode #cartFab {
               <option value="">جميع الفروع</option>
               <option value="company">🏢 إداري (شركة)</option>
             </select>
-            <button class="btn btn-primary" onclick="openExpenseModal()">➕ إضافة مصروف</button>
+            <button class="btn btn-primary" id="expAddBtn" onclick="openExpenseModal()">➕ إضافة مصروف</button>
+            <button class="btn btn-outline" id="expReqBranchBtn" style="display:none;font-size:13px" onclick="openExpenseRequestModal()">📤 طلب مصروف</button>
           </div>
         </div>
+        <!-- Expense Tabs -->
+        <div style="display:flex;gap:4px;margin-bottom:16px;background:var(--bg-secondary);padding:4px;border-radius:10px;width:fit-content;">
+          <button id="expTabBtn_main" class="btn" style="font-size:13px;padding:6px 16px;border-radius:7px;background:white;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.1);" onclick="switchExpTab('main')">💸 المصاريف</button>
+          <button id="expTabBtn_requests" class="btn" style="font-size:13px;padding:6px 16px;border-radius:7px;" onclick="switchExpTab('requests')">📋 طلبات الاعتماد <span id="expReqBadge" style="display:none;background:#dc3545;color:#fff;border-radius:50%;font-size:10px;min-width:16px;height:16px;line-height:16px;text-align:center;padding:0 3px;">0</span></button>
+        </div>
+        <div id="expPane_main">
         <!-- KPI row -->
         <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); margin-bottom:16px;">
           <div class="stat-card" style="border-top:3px solid var(--danger);"><div class="stat-label">💸 إجمالي المصاريف</div><div class="stat-value" id="exp-total" style="font-size:22px; color:var(--danger);">0 ج</div></div>
@@ -1845,6 +1863,8 @@ body.warehouse-mode #cartFab {
             <tbody id="expensesBody"></tbody></table>
           </div>
         </div>
+        </div><!-- end expPane_main -->
+        <div id="expPane_requests" class="hidden" style="padding-top:8px"></div>
       </div>
 
       <!-- ══ AUDIT LOG ══ -->
@@ -2215,6 +2235,124 @@ body.warehouse-mode #cartFab {
 
 
     
+
+<!-- ════════════════ EXPENSE REQUEST MODAL ════════════════ -->
+<div id="expenseRequestModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:460px;width:94%;">
+    <div class="modal-header"><h3 style="margin:0;font-size:17px;">📤 طلب اعتماد مصروف</h3></div>
+    <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+      <div><label class="form-label">الفرع</label>
+        <select id="expReqBranchId" class="form-control"></select></div>
+      <div><label class="form-label">التصنيف</label>
+        <select id="expReqCategory" class="form-control">
+          <option value="rent">إيجار</option><option value="electricity">كهرباء</option>
+          <option value="water">مياه</option><option value="internet">إنترنت / تليفون</option>
+          <option value="salaries">رواتب</option><option value="maintenance">صيانة</option>
+          <option value="marketing">تسويق</option><option value="transport">نقل / شحن</option>
+          <option value="other">أخرى</option>
+        </select></div>
+      <div style="display:flex;gap:12px;">
+        <div style="flex:1"><label class="form-label">المبلغ (ج)</label>
+          <input type="number" id="expReqAmount" class="form-control" placeholder="0.00" min="0" step="0.01"></div>
+        <div style="flex:1"><label class="form-label">التاريخ</label>
+          <input type="date" id="expReqDate" class="form-control"></div>
+      </div>
+      <div><label class="form-label">ملاحظة / تفاصيل</label>
+        <textarea id="expReqNote" class="form-control" rows="2" placeholder="وصف المصروف..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="document.getElementById('expenseRequestModal').classList.add('hidden')">إلغاء</button>
+      <button class="btn btn-primary" onclick="saveExpenseRequest()">📤 إرسال للاعتماد</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ LEAVE REQUEST MODAL ════════════════ -->
+<div id="leaveRequestModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:460px;width:94%;">
+    <div class="modal-header"><h3 style="margin:0;font-size:17px;">📝 طلب إجازة / إذن انصراف</h3></div>
+    <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+      <div><label class="form-label">الموظف</label>
+        <select id="leaveReqEmpName" class="form-control"></select></div>
+      <div style="display:flex;gap:12px;">
+        <div style="flex:1"><label class="form-label">النوع</label>
+          <select id="leaveReqType" class="form-control" onchange="toggleLeaveTimeFields()">
+            <option value="leave">🏖️ إجازة يوم كامل</option>
+            <option value="permission">🕐 إذن انصراف</option>
+          </select></div>
+        <div style="flex:1"><label class="form-label">التاريخ</label>
+          <input type="date" id="leaveReqDate" class="form-control"></div>
+      </div>
+      <div id="leaveReqTimeRow" style="display:none;gap:12px;">
+        <div style="flex:1"><label class="form-label">من الساعة</label>
+          <input type="time" id="leaveReqFromTime" class="form-control"></div>
+        <div style="flex:1"><label class="form-label">حتى الساعة</label>
+          <input type="time" id="leaveReqToTime" class="form-control"></div>
+      </div>
+      <div><label class="form-label">السبب</label>
+        <textarea id="leaveReqReason" class="form-control" rows="2" placeholder="سبب الطلب (اختياري)..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="document.getElementById('leaveRequestModal').classList.add('hidden')">إلغاء</button>
+      <button class="btn btn-primary" onclick="saveLeaveRequest()">📤 إرسال للاعتماد</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ PRINTER SETTINGS MODAL ════════════════ -->
+<div id="printerSettingsModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:440px;width:94%;">
+    <div class="modal-header"><h3 style="margin:0;font-size:17px;">🖨️ إعدادات الطابعة</h3></div>
+    <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:16px;">
+      <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:12px 16px;">
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:6px">حالة الاتصال</div>
+        <div id="printerStatusTxt"><span style="color:#dc3545">🔴 غير متصلة</span></div>
+      </div>
+      <div><label class="form-label">Baud Rate (سرعة الاتصال)</label>
+        <select id="printerBaud" class="form-control">
+          <option value="9600">9600 (الافتراضي)</option>
+          <option value="19200">19200</option>
+          <option value="38400">38400</option>
+          <option value="115200">115200</option>
+        </select></div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-primary" style="flex:1" onclick="connectReceiptPrinter()">🔌 اتصال</button>
+        <button class="btn btn-gray" style="flex:1" onclick="disconnectPrinter()">⛔ قطع الاتصال</button>
+      </div>
+      <button class="btn btn-outline" onclick="testReceiptPrint()">🖨️ طباعة اختبار</button>
+      <div style="font-size:12px;color:var(--text-muted);background:var(--bg-secondary);padding:10px 12px;border-radius:8px;">
+        <strong>تعليمات:</strong> اربط الطابعة بـ USB → اضغط اتصال → اختر الـ Port → اختبر الطباعة.<br>
+        متاح على Chrome / Edge على سطح المكتب فقط.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="document.getElementById('printerSettingsModal').classList.add('hidden')">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ FINGERPRINT IMPORT MODAL ════════════════ -->
+<div id="fingerprintModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:500px;width:94%;">
+    <div class="modal-header"><h3 style="margin:0;font-size:17px;">📲 استيراد بيانات جهاز البصمة</h3></div>
+    <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:16px;">
+      <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:13px;color:var(--text-muted);">
+        <strong>تنسيق الملف المطلوب (CSV):</strong><br>
+        العمود 1: اسم الموظف | العمود 2: التاريخ (YYYY-MM-DD) | العمود 3: وقت الحضور | العمود 4: وقت الانصراف
+      </div>
+      <div>
+        <label class="form-label">اختر ملف CSV / TXT من جهاز البصمة</label>
+        <input type="file" id="fingerprintFile" accept=".csv,.txt,.xls,.xlsx" class="form-control" onchange="handleFingerprintFile(this)">
+      </div>
+      <button class="btn btn-outline" onclick="downloadFingerprintTemplate()">⬇️ تنزيل نموذج CSV</button>
+      <div id="fingerprintImportLog" style="min-height:40px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="document.getElementById('fingerprintModal').classList.add('hidden')">إغلاق</button>
+    </div>
+  </div>
+</div>
+
     
 // ══════════════════════════════════════════════
 // DATA
