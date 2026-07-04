@@ -209,12 +209,11 @@ async function doLogin() {
         showPage('warehouse');
         setTimeout(() => addAuditLog('auth.login', `تسجيل دخول مخزن: ${user}`, matchedBranch), 500);
       } else {
-        document.getElementById('cashierView').classList.remove('hidden');
+        document.getElementById('managerView').classList.remove('hidden');
         initFirebase();
-        applyMobileUI();
-        renderProducts();
-        updateClock();
-        setInterval(updateClock, 30000);
+        initBranchUI();
+        showPage('home');
+        renderHomeIcons();
         setTimeout(() => addAuditLog('auth.login', `تسجيل دخول كاشير: ${user} — ${getBranchName(matchedBranch)}`, matchedBranch), 500);
       }
     } else {
@@ -6478,4 +6477,57 @@ const _origShowPageBadge = showPage;
 function showPage(page) {
   _origShowPageBadge(page);
   setTimeout(()=>{ updateExpReqBadge(); updateLeaveReqBadge(); }, 50);
+}
+
+
+/* ═══════════════════════════════════════════════
+   HOME PAGE — ROLE-BASED ICON GRID
+   ═══════════════════════════════════════════════ */
+
+let _clockIntervalStarted = false;
+
+function switchToCashier() {
+  document.getElementById('managerView').classList.add('hidden');
+  document.getElementById('cashierView').classList.remove('hidden');
+  applyMobileUI();
+  renderProducts();
+  updateClock();
+  if (!_clockIntervalStarted) {
+    _clockIntervalStarted = true;
+    setInterval(updateClock, 30000);
+  }
+}
+
+function switchToHome() {
+  document.getElementById('cashierView').classList.add('hidden');
+  document.getElementById('managerView').classList.remove('hidden');
+  showPage('home');
+  renderHomeIcons();
+}
+
+function renderHomeIcons() {
+  const isAdmin = (currentUser === 'admin');
+  const adminGrid = document.getElementById('homeGrid');
+  const branchGrid = document.getElementById('homeGrid_branch');
+  if (adminGrid) adminGrid.style.display = isAdmin ? '' : 'none';
+  if (branchGrid) branchGrid.style.display = isAdmin ? 'none' : '';
+  // Update pending badges on admin home icons
+  if (isAdmin) {
+    try {
+      const expPending = getExpenseRequests().filter(r => r.status === 'pending').length;
+      const leavePending = getLeaveRequests().filter(r => r.status === 'pending').length;
+      const eb = document.getElementById('homeExpReqBadge');
+      const lb = document.getElementById('homeLeaveReqBadge');
+      if (eb) { eb.textContent = expPending; eb.style.display = expPending ? 'inline' : 'none'; }
+      if (lb) { lb.textContent = leavePending; lb.style.display = leavePending ? 'inline' : 'none'; }
+    } catch(e) {}
+  }
+}
+
+
+// Override showPage to render home icons when navigating to home
+const _origShowPageHome = showPage;
+function showPage(page) {
+  _origShowPageHome(page);
+  if (page === 'home') { setTimeout(renderHomeIcons, 100); }
 }
