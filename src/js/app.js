@@ -6473,11 +6473,7 @@ function downloadFingerprintTemplate() {
 }
 
 // ─── Badge updates on showPage ────────────────────────────────────────
-const _origShowPageBadge = showPage;
-function showPage(page) {
-  _origShowPageBadge(page);
-  setTimeout(()=>{ updateExpReqBadge(); updateLeaveReqBadge(); }, 50);
-}
+
 
 
 /* ═══════════════════════════════════════════════
@@ -6526,8 +6522,15 @@ function renderHomeIcons() {
 
 
 // Override showPage to render home icons when navigating to home
-const _origShowPageHome = showPage;
-function showPage(page) {
-  _origShowPageHome(page);
-  if (page === 'home') { setTimeout(renderHomeIcons, 100); }
-}
+// Patch showPage: update badges + home icons (no hoisting issues)
+(function() {
+  var _orig = showPage;
+  window.showPage = function(page) {
+    _orig(page);
+    setTimeout(function() {
+      try { updateExpReqBadge(); } catch(e) {}
+      try { updateLeaveReqBadge(); } catch(e) {}
+      if (page === 'home') { try { renderHomeIcons(); } catch(e) {} }
+    }, 50);
+  };
+})();
