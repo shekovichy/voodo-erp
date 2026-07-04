@@ -21,7 +21,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-<style>
 
 :root {
   --primary: #1a5faf;
@@ -649,7 +648,6 @@ body.warehouse-mode #cartFab {
   display: none !important;
 }
 
-</style>
 
 </head>
 <body>
@@ -740,6 +738,7 @@ body.warehouse-mode #cartFab {
         <h2>🧾 الفاتورة</h2>
         <div class="flex gap-8 items-center">
           <span class="badge badge-info" id="cashierBadge">كاشير</span>
+          <button class="icon-btn" onclick="switchToHome()" title="الرئيسية" style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 6px;border-radius:6px;color:inherit;" id="homeBtn">🏠</button>
           <!-- Mobile close button -->
           <button onclick="toggleMobileCart(false)"
             style="display:none; background:none; border:none; font-size:22px; cursor:pointer; color:var(--text-muted); padding:0 4px;"
@@ -1631,7 +1630,56 @@ body.warehouse-mode #cartFab {
                 <span class="app-name">الإعدادات</span>
               </div>
 
+              <div class="app-icon" onclick="showPage('expenses'); switchExpTab('requests')" style="position:relative;">
+                <div class="app-tile" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                  <svg viewBox="0 0 48 48" fill="none"><rect x="10" y="14" width="28" height="22" rx="3" stroke="white" stroke-width="2.5"/><path d="M16 22h16M16 28h10" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M30 8l4 4-4 4M34 12H22" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+                <span class="app-name">اعتماد المصاريف</span>
+                <span id="homeExpReqBadge" style="display:none;position:absolute;top:2px;right:2px;background:#ef4444;color:white;font-size:10px;font-weight:bold;min-width:18px;height:18px;border-radius:9px;text-align:center;line-height:18px;padding:0 4px;"></span>
+              </div>
+
+              <div class="app-icon" onclick="showPage('hr'); switchHRTab('leavereqs')" style="position:relative;">
+                <div class="app-tile" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
+                  <svg viewBox="0 0 48 48" fill="none"><rect x="14" y="8" width="20" height="32" rx="3" stroke="white" stroke-width="2.5"/><path d="M19 18h10M19 24h10M19 30h6" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>
+                </div>
+                <span class="app-name">اعتماد الإجازات</span>
+                <span id="homeLeaveReqBadge" style="display:none;position:absolute;top:2px;right:2px;background:#ef4444;color:white;font-size:10px;font-weight:bold;min-width:18px;height:18px;border-radius:9px;text-align:center;line-height:18px;padding:0 4px;"></span>
+              </div>
+
             </div><!-- /homeGrid -->
+
+          <div id="homeGrid_branch" class="home-grid" style="display:none;">
+
+              <div class="app-icon" onclick="switchToCashier()">
+                <div class="app-tile" style="background: linear-gradient(135deg, #10b981, #059669);">
+                  <svg viewBox="0 0 48 48" fill="none"><rect x="6" y="12" width="36" height="26" rx="3" stroke="white" stroke-width="2.5"/><path d="M6 20h36" stroke="white" stroke-width="2.5"/><path d="M14 28h8M14 32h6" stroke="white" stroke-width="2.5" stroke-linecap="round"/><rect x="28" y="26" width="10" height="8" rx="1" stroke="white" stroke-width="2"/></svg>
+                </div>
+                <span class="app-name">الكاشير</span>
+              </div>
+
+              <div class="app-icon" onclick="openExpenseRequestModal()">
+                <div class="app-tile" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                  <svg viewBox="0 0 48 48" fill="none"><rect x="10" y="14" width="28" height="22" rx="3" stroke="white" stroke-width="2.5"/><path d="M16 22h16M16 28h10" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M30 8l4 4-4 4M34 12H22" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+                <span class="app-name">طلب مصروف</span>
+              </div>
+
+              <div class="app-icon" onclick="openLeaveRequestModal()">
+                <div class="app-tile" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
+                  <svg viewBox="0 0 48 48" fill="none"><rect x="12" y="10" width="24" height="28" rx="3" stroke="white" stroke-width="2.5"/><path d="M17 20h14M17 26h10" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M17 14h4M27 14h4" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>
+                </div>
+                <span class="app-name">طلب إجازة/إذن</span>
+              </div>
+
+              <div class="app-icon" onclick="showPage('reports')">
+                <div class="app-tile" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
+                  <svg viewBox="0 0 48 48" fill="none"><rect x="8" y="8" width="32" height="32" rx="3" stroke="white" stroke-width="2.5"/><path d="M16 32v-8M24 32V20M32 32V16" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>
+                </div>
+                <span class="app-name">التقارير</span>
+              </div>
+
+          </div><!-- /homeGrid_branch -->
+
           </div><!-- /homeContent -->
         </div><!-- /homeWallpaper -->
       </div>
@@ -2355,8 +2403,7 @@ body.warehouse-mode #cartFab {
   </div>
 </div>
 
-    <script>
-
+    
 // ══════════════════════════════════════════════
 // DATA
 // ══════════════════════════════════════════════
@@ -2567,12 +2614,11 @@ async function doLogin() {
         showPage('warehouse');
         setTimeout(() => addAuditLog('auth.login', `تسجيل دخول مخزن: ${user}`, matchedBranch), 500);
       } else {
-        document.getElementById('cashierView').classList.remove('hidden');
+        document.getElementById('managerView').classList.remove('hidden');
         initFirebase();
-        applyMobileUI();
-        renderProducts();
-        updateClock();
-        setInterval(updateClock, 30000);
+        initBranchUI();
+        showPage('home');
+        renderHomeIcons();
         setTimeout(() => addAuditLog('auth.login', `تسجيل دخول كاشير: ${user} — ${getBranchName(matchedBranch)}`, matchedBranch), 500);
       }
     } else {
@@ -8838,7 +8884,59 @@ function showPage(page) {
   setTimeout(()=>{ updateExpReqBadge(); updateLeaveReqBadge(); }, 50);
 }
 
-</script>
+
+/* ═══════════════════════════════════════════════
+   HOME PAGE — ROLE-BASED ICON GRID
+   ═══════════════════════════════════════════════ */
+
+let _clockIntervalStarted = false;
+
+function switchToCashier() {
+  document.getElementById('managerView').classList.add('hidden');
+  document.getElementById('cashierView').classList.remove('hidden');
+  applyMobileUI();
+  renderProducts();
+  updateClock();
+  if (!_clockIntervalStarted) {
+    _clockIntervalStarted = true;
+    setInterval(updateClock, 30000);
+  }
+}
+
+function switchToHome() {
+  document.getElementById('cashierView').classList.add('hidden');
+  document.getElementById('managerView').classList.remove('hidden');
+  showPage('home');
+  renderHomeIcons();
+}
+
+function renderHomeIcons() {
+  const isAdmin = (currentUser === 'admin');
+  const adminGrid = document.getElementById('homeGrid');
+  const branchGrid = document.getElementById('homeGrid_branch');
+  if (adminGrid) adminGrid.style.display = isAdmin ? '' : 'none';
+  if (branchGrid) branchGrid.style.display = isAdmin ? 'none' : '';
+  // Update pending badges on admin home icons
+  if (isAdmin) {
+    try {
+      const expPending = getExpenseRequests().filter(r => r.status === 'pending').length;
+      const leavePending = getLeaveRequests().filter(r => r.status === 'pending').length;
+      const eb = document.getElementById('homeExpReqBadge');
+      const lb = document.getElementById('homeLeaveReqBadge');
+      if (eb) { eb.textContent = expPending; eb.style.display = expPending ? 'inline' : 'none'; }
+      if (lb) { lb.textContent = leavePending; lb.style.display = leavePending ? 'inline' : 'none'; }
+    } catch(e) {}
+  }
+}
+
+
+// Override showPage to render home icons when navigating to home
+const _origShowPageHome = showPage;
+function showPage(page) {
+  _origShowPageHome(page);
+  if (page === 'home') { setTimeout(renderHomeIcons, 100); }
+}
+
 
 
 <!-- ===================== CUSTOMER MODAL ===================== -->
