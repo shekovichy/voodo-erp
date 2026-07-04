@@ -6092,3 +6092,390 @@ async function confirmFirstRun() {
 
 setInterval(updateHomeClock, 1000);
 
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// EXPENSE APPROVAL REQUESTS — طلبات اعتماد المصاريف
+// ═══════════════════════════════════════════════════════════════════════
+let _expReqCache = null;
+function getExpenseRequests() {
+  if (!_expReqCache) _expReqCache = DB.g('pos_expense_requests', []);
+  return _expReqCache;
+}
+function setExpenseRequests(list) {
+  _expReqCache = list;
+  DB.s('pos_expense_requests', list);
+  try { _db && _db.collection('pos_data').doc('expense_requests').set({ list, updatedAt: Date.now() }); } catch(e) {}
+}
+function openExpenseRequestModal() {
+  const brSel = document.getElementById('expReqBranchId');
+  if (brSel) brSel.innerHTML = BRANCH_IDS.filter(b=>b!=='wh').map(b=>'<option value="'+b+'"'+(b===currentBranch?' selected':'')+'>'+getBranchName(b)+'</option>').join('');
+  document.getElementById('expReqAmount').value = '';
+  document.getElementById('expReqDate').value = new Date().toISOString().slice(0,10);
+  document.getElementById('expReqNote').value = '';
+  document.getElementById('expReqCategory').value = 'rent';
+  document.getElementById('expenseRequestModal').classList.remove('hidden');
+}
+function saveExpenseRequest() {
+  const amount = parseFloat(document.getElementById('expReqAmount').value);
+  const date   = document.getElementById('expReqDate').value;
+  if (!amount || amount <= 0) { alert('أدخل مبلغ صحيح'); return; }
+  if (!date) { alert('أدخل التاريخ'); return; }
+  const rec = {
+    id: 'expreq_' + Date.now(),
+    branchId: document.getElementById('expReqBranchId').value || currentBranch,
+    category: document.getElementById('expReqCategory').value,
+    amount, date, month: date.slice(0,7),
+    note: document.getElementById('expReqNote').value.trim(),
+    status: 'pending',
+    by: currentUser + ' (' + getBranchName(currentBranch) + ')',
+    createdAt: Date.now()
+  };
+  const list = getExpenseRequests(); list.push(rec); setExpenseRequests(list);
+  document.getElementById('expenseRequestModal').classList.add('hidden');
+  updateExpReqBadge(); renderExpensesPage();
+  showToast('✅ تم إرسال طلب المصروف — بانتظار اعتماد الإدارة');
+}
+function approveExpenseRequest(id) {
+  if (!confirm('تأكيد اعتماد هذا المصروف؟')) return;
+  const list = getExpenseRequests(); const req = list.find(r=>r.id===id); if (!req) return;
+  req.status = 'approved'; req.reviewedBy = currentUser; req.reviewedAt = Date.now();
+  setExpenseRequests(list);
+  const expenses = getExpenses();
+  expenses.push({ id:'exp_'+Date.now(), type:'branch', branchId:req.branchId, category:req.category,
+    amount:req.amount, date:req.date, month:req.month,
+    note:(req.note?req.note+' — ':'')+'معتمد من '+req.by, by:currentUser, createdAt:Date.now() });
+  setExpenses(expenses);
+  updateExpReqBadge(); renderExpensesPage(); showToast('✅ تمت الموافقة وتسجيل المصروف');
+}
+function rejectExpenseRequest(id) {
+  const list = getExpenseRequests(); const req = list.find(r=>r.id===id); if (!req) return;
+  req.status = 'rejected'; req.reviewedBy = currentUser; req.reviewedAt = Date.now();
+  setExpenseRequests(list); updateExpReqBadge(); renderExpensesPage(); showToast('❌ تم رفض الطلب');
+}
+function updateExpReqBadge() {
+  const pending = getExpenseRequests().filter(r=>r.status==='pending').length;
+  const badge = document.getElementById('expReqBadge');
+  if (badge) { badge.textContent = pending; badge.style.display = pending ? '' : 'none'; }
+}
+function switchExpTab(tab) {
+  ['main','requests'].forEach(t => {
+    const btn  = document.getElementById('expTabBtn_'+t);
+    const pane = document.getElementById('expPane_'+t);
+    if (btn)  { btn.style.background = t===tab?'white':''; btn.style.fontWeight = t===tab?'700':'400'; btn.style.boxShadow = t===tab?'0 1px 4px rgba(0,0,0,.1)':''; }
+    if (pane) pane.classList.toggle('hidden', t!==tab);
+  });
+  if (tab==='requests') renderExpenseRequestsPane();
+}
+function renderExpenseRequestsPane() {
+  const cont = document.getElementById('expPane_requests'); if (!cont) return;
+  const isAdmin = currentUser === 'admin';
+  const reqs = getExpenseRequests()
+    .filter(r => isAdmin ? true : r.branchId === currentBranch)
+    .sort((a,b) => b.createdAt - a.createdAt);
+  if (!reqs.length) { cont.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:32px">لا توجد طلبات مصاريف</p>'; return; }
+  cont.innerHTML = reqs.map(r => '<div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+    '<div style="flex:1;min-width:200px">' +
+      '<div style="font-weight:700;font-size:15px">'+(EXP_CATS[r.category]||r.category)+' — <span style="color:#3d8fff">'+(r.amount||0).toLocaleString()+' ج</span></div>' +
+      '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">🏬 '+getBranchName(r.branchId)+' · 📅 '+r.date+(r.note?' · '+r.note:'')+'</div>' +
+      '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">👤 '+r.by+' · '+new Date(r.createdAt).toLocaleString('ar-EG')+'</div>' +
+    '</div>' +
+    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+      '<span style="padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700;background:'+(r.status==='pending'?'rgba(255,193,7,.15)':r.status==='approved'?'rgba(40,167,69,.15)':'rgba(220,53,69,.15)')+';color:'+(r.status==='pending'?'#e09000':r.status==='approved'?'#28a745':'#dc3545')+'">' +
+        (r.status==='pending'?'⏳ بانتظار الاعتماد':r.status==='approved'?'✅ معتمد':'❌ مرفوض') +
+      '</span>' +
+      (isAdmin && r.status==='pending' ?
+        '<button class="btn" style="background:#28a745;color:#fff;font-size:12px;padding:6px 14px" onclick="approveExpenseRequest(\''+r.id+'\')">✅ قبول</button>' +
+        '<button class="btn" style="background:#dc3545;color:#fff;font-size:12px;padding:6px 14px" onclick="rejectExpenseRequest(\''+r.id+'\')">❌ رفض</button>' : '') +
+      (r.status!=='pending' ? '<div style="font-size:11px;color:var(--text-muted)">'+r.reviewedBy+'</div>' : '') +
+    '</div>' +
+  '</div>').join('');
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// LEAVE & PERMISSION REQUESTS — طلبات الإجازات والأذونات
+// ═══════════════════════════════════════════════════════════════════════
+let _leaveReqCache = null;
+function getLeaveRequests() {
+  if (!_leaveReqCache) _leaveReqCache = DB.g('pos_leave_requests', []);
+  return _leaveReqCache;
+}
+function setLeaveRequests(list) {
+  _leaveReqCache = list;
+  DB.s('pos_leave_requests', list);
+  try { _db && _db.collection('pos_data').doc('leave_requests').set({ list, updatedAt: Date.now() }); } catch(e) {}
+}
+function openLeaveRequestModal() {
+  const empSel = document.getElementById('leaveReqEmpName');
+  const emps = getSalespeople ? getSalespeople() : DB.g('pos_salespeople', []);
+  const empNames = emps.map(e => typeof e === 'string' ? e : e.name).filter(Boolean);
+  if (empSel) empSel.innerHTML = empNames.map(n => '<option value="'+n+'">'+n+'</option>').join('');
+  document.getElementById('leaveReqDate').value = new Date().toISOString().slice(0,10);
+  document.getElementById('leaveReqType').value = 'leave';
+  document.getElementById('leaveReqFromTime').value = '';
+  document.getElementById('leaveReqToTime').value = '';
+  document.getElementById('leaveReqReason').value = '';
+  toggleLeaveTimeFields();
+  document.getElementById('leaveRequestModal').classList.remove('hidden');
+}
+function toggleLeaveTimeFields() {
+  const type = document.getElementById('leaveReqType').value;
+  const row  = document.getElementById('leaveReqTimeRow');
+  if (row) row.style.display = (type === 'permission') ? '' : 'none';
+}
+function saveLeaveRequest() {
+  const empName = document.getElementById('leaveReqEmpName').value;
+  const date    = document.getElementById('leaveReqDate').value;
+  const type    = document.getElementById('leaveReqType').value;
+  if (!empName) { alert('اختر الموظف'); return; }
+  if (!date)    { alert('أدخل التاريخ'); return; }
+  const rec = {
+    id: 'leaveq_' + Date.now(),
+    branchId: currentBranch,
+    empName, type, date,
+    fromTime: document.getElementById('leaveReqFromTime').value || '',
+    toTime:   document.getElementById('leaveReqToTime').value   || '',
+    reason:   document.getElementById('leaveReqReason').value.trim(),
+    status: 'pending',
+    by: currentUser + ' (' + getBranchName(currentBranch) + ')',
+    createdAt: Date.now()
+  };
+  const list = getLeaveRequests(); list.push(rec); setLeaveRequests(list);
+  document.getElementById('leaveRequestModal').classList.add('hidden');
+  updateLeaveReqBadge(); renderHRPage();
+  showToast('✅ تم إرسال الطلب — بانتظار موافقة الإدارة');
+}
+function approveLeaveRequest(id) {
+  if (!confirm('تأكيد الموافقة على هذا الطلب؟')) return;
+  const list = getLeaveRequests(); const req = list.find(r=>r.id===id); if (!req) return;
+  req.status = 'approved'; req.reviewedBy = currentUser; req.reviewedAt = Date.now();
+  setLeaveRequests(list);
+  if (req.type === 'leave') {
+    saveAttendanceRecord(req.empName, req.date, 'absent', '', '', 'إجازة معتمدة');
+  } else {
+    const notes = (req.fromTime && req.toTime) ? 'إذن انصراف '+req.fromTime+' - '+req.toTime : 'إذن انصراف معتمد';
+    saveAttendanceRecord(req.empName, req.date, 'late', req.fromTime||'', req.toTime||'', notes);
+  }
+  updateLeaveReqBadge(); renderHRPage(); showToast('✅ تمت الموافقة وتسجيل الحضور');
+}
+function rejectLeaveRequest(id) {
+  const list = getLeaveRequests(); const req = list.find(r=>r.id===id); if (!req) return;
+  req.status = 'rejected'; req.reviewedBy = currentUser; req.reviewedAt = Date.now();
+  setLeaveRequests(list); updateLeaveReqBadge(); renderHRPage(); showToast('❌ تم رفض الطلب');
+}
+function updateLeaveReqBadge() {
+  const pending = getLeaveRequests().filter(r=>r.status==='pending').length;
+  const badge = document.getElementById('leaveReqBadge');
+  if (badge) { badge.textContent = pending; badge.style.display = pending ? '' : 'none'; }
+}
+function renderLeaveRequestsPane() {
+  const cont = document.getElementById('hrPane_leavereqs'); if (!cont) return;
+  const isAdmin = currentUser === 'admin';
+  const btn = document.getElementById('leaveReqAddBtn');
+  if (btn) btn.style.display = (currentUser !== 'admin') ? '' : 'none';
+  const reqs = getLeaveRequests()
+    .filter(r => isAdmin ? true : r.branchId === currentBranch)
+    .sort((a,b) => b.createdAt - a.createdAt);
+  if (!reqs.length) { cont.querySelector('#leaveReqList').innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:32px">لا توجد طلبات إجازات أو أذونات</p>'; return; }
+  const TYPE_LABELS = { leave: '🏖️ إجازة يوم كامل', permission: '🕐 إذن انصراف' };
+  cont.querySelector('#leaveReqList').innerHTML = reqs.map(r =>
+    '<div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+    '<div style="flex:1;min-width:200px">' +
+      '<div style="font-weight:700;font-size:15px">👤 '+r.empName+' — <span style="color:#3d8fff">'+(TYPE_LABELS[r.type]||r.type)+'</span></div>' +
+      '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">🏬 '+getBranchName(r.branchId)+' · 📅 '+r.date+(r.type==='permission'&&r.fromTime?' · 🕐 '+r.fromTime+'–'+r.toTime:'')+(r.reason?' · '+r.reason:'')+'</div>' +
+      '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">👤 '+r.by+' · '+new Date(r.createdAt).toLocaleString('ar-EG')+'</div>' +
+    '</div>' +
+    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+      '<span style="padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700;background:'+(r.status==='pending'?'rgba(255,193,7,.15)':r.status==='approved'?'rgba(40,167,69,.15)':'rgba(220,53,69,.15)')+';color:'+(r.status==='pending'?'#e09000':r.status==='approved'?'#28a745':'#dc3545')+'">' +
+        (r.status==='pending'?'⏳ بانتظار الموافقة':r.status==='approved'?'✅ موافق عليه':'❌ مرفوض') +
+      '</span>' +
+      (isAdmin && r.status==='pending' ?
+        '<button class="btn" style="background:#28a745;color:#fff;font-size:12px;padding:6px 14px" onclick="approveLeaveRequest(\''+r.id+'\')">✅ قبول</button>' +
+        '<button class="btn" style="background:#dc3545;color:#fff;font-size:12px;padding:6px 14px" onclick="rejectLeaveRequest(\''+r.id+'\')">❌ رفض</button>' : '') +
+      (r.status!=='pending' ? '<span style="font-size:11px;color:var(--text-muted)">'+r.reviewedBy+'</span>' : '') +
+    '</div></div>'
+  ).join('');
+}
+// Extend switchHRTab to handle leavereqs tab
+const _origSwitchHRTab = switchHRTab;
+function switchHRTab(tab) {
+  _hrActiveTab = tab;
+  ['targets','attendance','payroll','leavereqs'].forEach(t => {
+    const btn  = document.getElementById('hrTab_'+t);
+    const pane = document.getElementById('hrPane_'+t);
+    if (btn)  { btn.style.background = t===tab?'white':''; btn.style.fontWeight = t===tab?'700':'400'; btn.style.boxShadow = t===tab?'0 1px 4px rgba(0,0,0,.1)':''; }
+    if (pane) pane.classList.toggle('hidden', t!==tab);
+  });
+  if (tab==='attendance') renderAttendancePane();
+  if (tab==='payroll')    renderPayrollPane();
+  if (tab==='leavereqs')  renderLeaveRequestsPane();
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// PRINTING — طابعات (ESC/POS USB + Barcode + A4)
+// ═══════════════════════════════════════════════════════════════════════
+let _serialPort   = null;
+let _serialWriter = null;
+
+function openPrinterSettings() {
+  document.getElementById('printerSettingsModal').classList.remove('hidden');
+  updatePrinterStatusUI();
+}
+function updatePrinterStatusUI() {
+  const el = document.getElementById('printerStatusTxt');
+  if (el) el.innerHTML = _serialPort
+    ? '<span style="color:#28a745;font-weight:700">🟢 الطابعة متصلة</span>'
+    : '<span style="color:#dc3545">🔴 غير متصلة</span>';
+}
+async function connectReceiptPrinter() {
+  if (!('serial' in navigator)) {
+    alert('متصفحك لا يدعم Web Serial API\nاستخدم Chrome أو Edge على سطح المكتب فقط');
+    return;
+  }
+  try {
+    _serialPort = await navigator.serial.requestPort();
+    const baud  = parseInt(document.getElementById('printerBaud')?.value || '9600');
+    await _serialPort.open({ baudRate: baud });
+    _serialWriter = _serialPort.writable.getWriter();
+    updatePrinterStatusUI();
+    showToast('✅ تم الاتصال بالطابعة');
+  } catch(e) {
+    _serialPort = null; _serialWriter = null;
+    showToast('❌ فشل الاتصال: ' + e.message);
+  }
+}
+async function disconnectPrinter() {
+  try {
+    if (_serialWriter) { await _serialWriter.releaseLock(); _serialWriter = null; }
+    if (_serialPort)  { await _serialPort.close(); _serialPort = null; }
+    updatePrinterStatusUI();
+    showToast('✅ تم قطع الاتصال');
+  } catch(e) { showToast('❌ خطأ: ' + e.message); }
+}
+async function sendToSerial(data) {
+  if (!_serialWriter) return false;
+  try { await _serialWriter.write(data); return true; }
+  catch(e) { showToast('❌ خطأ في الطباعة: ' + e.message); return false; }
+}
+function buildReceiptESCPOS(sale) {
+  const ESC = 0x1B, GS = 0x1D;
+  const enc = new TextEncoder();
+  const bytes = [];
+  const push = arr => arr.forEach(b => bytes.push(b));
+  const text  = str => enc.encode(str).forEach(b => bytes.push(b));
+  const line  = str => text(str + '\n');
+  // Init + center
+  push([ESC,0x40]); push([ESC,0x61,0x01]);
+  push([ESC,0x21,0x10]); // double height
+  const s = _settingsCache || {};
+  line(s.shopName || 'Voodo ERP');
+  push([ESC,0x21,0x00]); // normal
+  if (s.shopAddress) line(s.shopAddress);
+  if (s.shopPhone)   line('Tel: ' + s.shopPhone);
+  line('--------------------------------');
+  push([ESC,0x61,0x00]); // left
+  line('Date: ' + (sale.date || new Date().toISOString().slice(0,10)));
+  line('Inv : #' + String(sale.id||'').slice(-6));
+  if (sale.salesperson) line('By  : ' + sale.salesperson);
+  line('--------------------------------');
+  (sale.items||[]).forEach(item => {
+    const nm = String(item.name||'').slice(0,20);
+    text(nm + '\n');
+    const det = (item.qty||1)+' x '+(item.price||0).toFixed(2)+' = '+((item.qty||1)*(item.price||0)).toFixed(2);
+    text(det + '\n');
+  });
+  line('--------------------------------');
+  push([ESC,0x61,0x02]); // right
+  push([ESC,0x21,0x10]); // double height
+  line('TOTAL: ' + (sale.total||0).toFixed(2) + ' EGP');
+  push([ESC,0x21,0x00]);
+  if (sale.paid > sale.total) {
+    line('PAID : ' + (sale.paid).toFixed(2));
+    line('CHANGE: ' + ((sale.paid||0)-(sale.total||0)).toFixed(2));
+  }
+  push([ESC,0x61,0x01]);
+  line('\n  Thank you / شكرًا  \n');
+  text('\n\n\n');
+  push([GS,0x56,0x00]); // cut
+  return new Uint8Array(bytes);
+}
+async function printReceiptESCPOS(sale) {
+  if (!_serialWriter) { printSaleReceipt(sale); return; }
+  const bytes = buildReceiptESCPOS(sale);
+  const ok = await sendToSerial(bytes);
+  if (ok) showToast('✅ تم الإرسال للطابعة');
+}
+async function testReceiptPrint() {
+  if (!_serialWriter) { alert('الطابعة غير متصلة — اضغط اتصال أولاً'); return; }
+  await printReceiptESCPOS({
+    id:'TEST001', date: new Date().toISOString().slice(0,10),
+    salesperson:'اختبار', items:[{name:'منتج تجريبي',qty:2,price:50}],
+    total:100, paid:100
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FINGERPRINT IMPORT — استيراد بيانات جهاز البصمة
+// ═══════════════════════════════════════════════════════════════════════
+function openFingerprintModal() {
+  document.getElementById('fingerprintModal').classList.remove('hidden');
+  document.getElementById('fingerprintImportLog').innerHTML = '';
+  document.getElementById('fingerprintFile').value = '';
+}
+function handleFingerprintFile(input) {
+  const file = input.files[0]; if (!file) return;
+  const logEl = document.getElementById('fingerprintImportLog');
+  logEl.innerHTML = '<div style="color:var(--text-muted)">⏳ جاري قراءة الملف...</div>';
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const text = e.target.result;
+    const rows = text.trim().split('\n').map(r => r.split(/[,\t;]/));
+    let imported = 0, skipped = 0;
+    const logs = [];
+    rows.forEach((cols, idx) => {
+      if (idx === 0 && isNaN(parseInt(cols[0])) && cols[0].trim().length > 1) return; // skip header
+      if (cols.length < 2) { skipped++; return; }
+      let empName = cols[0]?.trim().replace(/"/g,'');
+      let rawDate = cols[1]?.trim().replace(/"/g,'');
+      let checkIn  = (cols[2]||'').trim().replace(/"/g,'');
+      let checkOut = (cols[3]||'').trim().replace(/"/g,'');
+      // Normalize date
+      let date = '';
+      const m1 = rawDate.match(/^(\d{4})[\-\/](\d{2})[\-\/](\d{2})/);
+      const m2 = rawDate.match(/^(\d{2})[\-\/](\d{2})[\-\/](\d{4})/);
+      if (m1) date = m1[1]+'-'+m1[2]+'-'+m1[3];
+      else if (m2) date = m2[3]+'-'+m2[2]+'-'+m2[1];
+      else { skipped++; return; }
+      if (!empName) { skipped++; return; }
+      const status = checkIn ? 'present' : 'absent';
+      saveAttendanceRecord(empName, date, status, checkIn, checkOut, 'استيراد البصمة');
+      imported++; logs.push('✅ '+empName+' — '+date+(checkIn?' ('+checkIn+'-'+checkOut+')':''));
+    });
+    logEl.innerHTML =
+      '<div style="color:#28a745;font-weight:700;margin-bottom:8px">تم الاستيراد: '+imported+' سجل</div>'+
+      (skipped?'<div style="color:#ffc107;margin-bottom:8px">تخطي: '+skipped+' سطر</div>':'')+
+      '<div style="max-height:180px;overflow-y:auto;font-size:12px;color:var(--text-muted)">'+
+        logs.slice(0,50).join('<br>')+(logs.length>50?'<br>... و '+(logs.length-50)+' آخر':'')+
+      '</div>';
+    if (imported > 0) {
+      showToast('✅ تم استيراد '+imported+' سجل حضور');
+      if (!document.getElementById('page-hr').classList.contains('hidden')) renderHRPage();
+    }
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+function downloadFingerprintTemplate() {
+  const csv = 'الاسم,التاريخ,وقت الحضور,وقت الانصراف\nأحمد محمد,2026-07-04,09:00,17:00\nمحمد علي,2026-07-05,09:15,17:30\n';
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='نموذج_بيانات_البصمة.csv'; a.click();
+}
+
+// ─── Badge updates on showPage ────────────────────────────────────────
+const _origShowPageBadge = showPage;
+function showPage(page) {
+  _origShowPageBadge(page);
+  setTimeout(()=>{ updateExpReqBadge(); updateLeaveReqBadge(); }, 50);
+}
