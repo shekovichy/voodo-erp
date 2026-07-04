@@ -1022,37 +1022,39 @@
 
             </div><!-- /homeGrid -->
 
-          <div id="homeGrid_branch" class="home-grid" style="display:none;">
+          <div id="homeGrid_branch" style="display:none; padding: 8px;">
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 380px; margin: 0 auto;">
 
-              <div class="app-icon" onclick="switchToCashier()">
-                <div class="app-tile" style="background: linear-gradient(135deg, #10b981, #059669);">
+              <div class="app-icon branch-card" onclick="switchToCashier()" style="background: linear-gradient(145deg,rgba(16,185,129,.18),rgba(5,150,105,.1)); border: 1px solid rgba(16,185,129,.3); border-radius: 20px; padding: 20px 12px 16px; gap: 10px;">
+                <div class="app-tile" style="background: linear-gradient(135deg, #10b981, #059669); width:64px; height:64px;">
                   <svg viewBox="0 0 48 48" fill="none"><rect x="6" y="12" width="36" height="26" rx="3" stroke="white" stroke-width="2.5"/><path d="M6 20h36" stroke="white" stroke-width="2.5"/><path d="M14 28h8M14 32h6" stroke="white" stroke-width="2.5" stroke-linecap="round"/><rect x="28" y="26" width="10" height="8" rx="1" stroke="white" stroke-width="2"/></svg>
                 </div>
-                <span class="app-name">الكاشير</span>
+                <span class="app-name" style="font-weight:700; font-size:14px;">الكاشير</span>
               </div>
 
-              <div class="app-icon" onclick="openExpenseRequestModal()">
-                <div class="app-tile" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+              <div class="app-icon branch-card" onclick="openExpenseRequestModal()" style="background: linear-gradient(145deg,rgba(245,158,11,.18),rgba(217,119,6,.1)); border: 1px solid rgba(245,158,11,.3); border-radius: 20px; padding: 20px 12px 16px; gap: 10px;">
+                <div class="app-tile" style="background: linear-gradient(135deg, #f59e0b, #d97706); width:64px; height:64px;">
                   <svg viewBox="0 0 48 48" fill="none"><rect x="10" y="14" width="28" height="22" rx="3" stroke="white" stroke-width="2.5"/><path d="M16 22h16M16 28h10" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M30 8l4 4-4 4M34 12H22" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </div>
-                <span class="app-name">طلب مصروف</span>
+                <span class="app-name" style="font-weight:700; font-size:14px;">طلب مصروف</span>
               </div>
 
-              <div class="app-icon" onclick="openLeaveRequestModal()">
-                <div class="app-tile" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
+              <div class="app-icon branch-card" onclick="openLeaveRequestModal()" style="background: linear-gradient(145deg,rgba(139,92,246,.18),rgba(124,58,237,.1)); border: 1px solid rgba(139,92,246,.3); border-radius: 20px; padding: 20px 12px 16px; gap: 10px;">
+                <div class="app-tile" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); width:64px; height:64px;">
                   <svg viewBox="0 0 48 48" fill="none"><rect x="12" y="10" width="24" height="28" rx="3" stroke="white" stroke-width="2.5"/><path d="M17 20h14M17 26h10" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M17 14h4M27 14h4" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>
                 </div>
-                <span class="app-name">طلب إجازة/إذن</span>
+                <span class="app-name" style="font-weight:700; font-size:14px;">طلب إجازة/إذن</span>
               </div>
 
-              <div class="app-icon" onclick="showPage('reports')">
-                <div class="app-tile" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
+              <div class="app-icon branch-card" onclick="showPage('reports')" style="background: linear-gradient(145deg,rgba(59,130,246,.18),rgba(37,99,235,.1)); border: 1px solid rgba(59,130,246,.3); border-radius: 20px; padding: 20px 12px 16px; gap: 10px;">
+                <div class="app-tile" style="background: linear-gradient(135deg, #3b82f6, #2563eb); width:64px; height:64px;">
                   <svg viewBox="0 0 48 48" fill="none"><rect x="8" y="8" width="32" height="32" rx="3" stroke="white" stroke-width="2.5"/><path d="M16 32v-8M24 32V20M32 32V16" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>
                 </div>
-                <span class="app-name">التقارير</span>
+                <span class="app-name" style="font-weight:700; font-size:14px;">التقارير</span>
               </div>
 
-          </div><!-- /homeGrid_branch -->
+            </div>
+          </div><!-- /homeGrid_branch --><!-- /homeGrid_branch -->
 
           </div><!-- /homeContent -->
         </div><!-- /homeWallpaper -->
