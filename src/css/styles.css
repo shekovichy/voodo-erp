@@ -754,3 +754,5 @@ select.form-control {
   body { background:#fff; color:#000; background-image:none; }
   table th,table td { border:1px solid #ccc; }
 }
+
+#lowStockPanel { display: none !important; }
