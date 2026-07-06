@@ -718,6 +718,22 @@ body.warehouse-mode #cartFab {
       <div id="loginError" class="alert alert-danger hidden">اسم المستخدم أو كلمة المرور غلط</div>
       <button class="btn btn-primary btn-full btn-lg" onclick="doLogin()">تسجيل الدخول</button>
 
+      <!-- DEMO BUTTON -->
+      <div style="margin-top:12px;text-align:center;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <div style="flex:1;height:1px;background:var(--border);"></div>
+          <span style="color:var(--text-muted);font-size:12px;">أو</span>
+          <div style="flex:1;height:1px;background:var(--border);"></div>
+        </div>
+        <button class="btn btn-full"
+          onclick="loadDemoAndEnter()"
+          style="background:linear-gradient(135deg,#1e1b4b,#4338ca);color:#c7d2fe;border:1px solid rgba(99,102,241,.4);font-weight:700;font-size:14px;padding:12px;border-radius:10px;cursor:pointer;transition:opacity .2s;"
+          onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+          <span id="demoBtnText">⚡ جرّب الديمو — بدون تسجيل</span>
+        </button>
+        <p style="color:var(--text-muted);font-size:11px;margin-top:8px;">داتا تجريبية جاهزة • كل الميزات مفتوحة</p>
+      </div>
+
     </div>
   </div>
 </div>
@@ -3002,10 +3018,203 @@ let currentUser = null;
 let cart = [];
 let payMethod = 'cash';
 let chartWeekly = null, chartTop = null, chartRptSales = null, chartProfit = null;
-let chartTrend = null, chartBranches = null, chartCmpTrend = null, chartCmpBranches = null;
-let _dashRange = 30; // default 30 days
-let lastSaleForPrint = null;
+let chartTrend = null, chartBranches = null, chart
+// ══════════════════════════════════════════════
+// DEMO MODE — داتا تجريبية جاهزة
+// ══════════════════════════════════════════════
 
+function loadDemoAndEnter() {
+  const btn = document.getElementById('demoBtnText');
+  if (btn) btn.textContent = '⏳ جاري تحميل الديمو...';
+
+  // ── 1. SETTINGS ─────────────────────────────
+  const settings = {
+    threshold: 5,
+    salespeople: ['أحمد سالم', 'محمد علي', 'سارة خالد', 'مروة حسن'],
+    branches: {
+      wh: '🏭 المخزن الرئيسي',
+      b1: 'فرع المعادي',
+      b2: 'فرع مدينة نصر',
+      b3: 'فرع الهرم',
+      b4: 'فرع الإسكندرية'
+    }
+  };
+  DB.s('pos_settings', settings);
+  _settingsCache = settings;
+
+  // ── 2. INVENTORY ─────────────────────────────
+  const inv = [
+    { code:'P001', name:'طقم غرفة نوم كاملة',  price:8500,  cost:5800, qty:12, category:'أثاث',    barcode:'6001001' },
+    { code:'P002', name:'كنبة ثلاثة مقاعد',     price:4200,  cost:2700, qty:8,  category:'أثاث',    barcode:'6001002' },
+    { code:'P003', name:'طاولة سفرة 6 كراسي',  price:3600,  cost:2200, qty:6,  category:'أثاث',    barcode:'6001003' },
+    { code:'P004', name:'مرتبة طبية 160×200',   price:2800,  cost:1700, qty:15, category:'مراتب',   barcode:'6001004' },
+    { code:'P005', name:'مرتبة أطفال 120×200',  price:1400,  cost:850,  qty:20, category:'مراتب',   barcode:'6001005' },
+    { code:'P006', name:'طقم ستائر صالة',       price:1200,  cost:700,  qty:25, category:'ستائر',   barcode:'6001006' },
+    { code:'P007', name:'ستارة غرفة نوم',        price:650,   cost:380,  qty:40, category:'ستائر',   barcode:'6001007' },
+    { code:'P008', name:'سجادة صالة 3×4',       price:1800,  cost:1100, qty:10, category:'سجاد',    barcode:'6001008' },
+    { code:'P009', name:'سجادة صغيرة 1.5×2.5', price:650,   cost:380,  qty:18, category:'سجاد',    barcode:'6001009' },
+    { code:'P010', name:'مطبخ ألمونيوم كامل',   price:12000, cost:8000, qty:5,  category:'مطابخ',   barcode:'6001010' },
+    { code:'P011', name:'براد أبواب زجاجية',    price:850,   cost:500,  qty:22, category:'إكسسوار', barcode:'6001011' },
+    { code:'P012', name:'لوحة ديكور فنية',      price:450,   cost:250,  qty:35, category:'ديكور',   barcode:'6001012' },
+    { code:'P013', name:'إضاءة سقف LED',        price:320,   cost:180,  qty:50, category:'إضاءة',   barcode:'6001013' },
+    { code:'P014', name:'طقم بشكير فاخر',       price:280,   cost:150,  qty:60, category:'منسوجات', barcode:'6001014' },
+    { code:'P015', name:'مفرش سرير مطرز',       price:420,   cost:240,  qty:45, category:'منسوجات', barcode:'6001015' },
+    { code:'P016', name:'خزانة ملابس 4 أبواب',  price:5500,  cost:3600, qty:7,  category:'أثاث',    barcode:'6001016' },
+    { code:'P017', name:'كومودينو خشب',         price:780,   cost:450,  qty:20, category:'أثاث',    barcode:'6001017' },
+    { code:'P018', name:'مرآة حائط كبيرة',      price:950,   cost:550,  qty:15, category:'ديكور',   barcode:'6001018' },
+    { code:'P019', name:'طاولة قهوة زجاج',      price:1100,  cost:650,  qty:12, category:'أثاث',    barcode:'6001019' },
+    { code:'P020', name:'أريكة فردية مودرن',    price:1800,  cost:1100, qty:9,  category:'أثاث',    barcode:'6001020' },
+  ];
+
+  _invCacheByBranch['b1'] = inv;
+  _invCacheByBranch['b2'] = inv.map(p => ({...p, qty: Math.floor(p.qty * 0.7)}));
+  _invCacheByBranch['b3'] = inv.map(p => ({...p, qty: Math.floor(p.qty * 0.5)}));
+  BRANCH_IDS.forEach(b => DB.s(`pos_inv_${b}`, _invCacheByBranch[b] || []));
+
+  // ── 3. SALES (last 60 days) ──────────────────
+  const sellers = settings.salespeople;
+  const payMethods = ['cash','card','cash','cash','card','installment'];
+  const branches = ['b1','b1','b1','b2','b2','b3'];
+  const sales = [];
+  const now = Date.now();
+
+  for (let d = 0; d < 60; d++) {
+    const dayMs = now - d * 86400000;
+    const dayDate = new Date(dayMs);
+    // 2-6 sales per day, fewer on Fridays
+    const count = dayDate.getDay() === 5 ? 1 : Math.floor(Math.random() * 5) + 2;
+    for (let s = 0; s < count; s++) {
+      const numItems = Math.floor(Math.random() * 3) + 1;
+      const items = [];
+      const usedCodes = new Set();
+      for (let i = 0; i < numItems; i++) {
+        let p;
+        do { p = inv[Math.floor(Math.random() * inv.length)]; } while (usedCodes.has(p.code));
+        usedCodes.add(p.code);
+        const qty = Math.floor(Math.random() * 2) + 1;
+        items.push({ ...p, qty, total: p.price * qty });
+      }
+      const sub   = items.reduce((a, i) => a + i.price * i.qty, 0);
+      const disc  = Math.random() > 0.8 ? Math.round(sub * 0.05) : 0;
+      const total = sub - disc;
+      const branchId = branches[Math.floor(Math.random() * branches.length)];
+      const saleDate = new Date(dayMs - Math.floor(Math.random() * 28800000)); // spread over 8hrs
+      sales.push({
+        id: dayMs + s,
+        date: saleDate.toISOString(),
+        cashier: 'مدير',
+        salesperson: sellers[Math.floor(Math.random() * sellers.length)],
+        items,
+        sub, disc, total,
+        paid: total + (Math.random() > 0.7 ? Math.floor(Math.random() * 200) : 0),
+        change: 0,
+        payMethod: payMethods[Math.floor(Math.random() * payMethods.length)],
+        appliedPromos: [],
+        branchId,
+        branchName: settings.branches[branchId]
+      });
+    }
+  }
+  _salesCache = sales;
+  DB.s('sales', sales);
+
+  // ── 4. SUPPLIERS & PURCHASES ─────────────────
+  const suppliers = [
+    { id:'S001', name:'شركة النيل للأثاث',     phone:'01001234567', email:'nile@furniture.eg',    balance:15000 },
+    { id:'S002', name:'مصنع الشرق للمراتب',    phone:'01112345678', email:'east@mattress.eg',     balance:8500  },
+    { id:'S003', name:'توريدات الديكور الحديث', phone:'01223456789', email:'modern@decor.eg',      balance:3200  },
+  ];
+  _suppliersCache = suppliers;
+  DB.s('pos_suppliers', suppliers);
+
+  const purchases = [
+    { id:'PO001', supplierId:'S001', supplierName:'شركة النيل للأثاث',  date: new Date(now-15*86400000).toISOString(), status:'received', items:[{code:'P001',name:'طقم غرفة نوم كاملة',qty:5,cost:5800,total:29000}], total:29000, branchId:'b1' },
+    { id:'PO002', supplierId:'S002', supplierName:'مصنع الشرق للمراتب', date: new Date(now-8*86400000).toISOString(),  status:'pending',  items:[{code:'P004',name:'مرتبة طبية 160×200',qty:10,cost:1700,total:17000}], total:17000, branchId:'b1' },
+    { id:'PO003', supplierId:'S003', supplierName:'توريدات الديكور',     date: new Date(now-3*86400000).toISOString(),  status:'ordered',  items:[{code:'P012',name:'لوحة ديكور فنية',qty:20,cost:250,total:5000}],   total:5000,  branchId:'b2' },
+  ];
+  _purchaseCache = purchases;
+  DB.s('pos_purchases', purchases);
+
+  // ── 5. HR TARGETS ────────────────────────────
+  const month = new Date().toISOString().slice(0,7);
+  const hrData = sellers.map((name, i) => ({
+    name, month,
+    target: [30000, 25000, 20000, 18000][i] || 20000,
+    commission: 2.5,
+    bonus: [1500, 1000, 800, 800][i] || 800
+  }));
+  _hrCache = hrData;
+  DB.s('pos_hr', hrData);
+
+  // ── 6. EXPENSES ──────────────────────────────
+  const expenses = [
+    { id:'E001', date: new Date(now-5*86400000).toISOString(),  type:'branch',   branchId:'b1', category:'إيجار',      amount:12000, note:'إيجار شهر يوليو — فرع المعادي' },
+    { id:'E002', date: new Date(now-5*86400000).toISOString(),  type:'branch',   branchId:'b2', category:'إيجار',      amount:9500,  note:'إيجار شهر يوليو — فرع مدينة نصر' },
+    { id:'E003', date: new Date(now-3*86400000).toISOString(),  type:'company',  branchId:'b1', category:'رواتب',      amount:35000, note:'رواتب موظفين يوليو' },
+    { id:'E004', date: new Date(now-1*86400000).toISOString(),  type:'branch',   branchId:'b1', category:'مصاريف تشغيل', amount:2200, note:'فواتير كهرباء ومياه' },
+    { id:'E005', date: new Date(now-2*86400000).toISOString(),  type:'company',  branchId:'b1', category:'تسويق',      amount:3500,  note:'إعلانات سوشيال ميديا' },
+    { id:'E006', date: new Date(now-10*86400000).toISOString(), type:'branch',   branchId:'b3', category:'صيانة',      amount:1800,  note:'صيانة تكييفات الفرع' },
+  ];
+  _expensesCache = expenses;
+  DB.s('pos_expenses', expenses);
+
+  // ── 7. CRM CUSTOMERS ─────────────────────────
+  const customers = [
+    { id:'C001', name:'أحمد محمود الشريف',  phone:'01001111111', email:'ahmed@email.com',   points:450,  totalSpent:18500, visits:7,  createdAt: new Date(now-90*86400000).toISOString() },
+    { id:'C002', name:'منى عبدالله حسن',    phone:'01112222222', email:'mona@email.com',    points:280,  totalSpent:11200, visits:4,  createdAt: new Date(now-60*86400000).toISOString() },
+    { id:'C003', name:'كريم سامي فؤاد',     phone:'01223333333', email:'karim@email.com',   points:620,  totalSpent:24800, visits:10, createdAt: new Date(now-120*86400000).toISOString() },
+    { id:'C004', name:'هبة محمد النجار',    phone:'01034444444', email:'heba@email.com',    points:150,  totalSpent:6000,  visits:2,  createdAt: new Date(now-30*86400000).toISOString() },
+    { id:'C005', name:'طارق علي إبراهيم',   phone:'01155555555', email:'tarek@email.com',   points:890,  totalSpent:35600, visits:15, createdAt: new Date(now-180*86400000).toISOString() },
+  ];
+  DB.s('pos_customers', customers);
+
+  // ── 8. AUTH ──────────────────────────────────
+  DB.s('users', { admin: 'demo1234', cashier: 'demo1234' });
+  DB.s('currentBranch', 'b1');
+
+  // ── 9. DEMO FLAG ─────────────────────────────
+  DB.s('pos_demo_mode', true);
+
+  // ── 10. ENTER AS ADMIN ───────────────────────
+  currentBranch = 'b1';
+  currentUser   = 'admin';
+  document.getElementById('loginPage').classList.add('hidden');
+
+  // Show demo banner
+  _showDemoBanner();
+
+  // Navigate to home
+  if (typeof showPage === 'function') showPage('home');
+  else if (typeof renderHomeIcons === 'function') {
+    document.getElementById('homePage')?.classList?.remove('hidden');
+    renderHomeIcons();
+  }
+
+  // Refresh low stock bell
+  if (typeof updateLowStockBell === 'function') setTimeout(updateLowStockBell, 300);
+}
+
+function _showDemoBanner() {
+  if (document.getElementById('demoBanner')) return;
+  const bar = document.createElement('div');
+  bar.id = 'demoBanner';
+  bar.innerHTML = `
+    <span>⚡ وضع الديمو — البيانات تجريبية</span>
+    <a href="#" onclick="if(confirm('مسح كل بيانات الديمو والبدء من جديد؟')){localStorage.clear();location.reload();}return false;"
+       style="color:#fbbf24;margin-right:16px;font-weight:700;text-decoration:underline;">مسح الديمو</a>
+  `;
+  bar.style.cssText = `
+    position:fixed;top:0;left:0;right:0;z-index:9999;
+    background:linear-gradient(90deg,#1e1b4b,#312e81);
+    color:#c7d2fe;font-size:13px;font-weight:600;
+    padding:7px 20px;text-align:center;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+    box-shadow:0 2px 8px rgba(0,0,0,.3);
+  `;
+  document.body.prepend(bar);
+  // Push content down
+  document.body.style.paddingTop = '35px';
+}
 
 // ══════════════════════════════════════════════
 // UTILS
@@ -3392,20 +3601,7 @@ async function preInitFirebase() {
     }
   } catch(e) {
     console.warn('preInitFirebase failed:', e);
-  } finally {
-    if (overlay) overlay.style.display = 'none';
-  }
-}
-preInitFirebase();
-
-document.addEventListener('DOMContentLoaded', applyMobileUI);
-
-// ── CLOCK ────────────────────────────────────
-function updateClock() {
-  document.getElementById('cartClock').textContent = new Date().toLocaleString('ar-EG');
-}
-
-
+  } final
 // ══════════════════════════════════════════════
 // CASHIER – PRODUCTS
 // ══════════════════════════════════════════════
@@ -3456,12 +3652,7 @@ function handleSearchKey(e) {
   const found = inv.find(p => p.code.toLowerCase() === q.toLowerCase());
   if (found && found.qty > 0) {
     addToCart(found.code);
-    document.getElementById('productSearch').value = '';
-    renderProducts();
-  }
-}
-
-
+    document.getElementById('product
 // ═══════════════════════════════════════════════════════════════════════
 // FINGERPRINT IMPORT — استيراد بيانات جهاز البصمة
 // ═══════════════════════════════════════════════════════════════════════
@@ -3637,13 +3828,7 @@ function applyBranchReportsFilter() {
     setTimeout(function() {
       try { updateExpReqBadge(); } catch(e) {}
       try { updateLeaveReqBadge(); } catch(e) {}
-      if (page === 'home')    { try { renderHomeIcons(); } catch(e) {} }
-      if (page === 'reports') { try { applyBranchReportsFilter(); } catch(e) {} }
-    }, 50);
-  };
-})();
-
-
+    
 
 // ============================================================
 // وحدة التصنيع — Manufacturing Module
@@ -4134,23 +4319,7 @@ function exportMfgReport() {
   });
   const csv='﻿'+rows.map(r=>r.join(',')).join('\n');
   const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
-  a.download='mfg_report_'+new Date().toISOString().split('T')[0]+'.csv';
-  a.click();
-  _mToast('تم تصدير التقرير','success');
-}
-
-// ============================================================
-// Wire up showPage — patch to add manufacturing case
-// ============================================================
-(function() {
-  const _orig = showPage;
-  showPage = function(page) {
-    _orig(page);
-    if (page === 'manufacturing') renderManufacturingPage();
-  };
-})();
-
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}))
 // ══════════════════════════════════════════════
 // CART
 // ══════════════════════════════════════════════
@@ -4268,14 +4437,7 @@ function updateCartUI() {
       payBtn.style.background = '#d97706';
       payBtn.onclick = sendForApproval;
     } else {
-      payBtn.textContent = '💳 دفع';
-      payBtn.style.background = '';
-      payBtn.onclick = openPayment;
-    }
-  }
-}
-
-
+      payB
 // ══════════════════════════════════════════════
 // PAYMENT
 // ══════════════════════════════════════════════
@@ -4402,15 +4564,7 @@ function printReceipt() {
   const html = document.getElementById('receiptContent').innerHTML;
   const w = window.open('','_blank','width=400,height=600');
   w.document.write('<html dir="rtl"><head><style>body{font-family:monospace;direction:rtl;padding:20px;font-size:13px;}</style></head><body>' + html + '</body></html>');
-  w.document.close(); w.print();
-}
-
-function closeModal(id) {
-  const el = document.getElementById(id);
-  if (el) el.classList.add('hidden');
-}
-
-
+  w.document.close(
 // ══════════════════════════════════════════════
 // MANAGER PAGES
 // ══════════════════════════════════════════════
@@ -4455,10 +4609,7 @@ function showPage(page) {
   }
   if (page === 'warehouse')  renderWarehousePage();
   if (page === 'expenses')   renderExpensesPage();
-  if (page === 'audit')      renderAuditPage();
-}
-
-
+  if (p
 // ══════════════════════════════════════════════
 // DASHBOARD
 // ══════════════════════════════════════════════
@@ -4676,13 +4827,7 @@ function buildDashboard() {
     dashEl.innerHTML = '<div class="text-center text-muted" style="padding:20px;">لا توجد منتجات تحتاج تجديد 👍</div>';
   } else {
     dashEl.innerHTML = `<table style="width:100%;"><thead><tr><th>الكود</th><th>الاسم</th><th>الكمية الحالية</th><th>الحالة</th></tr></thead><tbody>
-      ${allAlert.map(p=>`<tr><td>${p.code}</td><td>${p.name}</td><td><strong>${p.qty}</strong></td>
-        <td><span class="badge ${p.qty<=0?'badge-danger':'badge-warning'}">${p.qty<=0?'نفد المخزون':'مخزون منخفض'}</span></td></tr>`).join('')}
-    </tbody></table>`;
-  }
-}
-
-
+      ${allAlert.map(p=>`<tr><td>${p.code}</td><td>${p.name}</td><td><strong>
 // ══════════════════════════════════════════════
 // INVENTORY
 // ══════════════════════════════════════════════
@@ -4856,12 +5001,7 @@ function exportInventoryExcel() {
     'السعر قبل':p.priceBefore||0,'السعر بعد':p.priceAfter,'الكمية':p.qty
   }));
   const ws = XLSX.utils.json_to_sheet(data);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'المخزون');
-  XLSX.writeFile(wb, 'inventory_' + new Date().toISOString().slice(0,10) + '.xlsx');
-}
-
-
+  const w
 // ══════════════════════════════════════════════
 // SALES LIST
 // ══════════════════════════════════════════════
@@ -4941,10 +5081,7 @@ function viewSale(id) {
 }
 
 function printSaleFromModal() {
-  if (lastSaleForPrint) { showReceipt(lastSaleForPrint); document.getElementById('saleDetailModal').classList.add('hidden'); setTimeout(printReceipt, 300); }
-}
-
-
+  if (lastSaleForPrint) { showReceipt(lastSaleForPrint); document.getElementById('
 // ══════════════════════════════════════════════
 // REPORTS
 // ══════════════════════════════════════════════
@@ -5237,17 +5374,7 @@ function renderCustomizedPage() {
   var period = document.getElementById('custRptPeriod')?.value || 'month';
   var from, to;
   if (period === 'custom') {
-    from = document.getElementById('custRptFrom')?.value || '';
-    to   = document.getElementById('custRptTo')?.value   || '';
-  } else {
-    var range = getDateRangeForPeriod(period);
-    from = range ? range.from : '';
-    to   = range ? range.to   : '';
-  }
-  renderCategoryReport(from, to);
-}
-
-
+    fro
 // ══════════════════════════════════════════════
 // KPI REPORT
 // ══════════════════════════════════════════════
@@ -5325,13 +5452,7 @@ function buildKPIReport() {
   chartKPI = new Chart(document.getElementById('chartKPI'), {
     type:'line',
     data:{ labels:days, datasets:[{data:days.map(d=>dayMap[d]),borderColor:'#1a5faf',backgroundColor:'rgba(26,95,175,.1)',fill:true,tension:.3,label:'المبيعات'}] },
-    options:{ plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}}, responsive:true }
-  });
-
-  buildHeatmap(sales);
-}
-
-
+    options:{ plugins:{legend:{display:false}}, scale
 // ══════════════════════════════════════════════
 // SELLERS REPORT
 // ══════════════════════════════════════════════
@@ -5386,12 +5507,7 @@ function buildSellersReport() {
           {label:'الخصومات',data:rows.map(r=>r.disc),backgroundColor:'rgba(217,119,6,.6)',borderRadius:6}
         ]
       },
-      options:{ plugins:{legend:{display:true}}, scales:{y:{beginAtZero:true}}, responsive:true }
-    });
-  }
-}
-
-
+      options:{ plugins:{legend:{display:true}}, scales:{y:
 // ══════════════════════════════════════════════
 // #4 LOW STOCK BELL
 // ══════════════════════════════════════════════
@@ -5592,13 +5708,7 @@ function printReport(sectionId) {
   const w = window.open('','_blank');
   w.document.write('<html dir="rtl"><head><title>تقرير</title>'
     + '<style>body{font-family:Arial,sans-serif;direction:rtl;padding:20px;font-size:13px;}'
-    + 'table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ccc;padding:7px;text-align:right;}'
-    + 'th{background:#f0f0f0;}.hidden,.btn,.tabs,.flex.gap-8.mb-16{display:none!important;}</style>'
-    + '</head><body>' + html + '</body></html>');
-  w.document.close(); w.print();
-}
-
-
+    + 'table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ccc;padding:7px;text-al
 // ══════════════════════════════════════════════
 // SETTINGS
 // ══════════════════════════════════════════════
@@ -5731,12 +5841,7 @@ function resetAll() {
     }).catch(()=>{});
   }
   _invCacheByBranch = {}; BRANCH_IDS.forEach(b => _invCacheByBranch[b] = []);
-  _salesCache = []; _suspendCache = []; _transfersCache = [];
-  _settingsCache = { threshold: 5 };
-  showMsg('sSettingsMsg','تم حذف كل البيانات','danger');
-}
-
-
+  _salesCache = []; _suspendCache = []; _t
 // ══════════════════════════════════════════════
 // FIREBASE CONFIG
 // ══════════════════════════════════════════════
@@ -6357,20 +6462,7 @@ function renderResumeList() {
         <span style="font-size:15px;font-weight:700;">${fmt(final)} ج</span>
       </div>
       <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">${new Date(b.created).toLocaleString('ar-EG')}</div>
-      <div style="font-size:12px;margin-bottom:8px;">${b.items.map(i=>i.name+' ×'+i.qty).join(' · ')}</div>
-      ${discAmt>0?`<div style="font-size:12px;color:var(--success);margin-bottom:8px;">خصم مدير: -${fmt(discAmt)} ج</div>`:''}
-      ${b.note?`<div style="font-size:12px;color:#6b7280;margin-bottom:8px;">ملاحظة: ${b.note}</div>`:''}
-      <button class="btn btn-success btn-sm" onclick="resumeFromModal('${b.id}')">استئناف هذه الفاتورة</button>
-    </div>`;
-  }).join('');
-}
-
-function resumeFromModal(id) {
-  document.getElementById('resumeModal').classList.add('hidden');
-  activateSuspended(id);
-}
-
-
+      <div style="font-
 // ══════════════════════════════════════════════
 // MULTI-BRANCH
 // ══════════════════════════════════════════════
@@ -6564,17 +6656,7 @@ function renderTransfersPage() {
     <td><span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:10px;font-size:12px;">${t.toName}</span></td>
     <td style="font-size:12px;">${t.items.map(i=>`${i.name} ×${i.qty}`).join(' · ')}</td>
     <td><span style="background:${t.status==='completed'?'#d1fae5':'#fef9c3'};color:${t.status==='completed'?'#065f46':'#92400e'};padding:2px 8px;border-radius:10px;font-size:11px;">${t.status==='completed'?'✅ مكتمل':'⏳ معلق'}</span></td>
-    <td style="font-size:12px;color:var(--text-muted);">${t.note||'-'}</td>
-    <td style="font-size:11px;color:var(--text-muted);">${t.by||''}</td>
-  </tr>`).join('');
-}
-
-// Call populateBranchSelect on login
-function initBranchUI() {
-  populateBranchSelect();
-}
-
-
+    <td style="font-size:12px;color:var(--text-muted);">${t.note||'-'}</
 // ══════════════════════════════════════════════
 // PURCHASE MANAGEMENT SYSTEM
 // ══════════════════════════════════════════════
@@ -6951,15 +7033,7 @@ function renderPurchasesPage() {
       <td style="font-size:12px;">${new Date(po.createdAt).toLocaleDateString('ar-EG')}</td>
       <td><span style="background:${statusBg};color:${statusColor};padding:2px 8px;border-radius:10px;font-size:11px;">${statusLabel}</span></td>
       <td>
-        <button class="btn btn-sm" onclick="openPODetails('${po.id}')" style="font-size:11px; padding:3px 8px; margin-left:4px;">👁️</button>
-        ${po.status!=='received'?`<button class="btn btn-sm" onclick="openPOModal('${po.id}')" style="font-size:11px; padding:3px 8px; margin-left:4px;">✏️</button>`:''}
-        <button class="btn btn-danger btn-sm" onclick="deletePO('${po.id}')" style="font-size:11px; padding:3px 8px;">🗑️</button>
-      </td>
-    </tr>`;
-  }).join('');
-}
-
-
+        <button class="btn btn-sm" onclick="openPODetails('${po.id}')" style="font-size:11px; padding:3px 8px; margin-lef
 // ══════════════════════════════════════════════
 // HR SYSTEM — TARGETS & COMMISSION
 // ══════════════════════════════════════════════
@@ -7097,14 +7171,7 @@ function renderHRPage() {
       <div style="background:#e5e7eb; border-radius:100px; height:12px; overflow:hidden;">
         <div style="background:${barColor}; width:${Math.min(r.pct,100)}%; height:100%; border-radius:100px; transition:width 0.5s ease;"></div>
       </div>
-      <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-muted); margin-top:4px;">
-        <span>0</span><span>${fmt(r.target)} ج</span>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-
+      <div style="display:flex; justify-content:space-between; font-size:11px; color
 // ══════════════════════════════════════════════
 // PROMOTIONS SYSTEM
 // ══════════════════════════════════════════════
@@ -7407,15 +7474,7 @@ function renderEligiblePromos() {
     const disc = calcPromoDiscount(promo);
     const badge = promo.type === 'bundle' ? '📦' : '💰';
     return `<div style="background:#faf5ff; border:1px dashed #7c3aed; border-radius:8px; padding:8px 10px; margin-bottom:6px; font-size:12px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
-        <span>${badge} <strong>${promo.name}</strong> — وفر ${fmt(disc)} ج</span>
-        <button class="btn btn-sm btn-primary" style="padding:3px 10px; font-size:11px;" onclick="applyPromo(${promo.id})">تطبيق</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-
+      <div style="display:flex; justify-content:space-between; alig
 // ══════════════════════════════════════════════
 // #1 CRM — CUSTOMERS
 // ══════════════════════════════════════════════
@@ -7644,15 +7703,7 @@ function clearSelectedCustomer() {
 
 function updateCustomerAfterSale(customerId, amount) {
   if (!customerId) return;
-  const list = getCustomers();
-  const c    = list.find(x => x.id === customerId); if (!c) return;
-  c.totalSpent = (c.totalSpent||0) + amount;
-  c.visits     = (c.visits||0)     + 1;
-  c.lastVisit  = new Date().toISOString();
-  setCustomers(list);
-}
-
-
+  const list = getCustom
 // ══════════════════════════════════════════════
 // #2 RETURNS
 // ══════════════════════════════════════════════
@@ -7770,12 +7821,7 @@ function buildReturnsReport() {
         <td style="white-space:nowrap;">${new Date(r.date).toLocaleString('ar-EG')}</td>
         <td>${r.originalSaleId ? '#'+String(r.originalSaleId).slice(-6) : '-'}</td>
         <td>${r.items.map(i=>i.name+' ×'+Math.abs(i.qty)).join(' · ')}</td>
-        <td style="color:var(--danger);font-weight:700;">${fmt(Math.abs(r.total))} ج</td>
-        <td>${r.returnReason||'-'}</td>
-      </tr>`).join('');
-}
-
-
+        <td style="color:var(--danger);fo
 // ══════════════════════════════════════════════
 // ABC ANALYSIS
 // ══════════════════════════════════════════════
@@ -8044,17 +8090,7 @@ function shareOffersWhatsApp() {
       if (p.type === 'bundle') {
         return `📦 *${p.name}*\nاشتري: ${p.items.map(i=>i.name+' ×'+i.minQty).join(' + ')}\nبسعر: ${fmt(p.bundlePrice)} ج بدل ${fmt(p.items.reduce((s,i)=>{const inv=getInv().find(x=>x.code===i.code);return s+(inv?.priceAfter||inv?.price||0)*i.minQty;},0))} ج`;
       } else {
-        return `💰 *${p.name}*\nعند شراء بأكثر من ${fmt(p.minAmount)} ج\nخصم ${p.discountType==='percent'?p.discountValue+'%':fmt(p.discountValue)+' ج'}`;
-      }
-    }),
-    `━━━━━━━━━━━━━━━━━━━━`,
-    `🏠 VOODO ERP — بادر بالشراء!`
-  ];
-  const text = encodeURIComponent(lines.join('\n'));
-  window.open(`https://wa.me/?text=${text}`, '_blank');
-}
-
-
+        return `💰 *${p.name}*\nعند شراء بأكثر من ${fmt(p.minAmount)} ج\nخصم ${p.discountType==='percent'?p.discountValue+'%':fmt(p.discoun
 // ══════════════════════════════════════════════
 // CASHIER RETURN SYSTEM
 // ══════════════════════════════════════════════
@@ -8231,12 +8267,7 @@ function sendReturnWhatsApp() {
     ``,
     `شكراً لثقتك بـ VOODO ERP 🏠`
   ].filter(l => l !== '');
-  const text = encodeURIComponent(lines.join('\n'));
-  const url = phone ? `https://wa.me/2${phone}?text=${text}` : `https://wa.me/?text=${text}`;
-  window.open(url, '_blank');
-}
-
-
+  co
 // ══════════════════════════════════════════════
 // BARCODE & PRICE TAG PRINTING
 // ══════════════════════════════════════════════
@@ -8436,14 +8467,7 @@ async function printReceiptESCPOS(sale) {
 }
 async function testReceiptPrint() {
   if (!_serialWriter) { alert('الطابعة غير متصلة — اضغط اتصال أولاً'); return; }
-  await printReceiptESCPOS({
-    id:'TEST001', date: new Date().toISOString().slice(0,10),
-    salesperson:'اختبار', items:[{name:'منتج تجريبي',qty:2,price:50}],
-    total:100, paid:100
-  });
-}
-
-
+  await prin
 // ══════════════════════════════════════════════
 // LOYALTY PROGRAM
 // ══════════════════════════════════════════════
@@ -8499,9 +8523,7 @@ function saveLoyaltySettings() {
     enabled: document.getElementById('loyEnabled').checked
   });
   document.getElementById('loyaltySettingsModal').classList.add('hidden');
-  alert('تم حفظ إعدادات الولاء ✓');
-}
-
+  a
 // ══════════════════════════════════════════════
 // ATTENDANCE & PAYROLL
 // ══════════════════════════════════════════════
@@ -8712,16 +8734,7 @@ function renderPayrollPane() {
           </td>
           <td style="padding:8px;text-align:center;">
             <button class="btn btn-sm" style="background:${p.isPaid?'#fee2e2':'#dcfce7'};color:${p.isPaid?'#b91c1c':'#15803d'};"
-              onclick="markPayrollPaid('${month}','${p.name}',${!p.isPaid});renderPayrollPane();">
-              ${p.isPaid?'↩ استرداد':'💵 صرف الراتب'}
-            </button>
-          </td>
-        </tr>`).join('')}
-      </tbody>
-    </table></div>`;
-}
-
-
+              onclick="markPayrollPaid('${month}','${p.name}',${!p
 // ══════════════════════════════════════════════
 // ACCOUNTING — محاسبة رسمية
 // ══════════════════════════════════════════════
@@ -8903,12 +8916,7 @@ function renderAccSummary() {
         <thead><tr style="background:var(--sidebar);color:white;">
           ${['الشهر','الإيراد','التكلفة','المصاريف','صافي الربح'].map(h=>`<th style="padding:10px 8px;text-align:center;">${h}</th>`).join('')}
         </tr></thead>
-        <tbody>${rows||'<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted);">لا توجد بيانات</td></tr>'}</tbody>
-      </table>
-    </div>`;
-}
-
-
+     
 // ══════════════════════════════════════════════
 // VLOOKUP — تقارير ربط الجداول
 // ══════════════════════════════════════════════
@@ -9245,17 +9253,7 @@ function applyVlookup(matched) {
   if (!matched || !matched.length) { alert('لا توجد تغييرات للتطبيق'); return; }
   var inv = getInv();
   matched.forEach(function(r) {
-    var prod = inv.find(function(p){ return p.code === r.keyVal || p.code.toLowerCase() === r.keyVal.toLowerCase(); });
-    if (!prod) return;
-    Object.keys(r.changes).forEach(function(field){ prod[field] = r.changes[field]; });
-  });
-  setInv(inv);
-  renderInventory();
-  document.getElementById('vlookupModal').classList.add('hidden');
-  alert('تم تحديث ' + matched.length + ' منتج بنجاح');
-}
-
-
+    var prod = inv.find(function(p){ return p.code === r.keyVal || p.code.toLo
 // ══════════════════════════════════════════════
 // WAREHOUSE (المخزن الرئيسي) MODULE
 // ══════════════════════════════════════════════
@@ -9458,12 +9456,7 @@ function confirmWhTransfer() {
   };
   var list = getTransfers(); list.unshift(record); setTransfers(list);
 
-  document.getElementById('whTransferModal').classList.add('hidden');
-  renderWarehousePage();
-  alert('✅ تم التحويل بنجاح\nمن: المخزن الرئيسي → إلى: '+(record.toName)+'\n'+_whTrItems.length+' صنف');
-}
-
-
+  document.getElementById('whTransferMod
 // ══════════════════════════════════════════════════════
 // PRICE-CHANGE APPROVAL SYSTEM
 // ══════════════════════════════════════════════════════
@@ -9793,17 +9786,7 @@ async function confirmFirstRun() {
   const users  = getUsers();
   users.admin  = hashed;
   setUsersLocal(users);
-  document.getElementById('firstRunModal').classList.add('hidden');
-  document.getElementById('loginPage').classList.remove('hidden');
-  document.getElementById('frMsg').textContent = '';
-  showToast('✅ تم تعيين كلمة مرور المدير — سجّل الدخول الآن');
-}
-
-setInterval(updateHomeClock, 1000);
-
-
-
-
+  d
 // ═══════════════════════════════════════════════════════════════════════
 // EXPENSE APPROVAL REQUESTS — طلبات اعتماد المصاريف
 // ═══════════════════════════════════════════════════════════════════════
@@ -9897,13 +9880,7 @@ function renderExpenseRequestsPane() {
       (isAdmin && r.status==='pending' ?
         '<button class="btn" style="background:#28a745;color:#fff;font-size:12px;padding:6px 14px" onclick="approveExpenseRequest(\''+r.id+'\')">✅ قبول</button>' +
         '<button class="btn" style="background:#dc3545;color:#fff;font-size:12px;padding:6px 14px" onclick="rejectExpenseRequest(\''+r.id+'\')">❌ رفض</button>' : '') +
-      (r.status!=='pending' ? '<div style="font-size:11px;color:var(--text-muted)">'+r.reviewedBy+'</div>' : '') +
-    '</div>' +
-  '</div>').join('');
-}
-
-
-
+      (r.status!=='pending' ? '<div style="font-size:11px;color
 // ═══════════════════════════════════════════════════════════════════════
 // LEAVE & PERMISSION REQUESTS — طلبات الإجازات والأذونات
 // ═══════════════════════════════════════════════════════════════════════
@@ -10018,16 +9995,9 @@ function switchHRTab(tab) {
     if (btn)  { btn.style.background = t===tab?'white':''; btn.style.fontWeight = t===tab?'700':'400'; btn.style.boxShadow = t===tab?'0 1px 4px rgba(0,0,0,.1)':''; }
     if (pane) pane.classList.toggle('hidden', t!==tab);
   });
-  if (tab==='attendance') renderAttendancePane();
-  if (tab==='payroll')    renderPayrollPane();
-  if (tab==='leavereqs')  renderLeaveRequestsPane();
-}
-
-
-
+  if (tab==='attendance') renderAttendan
 // app.js split into feature modules (00-core.js … 105-manufacturing.js)
 // Backup: app.js.bak
-
 
 </script>
 
@@ -10726,42 +10696,4 @@ function switchHRTab(tab) {
       </div>
       <div class="modal-footer">
         <button class="btn btn-primary" style="width:100%;" onclick="confirmFirstRun()">✅ تأكيد وبدء النظام</button>
-      </div>
-    </div>
-  </div>
-
-<!-- PWA Service Worker Registration -->
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then(reg => console.log('SW registered:', reg.scope))
-      .catch(err => console.warn('SW registration failed:', err));
-  });
-}
-
-let deferredPrompt;
-window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault();
-  deferredPrompt = e;
-  const btn = document.getElementById('pwaInstallBtn');
-  if (btn) btn.style.display = 'flex';
-});
-
-window.addEventListener('appinstalled', () => {
-  deferredPrompt = null;
-  const btn = document.getElementById('pwaInstallBtn');
-  if (btn) btn.style.display = 'none';
-  showToast('\u2705 \u062a\u0645 \u062a\u062b\u0628\u064a\u062a \u0627\u0644\u062a\u0637\u0628\u064a\u0642 \u0628\u0646\u062c\u0627\u062d!');
-});
-
-function installPWA() {
-  if (!deferredPrompt) return;
-  deferredPrompt.prompt();
-  deferredPrompt.userChoice.then(result => {
-    deferredPrompt = null;
-  });
-}
-</script>
-</body>
-</html>
+      <
