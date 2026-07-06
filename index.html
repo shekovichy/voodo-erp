@@ -3018,7 +3018,11 @@ let currentUser = null;
 let cart = [];
 let payMethod = 'cash';
 let chartWeekly = null, chartTop = null, chartRptSales = null, chartProfit = null;
-let chartTrend = null, chartBranches = null, chart
+let chartTrend = null, chartBranches = null, chartCmpTrend = null, chartCmpBranches = null;
+let _dashRange = 30; // default 30 days
+let lastSaleForPrint = null;
+
+
 // ══════════════════════════════════════════════
 // DEMO MODE — داتا تجريبية جاهزة
 // ══════════════════════════════════════════════
@@ -3601,7 +3605,20 @@ async function preInitFirebase() {
     }
   } catch(e) {
     console.warn('preInitFirebase failed:', e);
-  } final
+  } finally {
+    if (overlay) overlay.style.display = 'none';
+  }
+}
+preInitFirebase();
+
+document.addEventListener('DOMContentLoaded', applyMobileUI);
+
+// ── CLOCK ────────────────────────────────────
+function updateClock() {
+  document.getElementById('cartClock').textContent = new Date().toLocaleString('ar-EG');
+}
+
+
 // ══════════════════════════════════════════════
 // CASHIER – PRODUCTS
 // ══════════════════════════════════════════════
@@ -3652,7 +3669,12 @@ function handleSearchKey(e) {
   const found = inv.find(p => p.code.toLowerCase() === q.toLowerCase());
   if (found && found.qty > 0) {
     addToCart(found.code);
-    document.getElementById('product
+    document.getElementById('productSearch').value = '';
+    renderProducts();
+  }
+}
+
+
 // ═══════════════════════════════════════════════════════════════════════
 // FINGERPRINT IMPORT — استيراد بيانات جهاز البصمة
 // ═══════════════════════════════════════════════════════════════════════
@@ -3828,7 +3850,13 @@ function applyBranchReportsFilter() {
     setTimeout(function() {
       try { updateExpReqBadge(); } catch(e) {}
       try { updateLeaveReqBadge(); } catch(e) {}
-    
+      if (page === 'home')    { try { renderHomeIcons(); } catch(e) {} }
+      if (page === 'reports') { try { applyBranchReportsFilter(); } catch(e) {} }
+    }, 50);
+  };
+})();
+
+
 
 // ============================================================
 // وحدة التصنيع — Manufacturing Module
@@ -4319,7 +4347,23 @@ function exportMfgReport() {
   });
   const csv='﻿'+rows.map(r=>r.join(',')).join('\n');
   const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}))
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download='mfg_report_'+new Date().toISOString().split('T')[0]+'.csv';
+  a.click();
+  _mToast('تم تصدير التقرير','success');
+}
+
+// ============================================================
+// Wire up showPage — patch to add manufacturing case
+// ============================================================
+(function() {
+  const _orig = showPage;
+  showPage = function(page) {
+    _orig(page);
+    if (page === 'manufacturing') renderManufacturingPage();
+  };
+})();
+
 // ══════════════════════════════════════════════
 // CART
 // ══════════════════════════════════════════════
@@ -4437,7 +4481,14 @@ function updateCartUI() {
       payBtn.style.background = '#d97706';
       payBtn.onclick = sendForApproval;
     } else {
-      payB
+      payBtn.textContent = '💳 دفع';
+      payBtn.style.background = '';
+      payBtn.onclick = openPayment;
+    }
+  }
+}
+
+
 // ══════════════════════════════════════════════
 // PAYMENT
 // ══════════════════════════════════════════════
@@ -4564,7 +4615,15 @@ function printReceipt() {
   const html = document.getElementById('receiptContent').innerHTML;
   const w = window.open('','_blank','width=400,height=600');
   w.document.write('<html dir="rtl"><head><style>body{font-family:monospace;direction:rtl;padding:20px;font-size:13px;}</style></head><body>' + html + '</body></html>');
-  w.document.close(
+  w.document.close(); w.print();
+}
+
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.add('hidden');
+}
+
+
 // ══════════════════════════════════════════════
 // MANAGER PAGES
 // ══════════════════════════════════════════════
@@ -4609,7 +4668,10 @@ function showPage(page) {
   }
   if (page === 'warehouse')  renderWarehousePage();
   if (page === 'expenses')   renderExpensesPage();
-  if (p
+  if (page === 'audit')      renderAuditPage();
+}
+
+
 // ══════════════════════════════════════════════
 // DASHBOARD
 // ══════════════════════════════════════════════
@@ -4827,7 +4889,13 @@ function buildDashboard() {
     dashEl.innerHTML = '<div class="text-center text-muted" style="padding:20px;">لا توجد منتجات تحتاج تجديد 👍</div>';
   } else {
     dashEl.innerHTML = `<table style="width:100%;"><thead><tr><th>الكود</th><th>الاسم</th><th>الكمية الحالية</th><th>الحالة</th></tr></thead><tbody>
-      ${allAlert.map(p=>`<tr><td>${p.code}</td><td>${p.name}</td><td><strong>
+      ${allAlert.map(p=>`<tr><td>${p.code}</td><td>${p.name}</td><td><strong>${p.qty}</strong></td>
+        <td><span class="badge ${p.qty<=0?'badge-danger':'badge-warning'}">${p.qty<=0?'نفد المخزون':'مخزون منخفض'}</span></td></tr>`).join('')}
+    </tbody></table>`;
+  }
+}
+
+
 // ══════════════════════════════════════════════
 // INVENTORY
 // ══════════════════════════════════════════════
@@ -5001,7 +5069,12 @@ function exportInventoryExcel() {
     'السعر قبل':p.priceBefore||0,'السعر بعد':p.priceAfter,'الكمية':p.qty
   }));
   const ws = XLSX.utils.json_to_sheet(data);
-  const w
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'المخزون');
+  XLSX.writeFile(wb, 'inventory_' + new Date().toISOString().slice(0,10) + '.xlsx');
+}
+
+
 // ══════════════════════════════════════════════
 // SALES LIST
 // ══════════════════════════════════════════════
@@ -5081,7 +5154,10 @@ function viewSale(id) {
 }
 
 function printSaleFromModal() {
-  if (lastSaleForPrint) { showReceipt(lastSaleForPrint); document.getElementById('
+  if (lastSaleForPrint) { showReceipt(lastSaleForPrint); document.getElementById('saleDetailModal').classList.add('hidden'); setTimeout(printReceipt, 300); }
+}
+
+
 // ══════════════════════════════════════════════
 // REPORTS
 // ══════════════════════════════════════════════
@@ -5374,7 +5450,17 @@ function renderCustomizedPage() {
   var period = document.getElementById('custRptPeriod')?.value || 'month';
   var from, to;
   if (period === 'custom') {
-    fro
+    from = document.getElementById('custRptFrom')?.value || '';
+    to   = document.getElementById('custRptTo')?.value   || '';
+  } else {
+    var range = getDateRangeForPeriod(period);
+    from = range ? range.from : '';
+    to   = range ? range.to   : '';
+  }
+  renderCategoryReport(from, to);
+}
+
+
 // ══════════════════════════════════════════════
 // KPI REPORT
 // ══════════════════════════════════════════════
@@ -5452,7 +5538,13 @@ function buildKPIReport() {
   chartKPI = new Chart(document.getElementById('chartKPI'), {
     type:'line',
     data:{ labels:days, datasets:[{data:days.map(d=>dayMap[d]),borderColor:'#1a5faf',backgroundColor:'rgba(26,95,175,.1)',fill:true,tension:.3,label:'المبيعات'}] },
-    options:{ plugins:{legend:{display:false}}, scale
+    options:{ plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}}, responsive:true }
+  });
+
+  buildHeatmap(sales);
+}
+
+
 // ══════════════════════════════════════════════
 // SELLERS REPORT
 // ══════════════════════════════════════════════
@@ -5507,7 +5599,12 @@ function buildSellersReport() {
           {label:'الخصومات',data:rows.map(r=>r.disc),backgroundColor:'rgba(217,119,6,.6)',borderRadius:6}
         ]
       },
-      options:{ plugins:{legend:{display:true}}, scales:{y:
+      options:{ plugins:{legend:{display:true}}, scales:{y:{beginAtZero:true}}, responsive:true }
+    });
+  }
+}
+
+
 // ══════════════════════════════════════════════
 // #4 LOW STOCK BELL
 // ══════════════════════════════════════════════
@@ -5708,7 +5805,13 @@ function printReport(sectionId) {
   const w = window.open('','_blank');
   w.document.write('<html dir="rtl"><head><title>تقرير</title>'
     + '<style>body{font-family:Arial,sans-serif;direction:rtl;padding:20px;font-size:13px;}'
-    + 'table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ccc;padding:7px;text-al
+    + 'table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ccc;padding:7px;text-align:right;}'
+    + 'th{background:#f0f0f0;}.hidden,.btn,.tabs,.flex.gap-8.mb-16{display:none!important;}</style>'
+    + '</head><body>' + html + '</body></html>');
+  w.document.close(); w.print();
+}
+
+
 // ══════════════════════════════════════════════
 // SETTINGS
 // ══════════════════════════════════════════════
@@ -5841,7 +5944,12 @@ function resetAll() {
     }).catch(()=>{});
   }
   _invCacheByBranch = {}; BRANCH_IDS.forEach(b => _invCacheByBranch[b] = []);
-  _salesCache = []; _suspendCache = []; _t
+  _salesCache = []; _suspendCache = []; _transfersCache = [];
+  _settingsCache = { threshold: 5 };
+  showMsg('sSettingsMsg','تم حذف كل البيانات','danger');
+}
+
+
 // ══════════════════════════════════════════════
 // FIREBASE CONFIG
 // ══════════════════════════════════════════════
@@ -6462,7 +6570,20 @@ function renderResumeList() {
         <span style="font-size:15px;font-weight:700;">${fmt(final)} ج</span>
       </div>
       <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">${new Date(b.created).toLocaleString('ar-EG')}</div>
-      <div style="font-
+      <div style="font-size:12px;margin-bottom:8px;">${b.items.map(i=>i.name+' ×'+i.qty).join(' · ')}</div>
+      ${discAmt>0?`<div style="font-size:12px;color:var(--success);margin-bottom:8px;">خصم مدير: -${fmt(discAmt)} ج</div>`:''}
+      ${b.note?`<div style="font-size:12px;color:#6b7280;margin-bottom:8px;">ملاحظة: ${b.note}</div>`:''}
+      <button class="btn btn-success btn-sm" onclick="resumeFromModal('${b.id}')">استئناف هذه الفاتورة</button>
+    </div>`;
+  }).join('');
+}
+
+function resumeFromModal(id) {
+  document.getElementById('resumeModal').classList.add('hidden');
+  activateSuspended(id);
+}
+
+
 // ══════════════════════════════════════════════
 // MULTI-BRANCH
 // ══════════════════════════════════════════════
@@ -6656,7 +6777,17 @@ function renderTransfersPage() {
     <td><span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:10px;font-size:12px;">${t.toName}</span></td>
     <td style="font-size:12px;">${t.items.map(i=>`${i.name} ×${i.qty}`).join(' · ')}</td>
     <td><span style="background:${t.status==='completed'?'#d1fae5':'#fef9c3'};color:${t.status==='completed'?'#065f46':'#92400e'};padding:2px 8px;border-radius:10px;font-size:11px;">${t.status==='completed'?'✅ مكتمل':'⏳ معلق'}</span></td>
-    <td style="font-size:12px;color:var(--text-muted);">${t.note||'-'}</
+    <td style="font-size:12px;color:var(--text-muted);">${t.note||'-'}</td>
+    <td style="font-size:11px;color:var(--text-muted);">${t.by||''}</td>
+  </tr>`).join('');
+}
+
+// Call populateBranchSelect on login
+function initBranchUI() {
+  populateBranchSelect();
+}
+
+
 // ══════════════════════════════════════════════
 // PURCHASE MANAGEMENT SYSTEM
 // ══════════════════════════════════════════════
@@ -7033,7 +7164,15 @@ function renderPurchasesPage() {
       <td style="font-size:12px;">${new Date(po.createdAt).toLocaleDateString('ar-EG')}</td>
       <td><span style="background:${statusBg};color:${statusColor};padding:2px 8px;border-radius:10px;font-size:11px;">${statusLabel}</span></td>
       <td>
-        <button class="btn btn-sm" onclick="openPODetails('${po.id}')" style="font-size:11px; padding:3px 8px; margin-lef
+        <button class="btn btn-sm" onclick="openPODetails('${po.id}')" style="font-size:11px; padding:3px 8px; margin-left:4px;">👁️</button>
+        ${po.status!=='received'?`<button class="btn btn-sm" onclick="openPOModal('${po.id}')" style="font-size:11px; padding:3px 8px; margin-left:4px;">✏️</button>`:''}
+        <button class="btn btn-danger btn-sm" onclick="deletePO('${po.id}')" style="font-size:11px; padding:3px 8px;">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+
 // ══════════════════════════════════════════════
 // HR SYSTEM — TARGETS & COMMISSION
 // ══════════════════════════════════════════════
@@ -7171,7 +7310,14 @@ function renderHRPage() {
       <div style="background:#e5e7eb; border-radius:100px; height:12px; overflow:hidden;">
         <div style="background:${barColor}; width:${Math.min(r.pct,100)}%; height:100%; border-radius:100px; transition:width 0.5s ease;"></div>
       </div>
-      <div style="display:flex; justify-content:space-between; font-size:11px; color
+      <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-muted); margin-top:4px;">
+        <span>0</span><span>${fmt(r.target)} ج</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+
 // ══════════════════════════════════════════════
 // PROMOTIONS SYSTEM
 // ══════════════════════════════════════════════
@@ -7474,7 +7620,15 @@ function renderEligiblePromos() {
     const disc = calcPromoDiscount(promo);
     const badge = promo.type === 'bundle' ? '📦' : '💰';
     return `<div style="background:#faf5ff; border:1px dashed #7c3aed; border-radius:8px; padding:8px 10px; margin-bottom:6px; font-size:12px;">
-      <div style="display:flex; justify-content:space-between; alig
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+        <span>${badge} <strong>${promo.name}</strong> — وفر ${fmt(disc)} ج</span>
+        <button class="btn btn-sm btn-primary" style="padding:3px 10px; font-size:11px;" onclick="applyPromo(${promo.id})">تطبيق</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+
 // ══════════════════════════════════════════════
 // #1 CRM — CUSTOMERS
 // ══════════════════════════════════════════════
@@ -7703,7 +7857,15 @@ function clearSelectedCustomer() {
 
 function updateCustomerAfterSale(customerId, amount) {
   if (!customerId) return;
-  const list = getCustom
+  const list = getCustomers();
+  const c    = list.find(x => x.id === customerId); if (!c) return;
+  c.totalSpent = (c.totalSpent||0) + amount;
+  c.visits     = (c.visits||0)     + 1;
+  c.lastVisit  = new Date().toISOString();
+  setCustomers(list);
+}
+
+
 // ══════════════════════════════════════════════
 // #2 RETURNS
 // ══════════════════════════════════════════════
@@ -7821,7 +7983,12 @@ function buildReturnsReport() {
         <td style="white-space:nowrap;">${new Date(r.date).toLocaleString('ar-EG')}</td>
         <td>${r.originalSaleId ? '#'+String(r.originalSaleId).slice(-6) : '-'}</td>
         <td>${r.items.map(i=>i.name+' ×'+Math.abs(i.qty)).join(' · ')}</td>
-        <td style="color:var(--danger);fo
+        <td style="color:var(--danger);font-weight:700;">${fmt(Math.abs(r.total))} ج</td>
+        <td>${r.returnReason||'-'}</td>
+      </tr>`).join('');
+}
+
+
 // ══════════════════════════════════════════════
 // ABC ANALYSIS
 // ══════════════════════════════════════════════
@@ -8090,7 +8257,17 @@ function shareOffersWhatsApp() {
       if (p.type === 'bundle') {
         return `📦 *${p.name}*\nاشتري: ${p.items.map(i=>i.name+' ×'+i.minQty).join(' + ')}\nبسعر: ${fmt(p.bundlePrice)} ج بدل ${fmt(p.items.reduce((s,i)=>{const inv=getInv().find(x=>x.code===i.code);return s+(inv?.priceAfter||inv?.price||0)*i.minQty;},0))} ج`;
       } else {
-        return `💰 *${p.name}*\nعند شراء بأكثر من ${fmt(p.minAmount)} ج\nخصم ${p.discountType==='percent'?p.discountValue+'%':fmt(p.discoun
+        return `💰 *${p.name}*\nعند شراء بأكثر من ${fmt(p.minAmount)} ج\nخصم ${p.discountType==='percent'?p.discountValue+'%':fmt(p.discountValue)+' ج'}`;
+      }
+    }),
+    `━━━━━━━━━━━━━━━━━━━━`,
+    `🏠 VOODO ERP — بادر بالشراء!`
+  ];
+  const text = encodeURIComponent(lines.join('\n'));
+  window.open(`https://wa.me/?text=${text}`, '_blank');
+}
+
+
 // ══════════════════════════════════════════════
 // CASHIER RETURN SYSTEM
 // ══════════════════════════════════════════════
@@ -8267,7 +8444,12 @@ function sendReturnWhatsApp() {
     ``,
     `شكراً لثقتك بـ VOODO ERP 🏠`
   ].filter(l => l !== '');
-  co
+  const text = encodeURIComponent(lines.join('\n'));
+  const url = phone ? `https://wa.me/2${phone}?text=${text}` : `https://wa.me/?text=${text}`;
+  window.open(url, '_blank');
+}
+
+
 // ══════════════════════════════════════════════
 // BARCODE & PRICE TAG PRINTING
 // ══════════════════════════════════════════════
@@ -8467,7 +8649,14 @@ async function printReceiptESCPOS(sale) {
 }
 async function testReceiptPrint() {
   if (!_serialWriter) { alert('الطابعة غير متصلة — اضغط اتصال أولاً'); return; }
-  await prin
+  await printReceiptESCPOS({
+    id:'TEST001', date: new Date().toISOString().slice(0,10),
+    salesperson:'اختبار', items:[{name:'منتج تجريبي',qty:2,price:50}],
+    total:100, paid:100
+  });
+}
+
+
 // ══════════════════════════════════════════════
 // LOYALTY PROGRAM
 // ══════════════════════════════════════════════
@@ -8523,7 +8712,9 @@ function saveLoyaltySettings() {
     enabled: document.getElementById('loyEnabled').checked
   });
   document.getElementById('loyaltySettingsModal').classList.add('hidden');
-  a
+  alert('تم حفظ إعدادات الولاء ✓');
+}
+
 // ══════════════════════════════════════════════
 // ATTENDANCE & PAYROLL
 // ══════════════════════════════════════════════
@@ -8734,7 +8925,16 @@ function renderPayrollPane() {
           </td>
           <td style="padding:8px;text-align:center;">
             <button class="btn btn-sm" style="background:${p.isPaid?'#fee2e2':'#dcfce7'};color:${p.isPaid?'#b91c1c':'#15803d'};"
-              onclick="markPayrollPaid('${month}','${p.name}',${!p
+              onclick="markPayrollPaid('${month}','${p.name}',${!p.isPaid});renderPayrollPane();">
+              ${p.isPaid?'↩ استرداد':'💵 صرف الراتب'}
+            </button>
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>`;
+}
+
+
 // ══════════════════════════════════════════════
 // ACCOUNTING — محاسبة رسمية
 // ══════════════════════════════════════════════
@@ -8916,7 +9116,12 @@ function renderAccSummary() {
         <thead><tr style="background:var(--sidebar);color:white;">
           ${['الشهر','الإيراد','التكلفة','المصاريف','صافي الربح'].map(h=>`<th style="padding:10px 8px;text-align:center;">${h}</th>`).join('')}
         </tr></thead>
-     
+        <tbody>${rows||'<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted);">لا توجد بيانات</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+
 // ══════════════════════════════════════════════
 // VLOOKUP — تقارير ربط الجداول
 // ══════════════════════════════════════════════
@@ -9253,7 +9458,17 @@ function applyVlookup(matched) {
   if (!matched || !matched.length) { alert('لا توجد تغييرات للتطبيق'); return; }
   var inv = getInv();
   matched.forEach(function(r) {
-    var prod = inv.find(function(p){ return p.code === r.keyVal || p.code.toLo
+    var prod = inv.find(function(p){ return p.code === r.keyVal || p.code.toLowerCase() === r.keyVal.toLowerCase(); });
+    if (!prod) return;
+    Object.keys(r.changes).forEach(function(field){ prod[field] = r.changes[field]; });
+  });
+  setInv(inv);
+  renderInventory();
+  document.getElementById('vlookupModal').classList.add('hidden');
+  alert('تم تحديث ' + matched.length + ' منتج بنجاح');
+}
+
+
 // ══════════════════════════════════════════════
 // WAREHOUSE (المخزن الرئيسي) MODULE
 // ══════════════════════════════════════════════
@@ -9456,7 +9671,12 @@ function confirmWhTransfer() {
   };
   var list = getTransfers(); list.unshift(record); setTransfers(list);
 
-  document.getElementById('whTransferMod
+  document.getElementById('whTransferModal').classList.add('hidden');
+  renderWarehousePage();
+  alert('✅ تم التحويل بنجاح\nمن: المخزن الرئيسي → إلى: '+(record.toName)+'\n'+_whTrItems.length+' صنف');
+}
+
+
 // ══════════════════════════════════════════════════════
 // PRICE-CHANGE APPROVAL SYSTEM
 // ══════════════════════════════════════════════════════
@@ -9786,7 +10006,17 @@ async function confirmFirstRun() {
   const users  = getUsers();
   users.admin  = hashed;
   setUsersLocal(users);
-  d
+  document.getElementById('firstRunModal').classList.add('hidden');
+  document.getElementById('loginPage').classList.remove('hidden');
+  document.getElementById('frMsg').textContent = '';
+  showToast('✅ تم تعيين كلمة مرور المدير — سجّل الدخول الآن');
+}
+
+setInterval(updateHomeClock, 1000);
+
+
+
+
 // ═══════════════════════════════════════════════════════════════════════
 // EXPENSE APPROVAL REQUESTS — طلبات اعتماد المصاريف
 // ═══════════════════════════════════════════════════════════════════════
@@ -9880,7 +10110,13 @@ function renderExpenseRequestsPane() {
       (isAdmin && r.status==='pending' ?
         '<button class="btn" style="background:#28a745;color:#fff;font-size:12px;padding:6px 14px" onclick="approveExpenseRequest(\''+r.id+'\')">✅ قبول</button>' +
         '<button class="btn" style="background:#dc3545;color:#fff;font-size:12px;padding:6px 14px" onclick="rejectExpenseRequest(\''+r.id+'\')">❌ رفض</button>' : '') +
-      (r.status!=='pending' ? '<div style="font-size:11px;color
+      (r.status!=='pending' ? '<div style="font-size:11px;color:var(--text-muted)">'+r.reviewedBy+'</div>' : '') +
+    '</div>' +
+  '</div>').join('');
+}
+
+
+
 // ═══════════════════════════════════════════════════════════════════════
 // LEAVE & PERMISSION REQUESTS — طلبات الإجازات والأذونات
 // ═══════════════════════════════════════════════════════════════════════
@@ -9995,9 +10231,16 @@ function switchHRTab(tab) {
     if (btn)  { btn.style.background = t===tab?'white':''; btn.style.fontWeight = t===tab?'700':'400'; btn.style.boxShadow = t===tab?'0 1px 4px rgba(0,0,0,.1)':''; }
     if (pane) pane.classList.toggle('hidden', t!==tab);
   });
-  if (tab==='attendance') renderAttendan
+  if (tab==='attendance') renderAttendancePane();
+  if (tab==='payroll')    renderPayrollPane();
+  if (tab==='leavereqs')  renderLeaveRequestsPane();
+}
+
+
+
 // app.js split into feature modules (00-core.js … 105-manufacturing.js)
 // Backup: app.js.bak
+
 
 </script>
 
@@ -10696,4 +10939,42 @@ function switchHRTab(tab) {
       </div>
       <div class="modal-footer">
         <button class="btn btn-primary" style="width:100%;" onclick="confirmFirstRun()">✅ تأكيد وبدء النظام</button>
-      <
+      </div>
+    </div>
+  </div>
+
+<!-- PWA Service Worker Registration -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => console.log('SW registered:', reg.scope))
+      .catch(err => console.warn('SW registration failed:', err));
+  });
+}
+
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  const btn = document.getElementById('pwaInstallBtn');
+  if (btn) btn.style.display = 'flex';
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredPrompt = null;
+  const btn = document.getElementById('pwaInstallBtn');
+  if (btn) btn.style.display = 'none';
+  showToast('\u2705 \u062a\u0645 \u062a\u062b\u0628\u064a\u062a \u0627\u0644\u062a\u0637\u0628\u064a\u0642 \u0628\u0646\u062c\u0627\u062d!');
+});
+
+function installPWA() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(result => {
+    deferredPrompt = null;
+  });
+}
+</script>
+</body>
+</html>
