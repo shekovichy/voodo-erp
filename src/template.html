@@ -992,6 +992,13 @@
                 <span class="app-name">المصاريف</span>
               </div>
 
+              <div class="app-icon" onclick="showPage('manufacturing')">
+                <div class="app-tile" style="background:linear-gradient(145deg,#f59e0b,#b45309);">
+                  <svg viewBox="0 0 48 48" fill="none"><rect x="6" y="28" width="10" height="14" rx="2" stroke="white" stroke-width="2.5"/><rect x="19" y="20" width="10" height="22" rx="2" stroke="white" stroke-width="2.5"/><rect x="32" y="12" width="10" height="30" rx="2" stroke="white" stroke-width="2.5"/><path d="M8 20l6-8 8 4 8-12 8 6" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+                <span class="app-name">التصنيع</span>
+              </div>
+
               <div class="app-icon" onclick="showPage('audit')">
                 <div class="app-tile" style="background:linear-gradient(145deg,#94a3b8,#334155);">
                   <svg viewBox="0 0 48 48" fill="none"><rect x="10" y="6" width="28" height="36" rx="3" stroke="white" stroke-width="2.5"/><path d="M16 16h16M16 22h16M16 28h8" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M30 32l2 2 4-4" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -1257,7 +1264,30 @@
         </div>
         <!-- Expense Tabs -->
         <div style="display:flex;gap:4px;margin-bottom:16px;background:var(--bg-secondary);padding:4px;border-radius:10px;width:fit-content;">
-          <button id="expTabBtn_main" class="btn" style="font-size:13px;padding:6px 16px;border-radius:7px;background:
+          <button id="expTabBtn_main" class="btn" style="font-size:13px;padding:6px 16px;border-radius:7px;background:white;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.1);" onclick="switchExpTab('main')">💸 المصاريف</button>
+          <button id="expTabBtn_requests" class="btn" style="font-size:13px;padding:6px 16px;border-radius:7px;" onclick="switchExpTab('requests')">📋 طلبات الاعتماد <span id="expReqBadge" style="display:none;background:#dc3545;color:#fff;border-radius:50%;font-size:10px;min-width:16px;height:16px;line-height:16px;text-align:center;padding:0 3px;">0</span></button>
+        </div>
+        <div id="expPane_main">
+        <!-- KPI row -->
+        <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); margin-bottom:16px;">
+          <div class="stat-card" style="border-top:3px solid var(--danger);"><div class="stat-label">💸 إجمالي المصاريف</div><div class="stat-value" id="exp-total" style="font-size:22px; color:var(--danger);">0 ج</div></div>
+          <div class="stat-card" style="border-top:3px solid #0891b2;"><div class="stat-label">🏬 مصاريف الفروع</div><div class="stat-value" id="exp-branches" style="font-size:22px; color:#0891b2;">0 ج</div></div>
+          <div class="stat-card" style="border-top:3px solid #7c3aed;"><div class="stat-label">🏢 مصاريف إدارية</div><div class="stat-value" id="exp-company" style="font-size:22px; color:#7c3aed;">0 ج</div></div>
+          <div class="stat-card" style="border-top:3px solid var(--success);"><div class="stat-label">💰 صافي الربح</div><div class="stat-value" id="exp-net-profit" style="font-size:22px; color:var(--success);">0 ج</div></div>
+        </div>
+        <!-- By branch breakdown -->
+        <div id="expBranchBreakdown" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-bottom:16px;"></div>
+        <!-- Expenses table -->
+        <div class="card">
+          <div class="table-wrap">
+            <table><thead><tr><th>التاريخ</th><th>النوع</th><th>الفرع/الجهة</th><th>التصنيف</th><th>المبلغ</th><th>ملاحظة</th><th>أضافه</th><th>إجراء</th></tr></thead>
+            <tbody id="expensesBody"></tbody></table>
+          </div>
+        </div>
+        </div><!-- end expPane_main -->
+        <div id="expPane_requests" class="hidden" style="padding-top:8px"></div>
+      </div>
+
 <!-- ====== صفحة التصنيع ====== -->
 <div id="page-manufacturing" class="hidden">
   <div class="page-header flex items-center justify-between mb-16">
@@ -1745,29 +1775,7 @@
     </div>
   </div>
 </div>
-white;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.1);" onclick="switchExpTab('main')">💸 المصاريف</button>
-          <button id="expTabBtn_requests" class="btn" style="font-size:13px;padding:6px 16px;border-radius:7px;" onclick="switchExpTab('requests')">📋 طلبات الاعتماد <span id="expReqBadge" style="display:none;background:#dc3545;color:#fff;border-radius:50%;font-size:10px;min-width:16px;height:16px;line-height:16px;text-align:center;padding:0 3px;">0</span></button>
-        </div>
-        <div id="expPane_main">
-        <!-- KPI row -->
-        <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); margin-bottom:16px;">
-          <div class="stat-card" style="border-top:3px solid var(--danger);"><div class="stat-label">💸 إجمالي المصاريف</div><div class="stat-value" id="exp-total" style="font-size:22px; color:var(--danger);">0 ج</div></div>
-          <div class="stat-card" style="border-top:3px solid #0891b2;"><div class="stat-label">🏬 مصاريف الفروع</div><div class="stat-value" id="exp-branches" style="font-size:22px; color:#0891b2;">0 ج</div></div>
-          <div class="stat-card" style="border-top:3px solid #7c3aed;"><div class="stat-label">🏢 مصاريف إدارية</div><div class="stat-value" id="exp-company" style="font-size:22px; color:#7c3aed;">0 ج</div></div>
-          <div class="stat-card" style="border-top:3px solid var(--success);"><div class="stat-label">💰 صافي الربح</div><div class="stat-value" id="exp-net-profit" style="font-size:22px; color:var(--success);">0 ج</div></div>
-        </div>
-        <!-- By branch breakdown -->
-        <div id="expBranchBreakdown" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-bottom:16px;"></div>
-        <!-- Expenses table -->
-        <div class="card">
-          <div class="table-wrap">
-            <table><thead><tr><th>التاريخ</th><th>النوع</th><th>الفرع/الجهة</th><th>التصنيف</th><th>المبلغ</th><th>ملاحظة</th><th>أضافه</th><th>إجراء</th></tr></thead>
-            <tbody id="expensesBody"></tbody></table>
-          </div>
-        </div>
-        </div><!-- end expPane_main -->
-        <div id="expPane_requests" class="hidden" style="padding-top:8px"></div>
-      </div>
+
 
       <!-- ══ AUDIT LOG ══ -->
       <div id="page-audit" class="hidden">
