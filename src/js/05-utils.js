@@ -1,0 +1,398 @@
+// ══════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════
+const fmt = (n) => (parseFloat(n) || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+function showMsg(id, msg, type='success') {
+  const el = document.getElementById(id);
+  el.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+  setTimeout(() => el.innerHTML = '', 3500);
+}
+
+function getDateRange(period, fromId, toId) {
+  const now = new Date();
+  let from, to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+  if (period === 'today')  { from = new Date(now.getFullYear(), now.getMonth(), now.getDate()); }
+  else if (period === 'week')  { from = new Date(now); from.setDate(from.getDate()-6); from.setHours(0,0,0,0); }
+  else if (period === 'month') { from = new Date(now.getFullYear(), now.getMonth(), 1); }
+  else if (period === 'year')  { from = new Date(now.getFullYear(), 0, 1); }
+  else if (period === 'custom' && fromId && toId) {
+    const f = document.getElementById(fromId)?.value;
+    const t = document.getElementById(toId)?.value;
+    from = f ? new Date(f) : new Date(0);
+    to   = t ? new Date(t + 'T23:59:59') : new Date();
+  }
+  return { from: from || new Date(0), to };
+}
+
+// ══════════════════════════════════════════════
+// LOGIN / LOGOUT
+// ══════════════════════════════════════════════
+async function doLogin() {
+  const user = document.getElementById('loginUser').value.trim().toLowerCase();
+  const pass = document.getElementById('loginPass').value;
+  const users = getUsers();
+  const branchUsers = getBranchUsers();
+  document.getElementById('loginError').classList.add('hidden');
+  if (!pass) { document.getElementById('loginError').textContent = 'أدخل كلمة المرور'; document.getElementById('loginError').classList.remove('hidden'); return; }
+
+  // First-run: no admin password set yet → show setup
+  if (!users.admin) {
+    showFirstRunSetup();
+    return;
+  }
+
+  if (user === 'admin' && await checkPass(pass, users.admin)) {
+    await upgradePassIfNeeded(pass, users.admin, 'admin');
+    currentUser = 'admin';
+    document.getElementById('loginPage').classList.add('hidden');
+    document.getElementById('managerView').classList.remove('hidden');
+    document.getElementById('todayDate').textContent =
+      new Date().toLocaleDateString('ar-EG', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+    document.getElementById('sLowThreshold').value = getThreshold();
+    initFirebase();   // ← يشغّل Firebase عند دخول الأدمن
+    initBranchUI();
+    document.getElementById('topbarLogout').style.display = 'inline-flex';
+    showPage('home');
+    setTimeout(() => addAuditLog('auth.login', 'تسجيل دخول: admin', currentBranch), 500);
+  } else if (user === 'cashier' && pass === users.cashier) {
+    // Legacy cashier (all branches)
+    currentUser = 'cashier';
+    document.getElementById('loginPage').classList.add('hidden');
+    document.getElementById('cashierView').classList.remove('hidden');
+    initFirebase();
+    applyMobileUI();
+    renderProducts();
+    updateClock();
+    setInterval(updateClock, 30000);
+    setTimeout(function(){ checkForApprovedCarts(); }, 1000);
+  } else {
+    // Branch-specific cashier login
+    const branchUsers = getBranchUsers();
+    let matchedBranch = null;
+    for (const b of BRANCH_IDS) {
+      if (branchUsers[b] &&
+          user === (branchUsers[b].username || '').toLowerCase() &&
+          await checkPass(pass, branchUsers[b].password)) {
+        matchedBranch = b; break;
+      }
+    }
+    if (matchedBranch) {
+      currentUser = 'cashier';
+      currentBranch = matchedBranch;
+      DB.s('currentBranch', matchedBranch);
+      document.getElementById('loginPage').classList.add('hidden');
+      if (matchedBranch === 'wh') {
+        // Warehouse-only mode: restricted to warehouse & transfers pages
+        window._whMode = true;
+        document.body.classList.add('warehouse-mode');
+        document.getElementById('managerView').classList.remove('hidden');
+        document.getElementById('topbarLogout').style.display = 'inline-flex';
+        initFirebase();
+        showPage('warehouse');
+        setTimeout(() => addAuditLog('auth.login', `تسجيل دخول مخزن: ${user}`, matchedBranch), 500);
+      } else {
+        document.getElementById('managerView').classList.remove('hidden');
+        initFirebase();
+        initBranchUI();
+        showPage('home');
+        renderHomeIcons();
+        setTimeout(() => addAuditLog('auth.login', `تسجيل دخول كاشير: ${user} — ${getBranchName(matchedBranch)}`, matchedBranch), 500);
+      }
+    } else {
+      document.getElementById('loginError').classList.remove('hidden');
+    }
+  }
+}
+
+
+// ── EXPORT REPORTS — Excel & PDF ────────────────────────────
+function exportReportExcel(type) {
+  const wb = XLSX.utils.book_new();
+  let ws, sheetName;
+
+  if (type === 'sales') {
+    // Build data from sales breakdown table
+    const rows = [['المنتج','الكمية المباعة','الإيراد (ج.م)']];
+    document.querySelectorAll('#rs-breakdown tr').forEach(tr => {
+      const cells = [...tr.querySelectorAll('td')].map(td => td.textContent.trim());
+      if (cells.length) rows.push(cells);
+    });
+    // Add summary at top
+    const summary = [
+      ['إجمالي المبيعات', document.getElementById('rs-total')?.textContent || ''],
+      ['صافي الإيرادات',  document.getElementById('rs-net')?.textContent || ''],
+      ['عدد الفواتير',    document.getElementById('rs-count')?.textContent || ''],
+      ['متوسط الفاتورة',  document.getElementById('rs-avg')?.textContent || ''],
+      [],
+      ...rows
+    ];
+    ws = XLSX.utils.aoa_to_sheet(summary);
+    sheetName = 'تقرير المبيعات';
+  } else if (type === 'profit') {
+    const rows = [['المنتج','الكمية','الإيراد','التكلفة','الربح','هامش%']];
+    document.querySelectorAll('#rp-breakdown tr').forEach(tr => {
+      const cells = [...tr.querySelectorAll('td')].map(td => td.textContent.trim());
+      if (cells.length) rows.push(cells);
+    });
+    const summary = [
+      ['إجمالي الإيرادات', document.getElementById('rp-revenue')?.textContent || ''],
+      ['إجمالي التكلفة',   document.getElementById('rp-cost')?.textContent || ''],
+      ['صافي الربح',       document.getElementById('rp-profit')?.textContent || ''],
+      ['هامش الربح',       document.getElementById('rp-margin')?.textContent || ''],
+      ['إجمالي الخصومات', document.getElementById('rp-discounts')?.textContent || ''],
+      [],
+      ...rows
+    ];
+    ws = XLSX.utils.aoa_to_sheet(summary);
+    sheetName = 'تقرير الأرباح';
+  }
+
+  if (!ws) { showToast('⚠️ لا توجد بيانات للتصدير'); return; }
+
+  // Style column widths
+  ws['!cols'] = [{wch:30},{wch:15},{wch:15},{wch:15},{wch:15},{wch:10}];
+
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  const date = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, sheetName + '_' + date + '.xlsx');
+  showToast('✅ تم تصدير ' + sheetName + ' كـ Excel');
+}
+
+function exportReportPDF(sectionId, title) {
+  const section = document.getElementById(sectionId);
+  if (!section) return;
+
+  // Open print dialog with just this section
+  const printWin = window.open('', '_blank', 'width=900,height=700');
+  const styles = [...document.styleSheets].map(ss => {
+    try { return [...ss.cssRules].map(r => r.cssText).join('\n'); }
+    catch(e) { return ''; }
+  }).join('\n');
+
+  printWin.document.write(`<!DOCTYPE html><html dir="rtl"><head>
+    <meta charset="UTF-8">
+    <title>${title}</title>
+    <style>
+      body { font-family: 'Segoe UI', Arial, sans-serif; direction: rtl; padding: 20px; color: #1a2b4a; }
+      h1 { color: #1a5faf; font-size: 20px; margin-bottom: 16px; border-bottom: 2px solid #1a5faf; padding-bottom: 8px; }
+      .print-date { font-size: 12px; color: #666; margin-bottom: 16px; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th { background: #1a5faf; color: white; padding: 8px 10px; text-align: right; }
+      td { padding: 7px 10px; border-bottom: 1px solid #e0e0e0; }
+      tr:nth-child(even) td { background: #f5f8ff; }
+      .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+      .stat-card { background: #f0f5ff; border-radius: 8px; padding: 12px; border: 1px solid #c0d4f5; }
+      .stat-label { font-size: 11px; color: #666; }
+      .stat-value { font-size: 20px; font-weight: 800; color: #1a5faf; margin-top: 4px; }
+      .btn { display: none; }
+      @media print { button { display: none; } }
+    </style>
+  </head><body>
+    <h1>${title}</h1>
+    <div class="print-date">📅 تاريخ الطباعة: ${new Date().toLocaleDateString('ar-EG', {weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
+    ${section.innerHTML}
+  </body></html>`);
+
+  printWin.document.close();
+  setTimeout(() => { printWin.print(); printWin.close(); }, 800);
+}
+
+
+// ── GOOGLE DRIVE BACKUP ─────────────────────────────────────
+const GDRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+let _gdriveToken = null;
+
+function getGdriveClientId() { return DB.g('gdriveClientId', ''); }
+
+function saveGdriveClientId() {
+  const val = document.getElementById('gdriveClientIdInput').value.trim();
+  if (!val) { showToast('⚠️ أدخل الـ Client ID أولاً'); return; }
+  DB.s('gdriveClientId', val);
+  showToast('✅ تم حفظ الـ Client ID');
+  initGoogleDriveUI();
+}
+
+function initGoogleDriveUI() {
+  const clientId = getGdriveClientId();
+  const connectBtn = document.getElementById('gdriveConnectBtn');
+  const backupBtn  = document.getElementById('gdriveBackupBtn');
+  const setupBox   = document.getElementById('gdriveSetupBox');
+  const autoToggle = document.getElementById('autoBackupToggle');
+  if (setupBox) {
+    setupBox.style.display = clientId ? 'none' : 'block';
+    const inp = document.getElementById('gdriveClientIdInput');
+    if (inp && clientId) inp.value = clientId;
+  }
+  if (connectBtn) connectBtn.style.display = (clientId && !_gdriveToken) ? 'flex' : 'none';
+  if (backupBtn)  backupBtn.style.display  = _gdriveToken ? 'flex' : 'none';
+  if (autoToggle) autoToggle.checked = DB.g('autoBackupEnabled', false);
+  const statusEl = document.getElementById('gdriveStatus');
+  if (statusEl) statusEl.textContent = _gdriveToken ? '✅ متصل بـ Google Drive' : '';
+}
+
+function connectGoogleDrive() {
+  const clientId = getGdriveClientId();
+  if (!clientId) { showToast('⚠️ أدخل الـ Client ID أولاً'); return; }
+  const redirect = window.location.origin;
+  const url = 'https://accounts.google.com/o/oauth2/v2/auth?client_id=' + encodeURIComponent(clientId) +
+    '&redirect_uri=' + encodeURIComponent(redirect) + '&response_type=token' +
+    '&scope=' + encodeURIComponent(GDRIVE_SCOPE) + '&prompt=select_account';
+  const popup = window.open(url, 'gdrive_auth', 'width=500,height=600,left=300,top=100');
+  const timer = setInterval(() => {
+    try {
+      if (!popup || popup.closed) { clearInterval(timer); return; }
+      const hash = popup.location.hash;
+      if (hash && hash.includes('access_token')) {
+        clearInterval(timer); popup.close();
+        const params = new URLSearchParams(hash.slice(1));
+        _gdriveToken = params.get('access_token');
+        initGoogleDriveUI();
+        showToast('✅ تم الربط مع Google Drive!');
+        if (DB.g('autoBackupEnabled', false)) checkAutoBackup(true);
+      }
+    } catch(e) {}
+  }, 500);
+}
+
+async function backupToGoogleDrive(silent) {
+  if (!_gdriveToken) { if (!silent) showToast('⚠️ ارتبط بـ Google Drive أولاً'); return false; }
+  const backup = {
+    version:2, date:new Date().toISOString(), branch:currentBranch,
+    inv:DB.g('pos_inv_'+currentBranch,[]), sales:DB.g('pos_sales',[]),
+    customers:DB.g('pos_customers',[]), expenses:DB.g('pos_expenses',[]),
+    sellers:DB.g('pos_sellers',[]), branchNames:DB.g('pos_branch_names',{}),
+    purchases:DB.g('pos_purchases',[]), suppliers:DB.g('pos_suppliers',[]),
+  };
+  const fileName = 'VoodoERP_Backup_' + new Date().toISOString().slice(0,10) + '.json';
+  const blob = new Blob([JSON.stringify(backup,null,2)], {type:'application/json'});
+  try {
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify({name:fileName,mimeType:'application/json'})],{type:'application/json'}));
+    form.append('file', blob);
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method:'POST', headers:{Authorization:'Bearer '+_gdriveToken}, body:form
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      if (err.error && err.error.code===401) { _gdriveToken=null; if(!silent) showToast('⚠️ انتهت صلاحية الربط — أعد الاتصال'); initGoogleDriveUI(); return false; }
+      throw new Error((err.error && err.error.message) || 'Upload failed');
+    }
+    DB.s('lastDriveBackup', new Date().toISOString());
+    if (!silent) showToast('☁️ تم رفع النسخة على Google Drive!');
+    renderLastBackupInfo(); return true;
+  } catch(err) { if (!silent) showToast('❌ فشل الرفع: '+err.message); return false; }
+}
+
+function toggleAutoBackup(enabled) {
+  DB.s('autoBackupEnabled', enabled);
+  showToast(enabled ? '✅ تم تفعيل النسخ التلقائي' : '⏹️ تم إيقاف النسخ التلقائي');
+}
+
+async function checkAutoBackup(force) {
+  if (!DB.g('autoBackupEnabled',false) && !force) return;
+  const last = DB.g('lastDriveBackup','');
+  const today = new Date().toISOString().slice(0,10);
+  if (!force && last && last.startsWith(today)) return;
+  if (_gdriveToken) {
+    const ok = await backupToGoogleDrive(true);
+    if (ok) showToast('☁️ تم النسخ الاحتياطي التلقائي على Drive');
+  }
+}
+setTimeout(() => checkAutoBackup(false), 5000);
+
+
+function logout() {
+  if (!confirm('هل تريد تسجيل الخروج؟')) return;
+  currentUser = null; cart = [];
+  document.getElementById('loginPage').classList.remove('hidden');
+  document.getElementById('cashierView').classList.add('hidden');
+  document.getElementById('managerView').classList.add('hidden');
+  window._whMode = false;
+  document.body.classList.remove('warehouse-mode');
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginPass').value = '';
+}
+
+// ── DARK MODE ────────────────────────────────
+function toggleDarkMode() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const newTheme = isDark ? 'light' : 'dark';
+  applyTheme(newTheme);
+  DB.s('theme', newTheme);
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('darkModeToggle');
+  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+
+// Apply saved theme on load
+(function() {
+  const saved = DB.g ? DB.g('theme', 'light') : (localStorage.getItem('pos_theme') || 'light');
+  applyTheme(saved);
+})();
+
+
+// ── MOBILE HELPERS ──────────────────────────
+function isMobile() { return window.innerWidth <= 768; }
+
+function toggleMobileCart(open) {
+  if (!isMobile()) return;
+  document.getElementById('cashierView').querySelector('.cart-panel').classList.toggle('open', open);
+  document.getElementById('cartBackdrop').classList.toggle('open', open);
+}
+
+function applyMobileUI() {
+  const mobile = isMobile();
+  // Cart close button
+  const cb = document.getElementById('cartCloseBtn');
+  if (cb) cb.style.display = mobile ? 'flex' : 'none';
+  // Manager topbar logout button — always shown after login, don't touch here
+  // FAB
+  const fab = document.getElementById('cartFab');
+  if (fab) fab.style.display = mobile ? 'flex' : 'none';
+}
+
+window.addEventListener('resize', applyMobileUI);
+// ── PRE-INIT: load passwords from Firebase before showing login ──
+async function preInitFirebase() {
+  const overlay = document.getElementById('appLoadingOverlay');
+  try {
+    if (!FIREBASE_CONFIG.projectId) { if(overlay) overlay.style.display='none'; return; }
+    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    const db = firebase.firestore();
+    // fetch auth doc with a short timeout (3s)
+    // Must sign in anonymously first — Firestore rules require auth
+    await Promise.race([
+      firebase.auth().signInAnonymously(),
+      new Promise((_,reject) => setTimeout(() => reject(new Error('auth timeout')), 5000))
+    ]);
+    // Now fetch passwords
+    const snap = await Promise.race([
+      db.collection('pos_data').doc('auth').get(),
+      new Promise((_,reject) => setTimeout(() => reject(new Error('read timeout')), 4000))
+    ]);
+    if (snap.exists) {
+      const data = snap.data();
+      const localU = DB.g('users', { admin: '', cashier: '' });
+      if (data.users && !localU.admin) DB.s('users', data.users);
+      const localBU = DB.g('pos_branch_users', null);
+      if (data.branchUsers && !localBU) DB.s('pos_branch_users', data.branchUsers);
+    }
+  } catch(e) {
+    console.warn('preInitFirebase failed:', e);
+  } finally {
+    if (overlay) overlay.style.display = 'none';
+  }
+}
+preInitFirebase();
+
+document.addEventListener('DOMContentLoaded', applyMobileUI);
+
+// ── CLOCK ────────────────────────────────────
+function updateClock() {
+  document.getElementById('cartClock').textContent = new Date().toLocaleString('ar-EG');
+}
+

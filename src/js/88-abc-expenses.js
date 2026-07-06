@@ -1,0 +1,278 @@
+// ══════════════════════════════════════════════
+// ABC ANALYSIS
+// ══════════════════════════════════════════════
+let _abcData = []; // full classified list for filter
+
+
+
+
+// ══════════════════════════════════════════════
+// EXPENSE TRACKING
+// ══════════════════════════════════════════════
+
+const EXP_CATS = { rent:'إيجار', electricity:'كهرباء', water:'مياه', internet:'إنترنت/تليفون', salaries:'رواتب', maintenance:'صيانة', marketing:'تسويق', transport:'نقل/شحن', other:'أخرى' };
+const EXP_ICONS = { rent:'🏠', electricity:'⚡', water:'💧', internet:'🌐', salaries:'👤', maintenance:'🔧', marketing:'📢', transport:'🚚', other:'📌' };
+
+const getExpenses = () => _expensesCache;
+function setExpenses(list) {
+  _expensesCache = list;
+  DB.s('pos_expenses', list);
+  try { _db && _db.collection('pos_data').doc('expenses').set({ list, updatedAt: Date.now() }); } catch(e) {}
+}
+
+function openExpenseModal(id) {
+  const exp = id ? getExpenses().find(e => e.id === id) : null;
+  document.getElementById('expModalTitle').textContent = exp ? '✏️ تعديل مصروف' : '➕ إضافة مصروف';
+  document.getElementById('expEditId').value    = exp?.id || '';
+  document.getElementById('expType').value      = exp?.type || 'branch';
+  document.getElementById('expCategory').value  = exp?.category || 'rent';
+  document.getElementById('expAmount').value    = exp?.amount || '';
+  document.getElementById('expDate').value      = exp?.date || new Date().toISOString().slice(0,10);
+  document.getElementById('expNote').value      = exp?.note || '';
+  // Populate branch select
+  const brSel = document.getElementById('expBranchId');
+  brSel.innerHTML = BRANCH_IDS.map(b => `<option value="${b}" ${exp?.branchId===b?'selected':''}>${getBranchName(b)}</option>`).join('');
+  toggleExpBranch();
+  document.getElementById('expenseModal').classList.remove('hidden');
+}
+
+function toggleExpBranch() {
+  const isCompany = document.getElementById('expType').value === 'company';
+  document.getElementById('expBranchGroup').style.display = isCompany ? 'none' : '';
+}
+
+function saveExpense() {
+  const amount = parseFloat(document.getElementById('expAmount').value);
+  const date   = document.getElementById('expDate').value;
+  if (!amount || amount <= 0) { alert('أدخل مبلغ صحيح'); return; }
+  if (!date) { alert('أدخل التاريخ'); return; }
+  const type     = document.getElementById('expType').value;
+  const editId   = document.getElementById('expEditId').value;
+  const list     = getExpenses();
+  const rec = {
+    id:       editId || 'exp_' + Date.now(),
+    type,
+    branchId: type === 'branch' ? document.getElementById('expBranchId').value : null,
+    category: document.getElementById('expCategory').value,
+    amount,
+    date,
+    month:    date.slice(0,7),
+    note:     document.getElementById('expNote').value.trim(),
+    by:       currentUser,
+    createdAt: editId ? (list.find(e=>e.id===editId)?.createdAt||Date.now()) : Date.now()
+  };
+  if (editId) { const idx=list.findIndex(e=>e.id===editId); if(idx>=0) list[idx]=rec; else list.push(rec); }
+  else list.push(rec);
+  setExpenses(list);
+  addAuditLog('expense.add', `مصروف: ${EXP_CATS[rec.category]} — ${fmt(rec.amount)} ج ${rec.type==='company'?'(إداري)':'('+(rec.branchId?getBranchName(rec.branchId):'')+')'}`, null);
+  closeModal('expenseModal');
+  renderExpensesPage();
+  buildDashboard();
+}
+
+function deleteExpense(id) {
+  if (!confirm('حذف هذا المصروف؟')) return;
+  setExpenses(getExpenses().filter(e => e.id !== id));
+  renderExpensesPage();
+  buildDashboard();
+}
+
+function renderExpensesPage() {
+  // Populate month filter
+  const monthSel = document.getElementById('expMonthFilter');
+  if (monthSel) {
+    const months = [...new Set(getExpenses().map(e=>e.month))].sort().reverse();
+    const cur = monthSel.value;
+    monthSel.innerHTML = '<option value="">الشهر الحالي</option>' + months.map(m=>`<option value="${m}" ${m===cur?'selected':''}>${m}</option>`).join('');
+  }
+  // Populate branch filter
+  const brSel = document.getElementById('expBranchFilter');
+  if (brSel && brSel.options.length <= 2) {
+    BRANCH_IDS.forEach(b => {
+      const o = document.createElement('option'); o.value=b; o.textContent='🏬 '+getBranchName(b);
+      brSel.appendChild(o);
+    });
+  }
+  const selMonth  = document.getElementById('expMonthFilter')?.value  || new Date().toISOString().slice(0,7);
+  const selBranch = document.getElementById('expBranchFilter')?.value || '';
+  let list = getExpenses().filter(e => e.month === selMonth);
+  if (selBranch === 'company') list = list.filter(e => e.type === 'company');
+  else if (selBranch) list = list.filter(e => e.type === 'branch' && e.branchId === selBranch);
+
+  const totalAll   = list.reduce((s,e)=>s+e.amount,0);
+  const totalBr    = list.filter(e=>e.type==='branch').reduce((s,e)=>s+e.amount,0);
+  const totalCo    = list.filter(e=>e.type==='company').reduce((s,e)=>s+e.amount,0);
+
+  // Net profit = month gross profit - expenses
+  const monthSales  = getSales().filter(s=>!s.isReturn && s.date && s.date.slice(0,7)===selMonth);
+  const inv = Object.values(_invCacheByBranch).flat();
+  const grossProfit = monthSales.reduce((acc,s)=>acc+s.items.reduce((a,i)=>{
+    const c=i.cost>0?i.cost:(inv.find(x=>x.code===i.code)?.cost||0); return a+(i.price-c)*i.qty; },0)-s.disc, 0);
+  const netProfit = grossProfit - totalAll;
+
+  const el1=document.getElementById('exp-total');    if(el1) el1.textContent=fmt(totalAll)+' ج';
+  const el2=document.getElementById('exp-branches'); if(el2) el2.textContent=fmt(totalBr)+' ج';
+  const el3=document.getElementById('exp-company');  if(el3) el3.textContent=fmt(totalCo)+' ج';
+  const el4=document.getElementById('exp-net-profit'); if(el4) { el4.textContent=fmt(netProfit)+' ج'; el4.style.color=netProfit>=0?'var(--success)':'var(--danger)'; }
+
+  // Branch breakdown cards
+  const breakdown = document.getElementById('expBranchBreakdown');
+  if (breakdown) {
+    const allMonthExp = getExpenses().filter(e=>e.month===selMonth);
+    breakdown.innerHTML = BRANCH_IDS.map(b => {
+      const bExp = allMonthExp.filter(e=>e.type==='branch'&&e.branchId===b).reduce((s,e)=>s+e.amount,0);
+      const bSales = getSales().filter(s=>!s.isReturn&&s.date&&s.date.slice(0,7)===selMonth&&s.branchId===b).reduce((s,x)=>s+x.total,0);
+      return `<div class="stat-card" style="border-top:3px solid var(--primary);">
+        <div style="font-weight:700; font-size:13px; margin-bottom:6px;">🏬 ${getBranchName(b)}</div>
+        <div style="font-size:12px; color:var(--text-muted);">مصاريف: <strong style="color:var(--danger);">${fmt(bExp)} ج</strong></div>
+        <div style="font-size:12px; color:var(--text-muted);">مبيعات: <strong style="color:var(--success);">${fmt(bSales)} ج</strong></div>
+      </div>`;
+    }).join('');
+  }
+
+  // Table
+  const tbody = document.getElementById('expensesBody'); if(!tbody) return;
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:24px;">لا توجد مصاريف لهذا الشهر</td></tr>'; return;
+  }
+  const sorted = [...list].sort((a,b)=>b.date.localeCompare(a.date));
+  tbody.innerHTML = sorted.map(e => `<tr>
+    <td style="white-space:nowrap; font-size:12px;">${e.date}</td>
+    <td><span style="background:${e.type==='company'?'#f3e8ff':'#dbeafe'};color:${e.type==='company'?'#7c3aed':'#1d4ed8'};padding:2px 8px;border-radius:10px;font-size:11px;">${e.type==='company'?'🏢 إداري':'🏬 فرع'}</span></td>
+    <td style="font-size:12px;">${e.type==='company'?'شركة':getBranchName(e.branchId)}</td>
+    <td><span style="font-size:12px;">${EXP_ICONS[e.category]||''} ${EXP_CATS[e.category]||e.category}</span></td>
+    <td style="font-weight:700; color:var(--danger);">${fmt(e.amount)} ج</td>
+    <td style="font-size:12px; color:var(--text-muted);">${e.note||'-'}</td>
+    <td style="font-size:11px; color:var(--text-muted);">${e.by||''}</td>
+    <td>
+      <button class="btn btn-sm" onclick="openExpenseModal('${e.id}')" style="font-size:11px;padding:3px 8px;margin-left:4px;">✏️</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteExpense('${e.id}')" style="font-size:11px;padding:3px 8px;">🗑️</button>
+    </td>
+  </tr>`).join('');
+}
+
+// ══════════════════════════════════════════════
+// AUDIT LOG
+// ══════════════════════════════════════════════
+
+const getAudit = () => _auditCache;
+function setAudit(list) {
+  _auditCache = list;
+  DB.s('pos_audit', list);
+  try { _db && _db.collection('pos_data').doc('audit').set({ list, updatedAt: Date.now() }); } catch(e) {}
+}
+
+function addAuditLog(action, details, branchId) {
+  const list = [...getAudit()];
+  list.unshift({
+    id: 'a_' + Date.now(),
+    action,
+    details,
+    user: currentUser || 'system',
+    branchId: branchId || currentBranch,
+    timestamp: Date.now()
+  });
+  // Keep last 500 entries
+  setAudit(list.slice(0, 500));
+}
+
+function renderAuditPage() {
+  const userFilter = document.getElementById('auditUserFilter')?.value || '';
+  const typeFilter = document.getElementById('auditTypeFilter')?.value || '';
+  const daysFilter = parseInt(document.getElementById('auditDateFilter')?.value) || 30;
+
+  // Populate user filter
+  const userSel = document.getElementById('auditUserFilter');
+  if (userSel && userSel.options.length <= 1) {
+    const users = [...new Set(getAudit().map(a=>a.user))].filter(Boolean);
+    users.forEach(u => {
+      if (!userSel.querySelector(`option[value="${u}"]`)) {
+        const o=document.createElement('option'); o.value=u; o.textContent=u; userSel.appendChild(o);
+      }
+    });
+  }
+
+  const cutoff = daysFilter === 'all' ? 0 : Date.now() - daysFilter * 86400000;
+  let list = getAudit().filter(a => a.timestamp >= cutoff);
+  if (userFilter) list = list.filter(a => a.user === userFilter);
+  if (typeFilter) list = list.filter(a => a.action.startsWith(typeFilter));
+
+  const totalCount    = list.length;
+  const invCount      = list.filter(a=>a.action.startsWith('inv')||a.action.startsWith('price')).length;
+  const saleCount     = list.filter(a=>a.action.startsWith('sale')).length;
+  const settingsCount = list.filter(a=>a.action.startsWith('settings')||a.action.startsWith('auth')).length;
+
+  const el1=document.getElementById('audit-total');    if(el1) el1.textContent=totalCount;
+  const el2=document.getElementById('audit-inv');      if(el2) el2.textContent=invCount;
+  const el3=document.getElementById('audit-sales');    if(el3) el3.textContent=saleCount;
+  const el4=document.getElementById('audit-settings'); if(el4) el4.textContent=settingsCount;
+
+  const actionLabels = {
+    'inv.add':'➕ إضافة صنف', 'inv.edit':'✏️ تعديل صنف', 'inv.delete':'🗑️ حذف صنف',
+    'price.change':'🏷️ تغيير سعر', 'sale.complete':'💰 فاتورة مكتملة', 'sale.return':'↩️ مرتجع',
+    'po.receive':'📦 استلام بضاعة', 'po.create':'🛒 أمر شراء', 'transfer.done':'🔄 تحويل',
+    'expense.add':'💸 مصروف', 'settings.change':'⚙️ تغيير إعداد',
+    'auth.login':'🔐 تسجيل دخول', 'auth.logout':'🚪 تسجيل خروج'
+  };
+
+  const tbody = document.getElementById('auditBody'); if(!tbody) return;
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:24px;">لا توجد سجلات</td></tr>'; return;
+  }
+  tbody.innerHTML = list.slice(0, 200).map(a => `<tr>
+    <td style="white-space:nowrap; font-size:11px; color:var(--text-muted);">${new Date(a.timestamp).toLocaleString('ar-EG')}</td>
+    <td><span style="background:#f0f4ff;color:#4338ca;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">${a.user||'system'}</span></td>
+    <td style="font-size:12px;">${a.branchId?getBranchName(a.branchId):'-'}</td>
+    <td style="font-size:12px;">${actionLabels[a.action]||a.action}</td>
+    <td style="font-size:12px; color:var(--text-muted);">${a.details||''}</td>
+  </tr>`).join('');
+}
+
+// ══════════════════════════════════════════════
+// WHATSAPP SHARING
+// ══════════════════════════════════════════════
+
+let _lastSale = null; // stored in completeSale for WhatsApp
+
+function shareReceiptWhatsApp() {
+  // Build text receipt from last sale
+  const sale = _lastSale;
+  if (!sale) { alert('لا توجد فاتورة لمشاركتها'); return; }
+  const lines = [
+    `🧾 فاتورة من VOODO ERP`,
+    `📅 ${new Date(sale.date).toLocaleString('ar-EG')}`,
+    `🏬 ${sale.branchName || getBranchName(sale.branchId || 'b1')}`,
+    `👤 ${sale.salesperson || sale.cashier || ''}`,
+    `━━━━━━━━━━━━━━━━━━━━`,
+    ...sale.items.map(i => `• ${i.name} ×${i.qty}  =  ${fmt(i.price * i.qty)} ج`),
+    `━━━━━━━━━━━━━━━━━━━━`,
+    sale.disc > 0 ? `🎁 خصم: ${fmt(sale.disc)} ج` : '',
+    `💰 الإجمالي: ${fmt(sale.total)} ج`,
+    `💳 الدفع: ${sale.payMethod === 'cash' ? 'نقدي' : 'كارت'}`,
+    ``,
+    `شكراً لثقتك بـ VOODO ERP 🏠`
+  ].filter(l => l !== undefined && l !== null);
+  const text = encodeURIComponent(lines.join('\n'));
+  window.open(`https://wa.me/?text=${text}`, '_blank');
+}
+
+function shareOffersWhatsApp() {
+  const promos = getPromos().filter(p => p.active);
+  if (!promos.length) { alert('لا توجد عروض نشطة للمشاركة'); return; }
+  const lines = [
+    `🏷️ *عروض وحزم VOODO ERP*`,
+    `━━━━━━━━━━━━━━━━━━━━`,
+    ...promos.map(p => {
+      if (p.type === 'bundle') {
+        return `📦 *${p.name}*\nاشتري: ${p.items.map(i=>i.name+' ×'+i.minQty).join(' + ')}\nبسعر: ${fmt(p.bundlePrice)} ج بدل ${fmt(p.items.reduce((s,i)=>{const inv=getInv().find(x=>x.code===i.code);return s+(inv?.priceAfter||inv?.price||0)*i.minQty;},0))} ج`;
+      } else {
+        return `💰 *${p.name}*\nعند شراء بأكثر من ${fmt(p.minAmount)} ج\nخصم ${p.discountType==='percent'?p.discountValue+'%':fmt(p.discountValue)+' ج'}`;
+      }
+    }),
+    `━━━━━━━━━━━━━━━━━━━━`,
+    `🏠 VOODO ERP — بادر بالشراء!`
+  ];
+  const text = encodeURIComponent(lines.join('\n'));
+  window.open(`https://wa.me/?text=${text}`, '_blank');
+}
+

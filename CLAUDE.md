@@ -1,0 +1,87 @@
+# VOODO ERP — CLAUDE.md
+
+## ⚠️ لا تقرأ أبداً
+- `index.html` — مُولَّد تلقائياً بـ build.py (حجمه 500 KB+)
+- `src/js/app.js` — placeholder فقط، الكود الحقيقي في الملفات المرقمة
+- `src/js/app.js.bak` — نسخة احتياطية
+
+## Build
+```
+cd C:\Projects\voodo-erp
+python build.py        # يولّد index.html من src/
+git add -A && git commit -m "..." && git push
+```
+GitHub Actions تنشر تلقائياً على https://shekovichy.github.io/voodo-erp/
+
+---
+
+## ملفات المصدر
+
+| الملف | المحتوى | السطور |
+|-------|---------|--------|
+| `src/template.html` | كل HTML + CSS | ~1500 |
+| `src/js/00-core.js` | DB، BRANCH_IDS، cache variables | 116 |
+| `src/js/05-utils.js` | fmt، showMsg، getDateRange، login/logout | 398 |
+| `src/js/10-pos-products.js` | renderProducts، handleSearchKey | 55 |
+| `src/js/15-pos-cart.js` | addToCart، renderCart، cartTotals | 124 |
+| `src/js/20-pos-payment.js` | openPayment، completeSale، showReceipt | 134 |
+| `src/js/25-navigation.js` | showPage | 47 |
+| `src/js/30-dashboard.js` | buildDashboard، calcProfit | 223 |
+| `src/js/35-inventory.js` | renderInventory، saveProduct، importExcel | 178 |
+| `src/js/40-sales.js` | renderSales، viewSale | 82 |
+| `src/js/45-reports.js` | buildSalesReport، buildInventoryReport، buildProfitReport | 302 |
+| `src/js/50-kpi.js` | buildKPIReport | 83 |
+| `src/js/52-sellers-report.js` | buildSellersReport | 59 |
+| `src/js/55-lowstock.js` | updateLowStockBell، buildHeatmap، exportBackup | 206 |
+| `src/js/60-settings.js` | saveSettings، renderBranchUsersSettings | 137 |
+| `src/js/65-firebase.js` | initFirebase، Firebase listeners، suspend/cashier | 633 |
+| `src/js/70-branches.js` | switchBranch، openTransferModal، getTransfers | 203 |
+| `src/js/75-purchases.js` | suppliers، purchase orders، receive goods | 384 |
+| `src/js/80-hr-targets.js` | HR targets، commission، buildSellersReport | 144 |
+| `src/js/82-promotions.js` | promotions system | 310 |
+| `src/js/85-crm.js` | CRM customers، loyalty points | 236 |
+| `src/js/87-returns.js` | returns system | 122 |
+| `src/js/88-abc-expenses.js` | ABC analysis، expense tracking، audit log، WhatsApp | 278 |
+| `src/js/89-cashier-return.js` | openCashierReturn، processCashierReturn | 181 |
+| `src/js/90-barcode.js` | barcodes، price tags، ESC/POS printer | 206 |
+| `src/js/91-loyalty.js` | loyalty settings | 57 |
+| `src/js/92-hr-attendance.js` | attendance، payroll، renderAttendancePane | 219 |
+| `src/js/93-accounting.js` | P&L، cash flow، accounting page | 186 |
+| `src/js/94-vlookup.js` | VLOOKUP reports، category reports | 346 |
+| `src/js/95-warehouse.js` | warehouse page، warehouse transfers | 207 |
+| `src/js/96-approvals.js` | price-change approvals، suspended tabs | 339 |
+| `src/js/97-expense-requests.js` | expense approval requests | 99 |
+| `src/js/98-leave-requests.js` | leave & permission requests | 120 |
+| `src/js/100-home.js` | home page، renderHomeIcons، fingerprint import | 181 |
+| `src/js/105-manufacturing.js` | التصنيع — raw materials، lines، orders، quality | 506 |
+
+---
+
+## خريطة الدوال الرئيسية
+
+### للتعديل في كل فيتشر — اقرأ هذا الملف فقط:
+
+| الفيتشر | الملف |
+|---------|-------|
+| كاشير / بيع | `20-pos-payment.js` + `15-pos-cart.js` |
+| المخزون | `35-inventory.js` |
+| الداشبورد | `30-dashboard.js` |
+| Firebase / cloud | `65-firebase.js` |
+| الفروع والتحويلات | `70-branches.js` |
+| المشتريات والموردين | `75-purchases.js` |
+| HR / رواتب / حضور | `80-hr-targets.js` + `92-hr-attendance.js` |
+| التصنيع | `105-manufacturing.js` |
+| التقارير | `45-reports.js` + `50-kpi.js` + `94-vlookup.js` |
+| المحاسبة | `93-accounting.js` |
+| الإعدادات | `60-settings.js` |
+| CRM / العملاء | `85-crm.js` |
+| طلبات الإجازات | `98-leave-requests.js` |
+| طلبات المصاريف | `97-expense-requests.js` |
+| اعتماد الأسعار | `96-approvals.js` |
+
+---
+
+## بعد أي تعديل
+1. `python build.py` — يولّد index.html
+2. `git add -A && git commit -m "وصف التغيير" && git push`
+3. GitHub Actions تنشر خلال ~30 ثانية
