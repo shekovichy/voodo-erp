@@ -147,14 +147,12 @@ function loadDemoAndEnter() {
   ];
   DB.s('pos_customers', customers);
 
-  // ── 8. AUTH ──────────────────────────────────
-  DB.s('users', { admin: 'demo1234', cashier: 'demo1234' });
+  // ── 8. BRANCH + FLAG ─────────────────────────
+  // NOTE: لا نمس كلمة مرور الـ admin الحقيقية
   DB.s('currentBranch', 'b1');
-
-  // ── 9. DEMO FLAG ─────────────────────────────
   DB.s('pos_demo_mode', true);
 
-  // ── 10. ENTER AS ADMIN ───────────────────────
+  // ── 9. ENTER AS ADMIN ────────────────────────
   currentBranch = 'b1';
   currentUser   = 'admin';
   document.getElementById('loginPage').classList.add('hidden');
@@ -162,12 +160,8 @@ function loadDemoAndEnter() {
   // Show demo banner
   _showDemoBanner();
 
-  // Navigate to home
-  if (typeof showPage === 'function') showPage('home');
-  else if (typeof renderHomeIcons === 'function') {
-    document.getElementById('homePage')?.classList?.remove('hidden');
-    renderHomeIcons();
-  }
+  // Show manager view properly then navigate to home
+  switchToHome(); // هيظهر managerView ويعمل renderHomeIcons
 
   // Refresh low stock bell
   if (typeof updateLowStockBell === 'function') setTimeout(updateLowStockBell, 300);
