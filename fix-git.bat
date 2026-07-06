@@ -1,0 +1,16 @@
+@echo off
+cd /d C:\Projects\voodo-erp
+echo Deleting lock files...
+del /f /q .git\index.lock 2>nul
+del /f /q .git\index 2>nul
+echo Rebuilding git index...
+git reset HEAD
+echo Adding all files...
+git add -A
+echo Committing...
+git commit -m "fix: sales table header + demo priceAfter"
+echo Pushing...
+git push
+echo.
+echo === DONE! ===
+pause
