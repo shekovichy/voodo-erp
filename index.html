@@ -3047,27 +3047,28 @@ function loadDemoAndEnter() {
   _settingsCache = settings;
 
   // ── 2. INVENTORY ─────────────────────────────
+  // السيستم بيستخدم priceAfter كسعر البيع الحالي
   const inv = [
-    { code:'P001', name:'طقم غرفة نوم كاملة',  price:8500,  cost:5800, qty:12, category:'أثاث',    barcode:'6001001' },
-    { code:'P002', name:'كنبة ثلاثة مقاعد',     price:4200,  cost:2700, qty:8,  category:'أثاث',    barcode:'6001002' },
-    { code:'P003', name:'طاولة سفرة 6 كراسي',  price:3600,  cost:2200, qty:6,  category:'أثاث',    barcode:'6001003' },
-    { code:'P004', name:'مرتبة طبية 160×200',   price:2800,  cost:1700, qty:15, category:'مراتب',   barcode:'6001004' },
-    { code:'P005', name:'مرتبة أطفال 120×200',  price:1400,  cost:850,  qty:20, category:'مراتب',   barcode:'6001005' },
-    { code:'P006', name:'طقم ستائر صالة',       price:1200,  cost:700,  qty:25, category:'ستائر',   barcode:'6001006' },
-    { code:'P007', name:'ستارة غرفة نوم',        price:650,   cost:380,  qty:40, category:'ستائر',   barcode:'6001007' },
-    { code:'P008', name:'سجادة صالة 3×4',       price:1800,  cost:1100, qty:10, category:'سجاد',    barcode:'6001008' },
-    { code:'P009', name:'سجادة صغيرة 1.5×2.5', price:650,   cost:380,  qty:18, category:'سجاد',    barcode:'6001009' },
-    { code:'P010', name:'مطبخ ألمونيوم كامل',   price:12000, cost:8000, qty:5,  category:'مطابخ',   barcode:'6001010' },
-    { code:'P011', name:'براد أبواب زجاجية',    price:850,   cost:500,  qty:22, category:'إكسسوار', barcode:'6001011' },
-    { code:'P012', name:'لوحة ديكور فنية',      price:450,   cost:250,  qty:35, category:'ديكور',   barcode:'6001012' },
-    { code:'P013', name:'إضاءة سقف LED',        price:320,   cost:180,  qty:50, category:'إضاءة',   barcode:'6001013' },
-    { code:'P014', name:'طقم بشكير فاخر',       price:280,   cost:150,  qty:60, category:'منسوجات', barcode:'6001014' },
-    { code:'P015', name:'مفرش سرير مطرز',       price:420,   cost:240,  qty:45, category:'منسوجات', barcode:'6001015' },
-    { code:'P016', name:'خزانة ملابس 4 أبواب',  price:5500,  cost:3600, qty:7,  category:'أثاث',    barcode:'6001016' },
-    { code:'P017', name:'كومودينو خشب',         price:780,   cost:450,  qty:20, category:'أثاث',    barcode:'6001017' },
-    { code:'P018', name:'مرآة حائط كبيرة',      price:950,   cost:550,  qty:15, category:'ديكور',   barcode:'6001018' },
-    { code:'P019', name:'طاولة قهوة زجاج',      price:1100,  cost:650,  qty:12, category:'أثاث',    barcode:'6001019' },
-    { code:'P020', name:'أريكة فردية مودرن',    price:1800,  cost:1100, qty:9,  category:'أثاث',    barcode:'6001020' },
+    { code:'P001', name:'طقم غرفة نوم كاملة',  priceAfter:8500,  cost:5800, qty:12, category:'أثاث',    barcode:'6001001' },
+    { code:'P002', name:'كنبة ثلاثة مقاعد',     priceAfter:4200,  cost:2700, qty:8,  category:'أثاث',    barcode:'6001002' },
+    { code:'P003', name:'طاولة سفرة 6 كراسي',  priceAfter:3600,  cost:2200, qty:6,  category:'أثاث',    barcode:'6001003' },
+    { code:'P004', name:'مرتبة طبية 160×200',   priceAfter:2800,  cost:1700, qty:15, category:'مراتب',   barcode:'6001004' },
+    { code:'P005', name:'مرتبة أطفال 120×200',  priceAfter:1400,  cost:850,  qty:20, category:'مراتب',   barcode:'6001005' },
+    { code:'P006', name:'طقم ستائر صالة',       priceAfter:1200,  cost:700,  qty:25, category:'ستائر',   barcode:'6001006' },
+    { code:'P007', name:'ستارة غرفة نوم',        priceAfter:650,   cost:380,  qty:40, category:'ستائر',   barcode:'6001007' },
+    { code:'P008', name:'سجادة صالة 3×4',       priceAfter:1800,  cost:1100, qty:10, category:'سجاد',    barcode:'6001008' },
+    { code:'P009', name:'سجادة صغيرة 1.5×2.5', priceAfter:650,   cost:380,  qty:18, category:'سجاد',    barcode:'6001009' },
+    { code:'P010', name:'مطبخ ألمونيوم كامل',   priceAfter:12000, cost:8000, qty:5,  category:'مطابخ',   barcode:'6001010' },
+    { code:'P011', name:'براد أبواب زجاجية',    priceAfter:850,   cost:500,  qty:22, category:'إكسسوار', barcode:'6001011' },
+    { code:'P012', name:'لوحة ديكور فنية',      priceAfter:450,   cost:250,  qty:35, category:'ديكور',   barcode:'6001012' },
+    { code:'P013', name:'إضاءة سقف LED',        priceAfter:320,   cost:180,  qty:50, category:'إضاءة',   barcode:'6001013' },
+    { code:'P014', name:'طقم بشكير فاخر',       priceAfter:280,   cost:150,  qty:60, category:'منسوجات', barcode:'6001014' },
+    { code:'P015', name:'مفرش سرير مطرز',       priceAfter:420,   cost:240,  qty:45, category:'منسوجات', barcode:'6001015' },
+    { code:'P016', name:'خزانة ملابس 4 أبواب',  priceAfter:5500,  cost:3600, qty:7,  category:'أثاث',    barcode:'6001016' },
+    { code:'P017', name:'كومودينو خشب',         priceAfter:780,   cost:450,  qty:20, category:'أثاث',    barcode:'6001017' },
+    { code:'P018', name:'مرآة حائط كبيرة',      priceAfter:950,   cost:550,  qty:15, category:'ديكور',   barcode:'6001018' },
+    { code:'P019', name:'طاولة قهوة زجاج',      priceAfter:1100,  cost:650,  qty:12, category:'أثاث',    barcode:'6001019' },
+    { code:'P020', name:'أريكة فردية مودرن',    priceAfter:1800,  cost:1100, qty:9,  category:'أثاث',    barcode:'6001020' },
   ];
 
   _invCacheByBranch['b1'] = inv;
@@ -3096,9 +3097,9 @@ function loadDemoAndEnter() {
         do { p = inv[Math.floor(Math.random() * inv.length)]; } while (usedCodes.has(p.code));
         usedCodes.add(p.code);
         const qty = Math.floor(Math.random() * 2) + 1;
-        items.push({ ...p, qty, total: p.price * qty });
+        items.push({ ...p, qty, total: p.priceAfter * qty });
       }
-      const sub   = items.reduce((a, i) => a + i.price * i.qty, 0);
+      const sub   = items.reduce((a, i) => a + i.priceAfter * i.qty, 0);
       const disc  = Math.random() > 0.8 ? Math.round(sub * 0.05) : 0;
       const total = sub - disc;
       const branchId = branches[Math.floor(Math.random() * branches.length)];
@@ -3172,8 +3173,12 @@ function loadDemoAndEnter() {
   ];
   DB.s('pos_customers', customers);
 
-  // ── 8. BRANCH + FLAG ─────────────────────────
-  // NOTE: لا نمس كلمة مرور الـ admin الحقيقية
+  // ── 8. BRANCH + PASSWORD + FLAG ──────────────
+  // نحط باسورد الديمو "1234" بس لو مافيش باسورد أصلاً
+  const existingUsers = DB.g('users', { admin: '', cashier: '' });
+  if (!existingUsers.admin) {
+    DB.s('users', { admin: '1234', cashier: '1234' });
+  }
   DB.s('currentBranch', 'b1');
   DB.s('pos_demo_mode', true);
 
