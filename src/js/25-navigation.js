@@ -3,7 +3,7 @@
 // ══════════════════════════════════════════════
 function showPage(page) {
   if (window._whMode && !['warehouse','transfers'].includes(page)) return;
-  ['home','dashboard','inventory','sales','suspended','reports','customized','warehouse','settings','customers','promos','transfers','purchases','hr','expenses','audit','accounting'].forEach(p => {
+  ['home','dashboard','inventory','sales','suspended','reports','customized','warehouse','settings','customers','promos','transfers','purchases','hr','expenses','audit','accounting','manufacturing'].forEach(p => {
     document.getElementById('page-'+p)?.classList.add('hidden');
   });
   document.getElementById('page-'+page).classList.remove('hidden');
