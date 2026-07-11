@@ -17,6 +17,34 @@ const escHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<
 // result so it also survives the surrounding double-quoted attribute.
 const escJsAttr = (s) => escHtml(String(s ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
 
+// Count-up animation for KPI numbers (dashboard prototype). Reads the
+// previous value off the element itself (data-raw-value) so repeated calls
+// on filter/period changes animate from the last shown number, not from 0.
+// Respects prefers-reduced-motion by jumping straight to the final value.
+const _prefersReducedMotion = () =>
+  window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function animateNumber(el, to, opts = {}) {
+  if (!el) return;
+  const { duration = 700, format = (n) => Math.round(n).toLocaleString('en-US'), suffix = '' } = opts;
+  to = parseFloat(to) || 0;
+  const from = parseFloat(el.dataset.rawValue) || 0;
+  el.dataset.rawValue = to;
+  if (_prefersReducedMotion() || from === to) {
+    el.textContent = format(to) + suffix;
+    return;
+  }
+  const start = performance.now();
+  const step = (now) => {
+    const p = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
+    el.textContent = format(from + (to - from) * eased) + suffix;
+    if (p < 1) requestAnimationFrame(step);
+    else el.textContent = format(to) + suffix;
+  };
+  requestAnimationFrame(step);
+}
+
 function showMsg(id, msg, type='success') {
   const el = document.getElementById(id);
   el.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;

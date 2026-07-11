@@ -88,14 +88,14 @@ function buildDashboard() {
   const monthProfit = calcProfit(monthSales, inv);
   const prevMonthProfit = calcProfit(prevMonthSales, inv);
 
-  document.getElementById('sd-today').textContent    = fmt(todaySales.reduce((s,x) => s+x.total,0)) + ' ج';
-  document.getElementById('sd-today-c').textContent  = todaySales.length + ' فاتورة';
-  document.getElementById('sd-month').textContent    = fmt(rangeSales.reduce((s,x) => s+x.total,0)) + ' ج';
-  document.getElementById('sd-month-c').textContent  = rangeSales.length + ' فاتورة';
-  document.getElementById('sd-profit').textContent   = fmt(rangeProfit) + ' ج';
-  document.getElementById('sd-products').textContent = inv.length;
-  document.getElementById('sd-low').textContent      = low.length;
-  document.getElementById('sd-out').textContent      = out.length;
+  animateNumber(document.getElementById('sd-today'),    todaySales.reduce((s,x) => s+x.total,0), { format: fmt, suffix: ' ج' });
+  document.getElementById('sd-today-c').textContent   = todaySales.length + ' فاتورة';
+  animateNumber(document.getElementById('sd-month'),    rangeSales.reduce((s,x) => s+x.total,0), { format: fmt, suffix: ' ج' });
+  document.getElementById('sd-month-c').textContent   = rangeSales.length + ' فاتورة';
+  animateNumber(document.getElementById('sd-profit'),   rangeProfit, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('sd-products'), inv.length);
+  animateNumber(document.getElementById('sd-low'),      low.length);
+  animateNumber(document.getElementById('sd-out'),      out.length);
   updateLowStockBell();
 
   // ── Month vs Prev Month comparison cards ──
@@ -108,11 +108,17 @@ function buildDashboard() {
   const thisMargin = thisRev > 0 ? Math.round(monthProfit / thisRev * 100) : 0;
   const prevMargin = prevRev > 0 ? Math.round(prevMonthProfit / prevRev * 100) : 0;
 
+  const _pulse = (el) => {
+    if (!el) return;
+    el.classList.remove('dash-pulse');
+    void el.offsetWidth; // force reflow so the animation can restart
+    el.classList.add('dash-pulse');
+  };
   const cmpEl = (id, val, prev, unit) => {
     const el = document.getElementById(id);
     const deltaEl = document.getElementById(id+'-delta');
-    if (el) el.textContent = fmt(val) + (unit||'');
-    if (deltaEl) deltaEl.innerHTML = deltaBadge(val, prev);
+    if (el) animateNumber(el, val, { format: fmt, suffix: unit||'' });
+    if (deltaEl) { deltaEl.innerHTML = deltaBadge(val, prev); _pulse(deltaEl); }
   };
   cmpEl('cmp-rev',    thisRev,    prevRev,    ' ج');
   cmpEl('cmp-profit', monthProfit, prevMonthProfit, ' ج');
@@ -120,8 +126,8 @@ function buildDashboard() {
   cmpEl('cmp-atv',    thisATV,    prevATV,    ' ج');
   const cmpMarginEl = document.getElementById('cmp-margin');
   const cmpMarginDelta = document.getElementById('cmp-margin-delta');
-  if (cmpMarginEl) cmpMarginEl.textContent = thisMargin + '%';
-  if (cmpMarginDelta) cmpMarginDelta.innerHTML = deltaBadge(thisMargin, prevMargin);
+  if (cmpMarginEl) animateNumber(cmpMarginEl, thisMargin, { suffix: '%' });
+  if (cmpMarginDelta) { cmpMarginDelta.innerHTML = deltaBadge(thisMargin, prevMargin); _pulse(cmpMarginDelta); }
 
   // ── Weekly chart (last 7 days) ──
   const days = Array.from({length:7}, (_,i) => { const d=new Date(); d.setDate(d.getDate()-6+i); return d; });
@@ -201,12 +207,12 @@ function buildDashboard() {
   const execTurnover = document.getElementById('exec-turnover');
   const execCoverage = document.getElementById('exec-coverage');
   const execInvVal   = document.getElementById('exec-inv-value');
-  if (execMargin)    { execMargin.textContent = marginPct+'%'; execMargin.style.color = marginPct>=20?'#7c3aed':marginPct>=10?'#d97706':'#dc2626'; }
-  if (execTarget)    { execTarget.textContent = totalTarget>0 ? achievePct+'%' : '-'; }
+  if (execMargin)    { animateNumber(execMargin, marginPct, { suffix: '%' }); execMargin.style.color = marginPct>=20?'#7c3aed':marginPct>=10?'#d97706':'#dc2626'; }
+  if (execTarget)    { if (totalTarget>0) animateNumber(execTarget, achievePct, { suffix: '%' }); else execTarget.textContent = '-'; }
   if (execTargetSub) { execTargetSub.textContent = totalTarget>0 ? `هدف: ${fmt(totalTarget)} ج` : 'لم يُحدد هدف'; }
-  if (execTurnover)  execTurnover.textContent = turnover.toFixed(1)+'x';
-  if (execCoverage)  execCoverage.textContent = coverage;
-  if (execInvVal)    execInvVal.textContent = fmt(invValue)+' ج';
+  if (execTurnover)  animateNumber(execTurnover, turnover, { format: (n) => n.toFixed(1), suffix: 'x' });
+  if (execCoverage)  animateNumber(execCoverage, coverage);
+  if (execInvVal)    animateNumber(execInvVal, invValue, { format: fmt, suffix: ' ج' });
 
   // Low stock list
   const allAlert = [...out, ...low].sort((a,b) => a.qty-b.qty);
