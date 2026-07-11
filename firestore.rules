@@ -22,25 +22,21 @@ service cloud.firestore {
     match /pos_data/{document} {
       allow read, write: if request.auth != null && document != 'auth';
     }
+    // Inventory per branch (inv_wh, inv_b1, inv_b2, ...) lives as documents
+    // INSIDE the pos_data collection (see setInv() in src/js/00-core.js —
+    // `_db.collection('pos_data').doc('inv_'+branch)`), not as separate
+    // top-level collections, so the rule above already covers it. An older
+    // version of this file had a `match /inv_{branch}/...` block here that
+    // was both invalid syntax AND matched a path the app never writes to —
+    // removed.
 
-    // ── INVENTORY per branch ──────────────────────────────────
-    // Firestore rules can't mix a literal prefix with a wildcard inside one
-    // path segment (`inv_{branch}` is invalid — a wildcard must occupy the
-    // whole segment), so each branch collection is listed explicitly.
-    // Keep this list in sync with BRANCH_IDS in src/js/00-core.js.
-    match /inv_wh/{document=**} {
-      allow read, write: if request.auth != null;
-    }
-    match /inv_b1/{document=**} {
-      allow read, write: if request.auth != null;
-    }
-    match /inv_b2/{document=**} {
-      allow read, write: if request.auth != null;
-    }
-    match /inv_b3/{document=**} {
-      allow read, write: if request.auth != null;
-    }
-    match /inv_b4/{document=**} {
+    // ── SALES (monthly documents, e.g. pos_sales/2026-07) ──────
+    // This collection was missing from earlier versions of this file even
+    // though the app has always read/written it (see addSale()/initFirebase
+    // in src/js/00-core.js and 65-firebase.js) — the rule actually enforced
+    // in the Firebase console must have been broader than what was committed
+    // here. Restoring it explicitly.
+    match /pos_sales/{document=**} {
       allow read, write: if request.auth != null;
     }
 
