@@ -12,7 +12,7 @@ function openReturnFromModal() {
   document.getElementById('returnItemsList').innerHTML = lastSaleForPrint.items.map((item, idx) => `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 4px;border-bottom:1px solid var(--border);">
       <div style="flex:1;">
-        <div style="font-size:13px;font-weight:600;">${item.name}</div>
+        <div style="font-size:13px;font-weight:600;">${escHtml(item.name)}</div>
         <div style="font-size:11px;color:var(--text-muted);">سعر الوحدة: ${fmt(item.price)} ج · الكمية الأصلية: ${item.qty}</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
@@ -114,9 +114,9 @@ function buildReturnsReport() {
         <td><span class="badge-return">مرتجع #${String(r.id).slice(-6)}</span></td>
         <td style="white-space:nowrap;">${new Date(r.date).toLocaleString('ar-EG')}</td>
         <td>${r.originalSaleId ? '#'+String(r.originalSaleId).slice(-6) : '-'}</td>
-        <td>${r.items.map(i=>i.name+' ×'+Math.abs(i.qty)).join(' · ')}</td>
+        <td>${r.items.map(i=>escHtml(i.name)+' ×'+Math.abs(i.qty)).join(' · ')}</td>
         <td style="color:var(--danger);font-weight:700;">${fmt(Math.abs(r.total))} ج</td>
-        <td>${r.returnReason||'-'}</td>
+        <td>${escHtml(r.returnReason)||'-'}</td>
       </tr>`).join('');
 }
 

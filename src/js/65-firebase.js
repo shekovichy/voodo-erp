@@ -189,22 +189,10 @@ function initFirebase() {
         visRefresh('page-promos', renderPromosPage);
       }, err => { _promoCache = DB.g('pos_promos', []); });
 
-    // Auth listener — sync passwords across devices
-    _db.collection('pos_data').doc('auth')
-      .onSnapshot(snap => {
-        if (snap.exists) {
-          const data = snap.data();
-          const localU = DB.g('users', { admin: '', cashier: '' });
-          if (data.users && !localU.admin) DB.s('users', data.users);
-          const localBU = DB.g('pos_branch_users', null);
-          if (data.branchUsers && !localBU) DB.s('pos_branch_users', data.branchUsers);
-        } else {
-          // First time: upload local passwords to Firestore
-          _db.collection('pos_data').doc('auth').set({
-            users: getUsers(), branchUsers: getBranchUsers(), updatedAt: Date.now()
-          }).catch(()=>{});
-        }
-      }, err => console.warn('Auth sync error:', err));
+    // NOTE: passwords are intentionally NOT synced through Firestore — pos_data/auth
+    // used to hold password hashes and was readable by any anonymously-authenticated
+    // client (Firestore rules only require auth != null). Each device now keeps its
+    // own admin/cashier credentials in localStorage only. See CLAUDE.md security notes.
 
     // Customers listener
     _db.collection('pos_data').doc('customers')
@@ -339,17 +327,17 @@ function renderSuspendedPage() {
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
         <div>
           <div style="font-weight:700;font-size:15px;font-family:monospace;color:var(--primary);">${b.id}</div>
-          <div style="font-size:12px;color:var(--text-muted);">${new Date(b.created).toLocaleString('ar-EG')} — كاشير: ${b.cashier}</div>
-          ${b.note?`<div style="font-size:12px;margin-top:3px;color:#6b7280;">ملاحظة: ${b.note}</div>`:''}
+          <div style="font-size:12px;color:var(--text-muted);">${new Date(b.created).toLocaleString('ar-EG')} — كاشير: ${escHtml(b.cashier)}</div>
+          ${b.note?`<div style="font-size:12px;margin-top:3px;color:#6b7280;">ملاحظة: ${escHtml(b.note)}</div>`:''}
         </div>
         <div style="text-align:left;">
           <div style="font-size:18px;font-weight:700;">${fmt(final)} ج</div>
           ${discAmt>0?`<div style="font-size:12px;color:var(--success);">خصم: -${fmt(discAmt)} ج</div>`:''}
-          ${b.adminDiscountNote?`<div style="font-size:11px;color:var(--text-muted);">${b.adminDiscountNote}</div>`:''}
+          ${b.adminDiscountNote?`<div style="font-size:11px;color:var(--text-muted);">${escHtml(b.adminDiscountNote)}</div>`:''}
         </div>
       </div>
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">
-        ${b.items.map(i=>`${i.name} × ${i.qty}`).join(' · ')}
+        ${b.items.map(i=>`${escHtml(i.name)} × ${i.qty}`).join(' · ')}
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn btn-primary btn-sm" onclick="activateSuspended('${b.id}')">تفعيل للكاشير</button>
@@ -390,7 +378,7 @@ function openAdminDiscount(id) {
   tbody.innerHTML = bill.items.map((item, idx) => {
     const origPrice = item._origPrice || item.price;
     return `<tr data-orig-price="${origPrice}" data-qty="${item.qty}">
-      <td style="font-weight:600;">${item.name}</td>
+      <td style="font-weight:600;">${escHtml(item.name)}</td>
       <td style="text-align:center;">${item.qty}</td>
       <td style="text-align:center;">${fmt(origPrice)} ج</td>
       <td style="text-align:center;">
@@ -543,7 +531,7 @@ function renderCashierReport() {
         <div style="display:flex;flex-wrap:wrap;gap:6px;">
           ${topProds.map(([name,d],i)=>`<span style="background:white;border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:12px;display:flex;align-items:center;gap:5px;">
             <span style="background:var(--primary);color:white;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;">${i+1}</span>
-            ${name} <span style="color:var(--primary);font-weight:700;">${d.qty} قطعة</span></span>`).join('')}
+            ${escHtml(name)} <span style="color:var(--primary);font-weight:700;">${d.qty} قطعة</span></span>`).join('')}
         </div>
       </div>` : '';
 
@@ -566,14 +554,14 @@ function renderCashierReport() {
     const dateLabel = new Date(day+'T12:00:00').toLocaleDateString('ar-EG',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
     const invoicesHtml = d.sales.sort((a,b)=>b.id-a.id).map(s=>{
       const t = new Date(s.date).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'});
-      const preview = (s.items||[]).map(i=>i.name+'×'+i.qty).join('، ');
+      const preview = (s.items||[]).map(i=>escHtml(i.name)+'×'+i.qty).join('، ');
       const pmColor = s.payMethod==='card'?'#1d4ed8':s.payMethod==='mixed'?'#7c3aed':'#15803d';
       const pmLabel = s.payMethod==='card'?'كارت':s.payMethod==='mixed'?'مختلط':'كاش';
       return `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 10px;border-radius:6px;background:var(--bg-secondary);margin-bottom:4px;gap:8px;flex-wrap:wrap;">
         <div style="min-width:0;flex:1;">
           <span style="font-size:12px;font-weight:700;color:var(--primary);">#${String(s.id).slice(-6)}</span>
           <span style="font-size:11px;color:var(--text-muted);margin-inline-start:6px;">${t}</span>
-          ${s.customerName?`<span style="font-size:11px;color:var(--text-muted);margin-inline-start:6px;">👤 ${s.customerName}</span>`:''}
+          ${s.customerName?`<span style="font-size:11px;color:var(--text-muted);margin-inline-start:6px;">👤 ${escHtml(s.customerName)}</span>`:''}
           <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${preview}</div>
         </div>
         <div style="text-align:end;flex-shrink:0;">
@@ -618,9 +606,9 @@ function renderResumeList() {
         <span style="font-size:15px;font-weight:700;">${fmt(final)} ج</span>
       </div>
       <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">${new Date(b.created).toLocaleString('ar-EG')}</div>
-      <div style="font-size:12px;margin-bottom:8px;">${b.items.map(i=>i.name+' ×'+i.qty).join(' · ')}</div>
+      <div style="font-size:12px;margin-bottom:8px;">${b.items.map(i=>escHtml(i.name)+' ×'+i.qty).join(' · ')}</div>
       ${discAmt>0?`<div style="font-size:12px;color:var(--success);margin-bottom:8px;">خصم مدير: -${fmt(discAmt)} ج</div>`:''}
-      ${b.note?`<div style="font-size:12px;color:#6b7280;margin-bottom:8px;">ملاحظة: ${b.note}</div>`:''}
+      ${b.note?`<div style="font-size:12px;color:#6b7280;margin-bottom:8px;">ملاحظة: ${escHtml(b.note)}</div>`:''}
       <button class="btn btn-success btn-sm" onclick="resumeFromModal('${b.id}')">استئناف هذه الفاتورة</button>
     </div>`;
   }).join('');

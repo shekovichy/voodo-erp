@@ -41,17 +41,17 @@ function renderCustomers() {
     else if (spent >= 1000)  { tier='🥈 فضي';    tierColor='#1e3a5f'; tierBg='#dbeafe'; }
     else                     { tier='🥉 برونزي';  tierColor='#4b3320'; tierBg='#fde8d0'; }
     return `<tr>
-      <td><strong style="cursor:pointer;color:var(--primary);" onclick="openCustomerProfile('${c.id}')">${c.name}</strong></td>
-      <td>${c.phone||'-'}</td>
+      <td><strong style="cursor:pointer;color:var(--primary);" onclick="openCustomerProfile('${escJsAttr(c.id)}')">${escHtml(c.name)}</strong></td>
+      <td>${escHtml(c.phone)||'-'}</td>
       <td>${c.visits||0}</td>
       <td>${fmt(spent)} ج</td>
       <td><span style="font-weight:700;color:#059669;">${pts} نقطة</span></td>
       <td><span style="background:${tierBg};color:${tierColor};padding:2px 8px;border-radius:20px;font-size:11px;">${tier}</span></td>
       <td>${c.createdAt ? new Date(c.createdAt).toLocaleDateString('ar-EG') : '-'}</td>
       <td>
-        <button class="btn btn-sm" style="background:#e0f2fe;color:#0369a1;" onclick="openCustomerProfile('${c.id}')" title="الملف الكامل">👁️</button>
-        <button class="btn btn-gray btn-sm" onclick="openCustomerModal('${c.id}')" style="margin:0 3px;">✏️</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteCustomer('${c.id}')">🗑️</button>
+        <button class="btn btn-sm" style="background:#e0f2fe;color:#0369a1;" onclick="openCustomerProfile('${escJsAttr(c.id)}')" title="الملف الكامل">👁️</button>
+        <button class="btn btn-gray btn-sm" onclick="openCustomerModal('${escJsAttr(c.id)}')" style="margin:0 3px;">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteCustomer('${escJsAttr(c.id)}')">🗑️</button>
       </td>
     </tr>`;
   }).join('');
@@ -130,11 +130,11 @@ function openCustomerProfile(id) {
   document.getElementById('cpBody').innerHTML = `
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
       <div style="width:54px;height:54px;border-radius:50%;background:#1a5faf;color:white;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;flex-shrink:0;">
-        ${c.name.charAt(0).toUpperCase()}
+        ${escHtml(c.name.charAt(0).toUpperCase())}
       </div>
       <div>
-        <div style="font-size:18px;font-weight:700;">${c.name}</div>
-        <div style="font-size:13px;color:var(--text-muted);">${c.phone||'لا يوجد هاتف'}</div>
+        <div style="font-size:18px;font-weight:700;">${escHtml(c.name)}</div>
+        <div style="font-size:13px;color:var(--text-muted);">${escHtml(c.phone)||'لا يوجد هاتف'}</div>
         <span style="background:${tierBg};color:${tierColor};padding:2px 10px;border-radius:20px;font-size:12px;margin-top:4px;display:inline-block;">${tier}</span>
       </div>
     </div>
@@ -155,18 +155,18 @@ function openCustomerProfile(id) {
     <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;margin-bottom:14px;">
       <div style="font-size:13px;font-weight:700;margin-bottom:8px;">🏆 أكثر المنتجات شراءً</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;">
-        ${topProds.map(([name,qty],i)=>`<span style="background:white;border:1px solid var(--border);border-radius:20px;padding:3px 10px;font-size:12px;">${i+1}. ${name} <strong style="color:var(--primary);">×${qty}</strong></span>`).join('')}
+        ${topProds.map(([name,qty],i)=>`<span style="background:white;border:1px solid var(--border);border-radius:20px;padding:3px 10px;font-size:12px;">${i+1}. ${escHtml(name)} <strong style="color:var(--primary);">×${qty}</strong></span>`).join('')}
       </div>
     </div>` : ''}
 
-    ${c.notes ? `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px;margin-bottom:14px;font-size:13px;">📝 ${c.notes}</div>` : ''}
+    ${c.notes ? `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px;margin-bottom:14px;font-size:13px;">📝 ${escHtml(c.notes)}</div>` : ''}
 
     <div style="font-size:13px;font-weight:700;margin-bottom:8px;">🧾 آخر الفواتير</div>
     <div style="max-height:220px;overflow-y:auto;">
       ${allSales.slice(0,20).map(s=>{
         const d = new Date(s.date).toLocaleDateString('ar-EG');
         const t = new Date(s.date).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'});
-        const preview = (s.items||[]).slice(0,2).map(i=>i.name).join('، ');
+        const preview = (s.items||[]).slice(0,2).map(i=>escHtml(i.name)).join('، ');
         return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:6px;background:var(--bg-secondary);margin-bottom:4px;gap:8px;">
           <div>
             <span style="font-size:12px;font-weight:700;color:var(--primary);">#${String(s.id).slice(-6)}</span>
@@ -199,8 +199,8 @@ function searchCustomerDD() {
       dd.innerHTML = '<div class="customer-dd-item" style="color:var(--text-muted);">لا توجد نتائج</div>';
     } else {
       dd.innerHTML = results.map(c =>
-        `<div class="customer-dd-item" onclick="selectCustomer('${c.id}')">
-          <strong>${c.name}</strong>${c.phone ? ' — ' + c.phone : ''}
+        `<div class="customer-dd-item" onclick="selectCustomer('${escJsAttr(c.id)}')">
+          <strong>${escHtml(c.name)}</strong>${c.phone ? ' — ' + escHtml(c.phone) : ''}
           ${(c.totalSpent||0) >= thresh ? ' <span class="vip-badge" style="font-size:9px;padding:1px 5px;">VIP</span>' : ''}
         </div>`
       ).join('');

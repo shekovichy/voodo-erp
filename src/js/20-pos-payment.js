@@ -10,7 +10,7 @@ function openPayment() {
   // Populate salesperson dropdown
   const sel = document.getElementById('paymentSalesperson');
   const people = getSalespeople();
-  sel.innerHTML = people.map(n => `<option value="${n}">${n}</option>`).join('');
+  sel.innerHTML = people.map(n => `<option value="${escHtml(n)}">${escHtml(n)}</option>`).join('');
   if (window._lastSalesperson && people.includes(window._lastSalesperson)) sel.value = window._lastSalesperson;
   clearSelectedCustomer();
   setPayMethod('cash');
@@ -91,7 +91,7 @@ function showReceipt(sale) {
   lastSaleForPrint = sale;
   const lines = sale.items.map(i =>
     `<div style="display:flex;justify-content:space-between;">
-      <span>${i.name} × ${i.qty}</span><span>${fmt(i.price*i.qty)} ج</span>
+      <span>${escHtml(i.name)} × ${i.qty}</span><span>${fmt(i.price*i.qty)} ج</span>
     </div>`).join('');
   document.getElementById('receiptContent').innerHTML = `
     <div style="text-align:center;margin-bottom:10px;">
@@ -102,7 +102,7 @@ function showReceipt(sale) {
       <div style="font-size:13px;font-weight:700;margin-top:4px;">فاتورة مبيعات</div>
       <div style="font-size:11px;color:gray;">${new Date(sale.date).toLocaleString('ar-EG')}</div>
       <div style="font-size:11px;color:gray;">رقم: ${String(sale.id).slice(-8)}</div>
-      ${sale.salesperson ? `<div style="font-size:11px;color:gray;">البائع: ${sale.salesperson}</div>` : ''}
+      ${sale.salesperson ? `<div style="font-size:11px;color:gray;">البائع: ${escHtml(sale.salesperson)}</div>` : ''}
     </div>
     <hr style="border:1px dashed #ccc;margin:8px 0;">
     ${lines}

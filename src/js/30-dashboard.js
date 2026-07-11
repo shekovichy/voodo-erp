@@ -215,7 +215,7 @@ function buildDashboard() {
     dashEl.innerHTML = '<div class="text-center text-muted" style="padding:20px;">لا توجد منتجات تحتاج تجديد 👍</div>';
   } else {
     dashEl.innerHTML = `<table style="width:100%;"><thead><tr><th>الكود</th><th>الاسم</th><th>الكمية الحالية</th><th>الحالة</th></tr></thead><tbody>
-      ${allAlert.map(p=>`<tr><td>${p.code}</td><td>${p.name}</td><td><strong>${p.qty}</strong></td>
+      ${allAlert.map(p=>`<tr><td>${escHtml(p.code)}</td><td>${escHtml(p.name)}</td><td><strong>${p.qty}</strong></td>
         <td><span class="badge ${p.qty<=0?'badge-danger':'badge-warning'}">${p.qty<=0?'نفد المخزون':'مخزون منخفض'}</span></td></tr>`).join('')}
     </tbody></table>`;
   }

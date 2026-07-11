@@ -102,7 +102,7 @@ function renderAttendancePane() {
     const ab= Object.values(attMap).filter(a=>a.empName===name&&a.status==='absent').length;
     const lt= Object.values(attMap).filter(a=>a.empName===name&&a.status==='late').length;
     return `<div style="background:var(--bg-secondary);border-radius:8px;padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-      <span style="font-weight:700;min-width:70px;">${name}</span>
+      <span style="font-weight:700;min-width:70px;">${escHtml(name)}</span>
       <span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:12px;font-size:12px;">✅ ${p} حضور</span>
       <span style="background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:12px;font-size:12px;">❌ ${ab} غياب</span>
       <span style="background:#fef9c3;color:#854d0e;padding:2px 8px;border-radius:12px;font-size:12px;">⏰ ${lt} تأخير</span>
@@ -119,7 +119,7 @@ function renderAttendancePane() {
       const rec = attMap[name+'_'+ds];
       const st = rec?.status||'';
       return `<td style="background:${SC[st]};text-align:center;cursor:pointer;padding:8px 6px;border:1px solid var(--border);"
-        title="${rec?.checkIn||''} → ${rec?.checkOut||''}" onclick="openAttendanceEdit('${name}','${ds}')">${SL[st]}</td>`;
+        title="${escHtml(rec?.checkIn||'')} → ${escHtml(rec?.checkOut||'')}" onclick="openAttendanceEdit('${escJsAttr(name)}','${ds}')">${SL[st]}</td>`;
     }).join('');
     return `<tr><td style="font-size:12px;color:var(--text-muted);padding:6px 8px;white-space:nowrap;border:1px solid var(--border);">${ds.slice(5)}${ds===today?' 🔵':''}</td>${cells}</tr>`;
   }).join('');
@@ -136,7 +136,7 @@ function renderAttendancePane() {
       <table style="width:100%;border-collapse:collapse;font-size:13px;">
         <thead><tr>
           <th style="padding:6px 8px;background:var(--bg-secondary);border:1px solid var(--border);">التاريخ</th>
-          ${sps.map(n=>`<th style="padding:6px 8px;background:var(--bg-secondary);text-align:center;border:1px solid var(--border);">${n}</th>`).join('')}
+          ${sps.map(n=>`<th style="padding:6px 8px;background:var(--bg-secondary);text-align:center;border:1px solid var(--border);">${escHtml(n)}</th>`).join('')}
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -146,7 +146,7 @@ function renderAttendancePane() {
 function openAttendanceEdit(empName, date) {
   const sps = (getSalespeople?getSalespeople():[]).map(sp=>typeof sp==='string'?sp:sp.name);
   const existing = getAttendance().find(a=>a.empName===empName&&a.date===date);
-  document.getElementById('attEmpSelect').innerHTML = sps.map(n=>`<option value="${n}" ${n===empName?'selected':''}>${n}</option>`).join('');
+  document.getElementById('attEmpSelect').innerHTML = sps.map(n=>`<option value="${escHtml(n)}" ${n===empName?'selected':''}>${escHtml(n)}</option>`).join('');
   document.getElementById('attDate').value     = date;
   document.getElementById('attStatus').value   = existing?.status||'present';
   document.getElementById('attCheckIn').value  = existing?.checkIn||'';
@@ -189,18 +189,18 @@ function renderPayrollPane() {
       </tr></thead>
       <tbody>
         ${payroll.map(p=>`<tr style="border-bottom:1px solid var(--border);">
-          <td style="padding:8px;font-weight:700;">${p.name}</td>
+          <td style="padding:8px;font-weight:700;">${escHtml(p.name)}</td>
           <td style="padding:8px;text-align:center;">${fmt(p.empSales)} ج</td>
           <td style="padding:8px;text-align:center;">${p.commPct}%</td>
           <td style="padding:8px;text-align:center;color:#059669;font-weight:700;">${fmt(p.commission)} ج</td>
           <td style="padding:8px;text-align:center;">${fmt(p.base)} ج</td>
           <td style="padding:8px;text-align:center;">
             <input type="number" value="${p.bonus}" min="0" style="width:70px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:2px 4px;font-size:12px;"
-              onchange="savePayrollAdjustment('${month}','${p.name}',parseFloat(this.value)||0,${p.deduction});renderPayrollPane();" />
+              onchange="savePayrollAdjustment('${escJsAttr(month)}','${escJsAttr(p.name)}',parseFloat(this.value)||0,${p.deduction});renderPayrollPane();" />
           </td>
           <td style="padding:8px;text-align:center;">
             <input type="number" value="${p.deduction}" min="0" style="width:70px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:2px 4px;font-size:12px;"
-              onchange="savePayrollAdjustment('${month}','${p.name}',${p.bonus},parseFloat(this.value)||0);renderPayrollPane();" />
+              onchange="savePayrollAdjustment('${escJsAttr(month)}','${escJsAttr(p.name)}',${p.bonus},parseFloat(this.value)||0);renderPayrollPane();" />
           </td>
           <td style="padding:8px;text-align:center;font-weight:800;color:var(--primary);font-size:14px;">${fmt(p.net)} ج</td>
           <td style="padding:8px;text-align:center;">
@@ -208,7 +208,7 @@ function renderPayrollPane() {
           </td>
           <td style="padding:8px;text-align:center;">
             <button class="btn btn-sm" style="background:${p.isPaid?'#fee2e2':'#dcfce7'};color:${p.isPaid?'#b91c1c':'#15803d'};"
-              onclick="markPayrollPaid('${month}','${p.name}',${!p.isPaid});renderPayrollPane();">
+              onclick="markPayrollPaid('${escJsAttr(month)}','${escJsAttr(p.name)}',${!p.isPaid});renderPayrollPane();">
               ${p.isPaid?'↩ استرداد':'💵 صرف الراتب'}
             </button>
           </td>

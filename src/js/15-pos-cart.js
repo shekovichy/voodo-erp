@@ -50,17 +50,17 @@ function renderCart() {
       : `${fmt(i.price)} ج × ${i.qty}`;
     return `<div class="cart-item" style="${modified?'background:#fff5f5;border-right:3px solid #ef4444;':''}">
       <div class="cart-item-info">
-        <div class="cart-item-name">${i.name}</div>
+        <div class="cart-item-name">${escHtml(i.name)}</div>
         <div class="cart-item-price">${priceHtml}</div>
       </div>
       <div class="qty-ctrl">
-        <button class="qty-btn" onclick="changeQty('${i.code}',-1)">−</button>
+        <button class="qty-btn" onclick="changeQty('${escJsAttr(i.code)}',-1)">−</button>
         <span class="qty-num">${i.qty}</span>
-        <button class="qty-btn" onclick="changeQty('${i.code}',1)">+</button>
+        <button class="qty-btn" onclick="changeQty('${escJsAttr(i.code)}',1)">+</button>
       </div>
-      <button onclick="editItemPrice('${i.code}')" style="background:${modified?'#fef3c7':'#f3f4f6'};border:none;border-radius:5px;padding:3px 7px;cursor:pointer;font-size:12px;" title="تعديل السعر">✏️</button>
+      <button onclick="editItemPrice('${escJsAttr(i.code)}')" style="background:${modified?'#fef3c7':'#f3f4f6'};border:none;border-radius:5px;padding:3px 7px;cursor:pointer;font-size:12px;" title="تعديل السعر">✏️</button>
       <div class="item-total">${fmt(i.price*i.qty)}</div>
-      <button class="delete-item" onclick="removeFromCart('${i.code}')">✕</button>
+      <button class="delete-item" onclick="removeFromCart('${escJsAttr(i.code)}')">✕</button>
     </div>`;
   }).join('');
   updateCartUI();
@@ -95,8 +95,8 @@ function updateCartUI() {
     aprEl.innerHTML = (cart._appliedPromos || []).map(p => `
       <div class="cart-row" style="color:#7c3aed; background:#f5f3ff; padding:5px 8px; border-radius:6px; margin:2px 0; align-items:center;">
         <span style="display:flex; align-items:center; gap:4px;">
-          🏷️ ${p.name}
-          <button onclick="removeAppliedPromo('${p.id}')" style="background:none; border:none; cursor:pointer; color:#ef4444; font-size:12px; padding:0 2px;" title="إزالة العرض">✕</button>
+          🏷️ ${escHtml(p.name)}
+          <button onclick="removeAppliedPromo('${escJsAttr(p.id)}')" style="background:none; border:none; cursor:pointer; color:#ef4444; font-size:12px; padding:0 2px;" title="إزالة العرض">✕</button>
         </span>
         <span>-${fmt(p.discAmt)} ج</span>
       </div>`).join('');

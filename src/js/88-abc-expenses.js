@@ -140,13 +140,13 @@ function renderExpensesPage() {
     <td style="white-space:nowrap; font-size:12px;">${e.date}</td>
     <td><span style="background:${e.type==='company'?'#f3e8ff':'#dbeafe'};color:${e.type==='company'?'#7c3aed':'#1d4ed8'};padding:2px 8px;border-radius:10px;font-size:11px;">${e.type==='company'?'🏢 إداري':'🏬 فرع'}</span></td>
     <td style="font-size:12px;">${e.type==='company'?'شركة':getBranchName(e.branchId)}</td>
-    <td><span style="font-size:12px;">${EXP_ICONS[e.category]||''} ${EXP_CATS[e.category]||e.category}</span></td>
+    <td><span style="font-size:12px;">${EXP_ICONS[e.category]||''} ${escHtml(EXP_CATS[e.category]||e.category)}</span></td>
     <td style="font-weight:700; color:var(--danger);">${fmt(e.amount)} ج</td>
-    <td style="font-size:12px; color:var(--text-muted);">${e.note||'-'}</td>
-    <td style="font-size:11px; color:var(--text-muted);">${e.by||''}</td>
+    <td style="font-size:12px; color:var(--text-muted);">${escHtml(e.note)||'-'}</td>
+    <td style="font-size:11px; color:var(--text-muted);">${escHtml(e.by)||''}</td>
     <td>
-      <button class="btn btn-sm" onclick="openExpenseModal('${e.id}')" style="font-size:11px;padding:3px 8px;margin-left:4px;">✏️</button>
-      <button class="btn btn-danger btn-sm" onclick="deleteExpense('${e.id}')" style="font-size:11px;padding:3px 8px;">🗑️</button>
+      <button class="btn btn-sm" onclick="openExpenseModal('${escJsAttr(e.id)}')" style="font-size:11px;padding:3px 8px;margin-left:4px;">✏️</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteExpense('${escJsAttr(e.id)}')" style="font-size:11px;padding:3px 8px;">🗑️</button>
     </td>
   </tr>`).join('');
 }
@@ -221,10 +221,10 @@ function renderAuditPage() {
   }
   tbody.innerHTML = list.slice(0, 200).map(a => `<tr>
     <td style="white-space:nowrap; font-size:11px; color:var(--text-muted);">${new Date(a.timestamp).toLocaleString('ar-EG')}</td>
-    <td><span style="background:#f0f4ff;color:#4338ca;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">${a.user||'system'}</span></td>
-    <td style="font-size:12px;">${a.branchId?getBranchName(a.branchId):'-'}</td>
-    <td style="font-size:12px;">${actionLabels[a.action]||a.action}</td>
-    <td style="font-size:12px; color:var(--text-muted);">${a.details||''}</td>
+    <td><span style="background:#f0f4ff;color:#4338ca;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">${escHtml(a.user)||'system'}</span></td>
+    <td style="font-size:12px;">${a.branchId?escHtml(getBranchName(a.branchId)):'-'}</td>
+    <td style="font-size:12px;">${escHtml(actionLabels[a.action]||a.action)}</td>
+    <td style="font-size:12px; color:var(--text-muted);">${escHtml(a.details)||''}</td>
   </tr>`).join('');
 }
 

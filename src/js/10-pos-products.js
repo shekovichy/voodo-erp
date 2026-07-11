@@ -31,9 +31,9 @@ function renderProducts() {
   }
   grid.innerHTML = items.map(p => {
     const oos = p.qty <= 0;
-    return `<div class="product-card ${oos ? 'out-of-stock' : ''}" onclick="${oos ? '' : `addToCart('${p.code}')`}">
-      <div class="product-code">${p.code}</div>
-      <div class="product-name">${p.name}</div>
+    return `<div class="product-card ${oos ? 'out-of-stock' : ''}" onclick="${oos ? '' : `addToCart('${escJsAttr(p.code)}')`}">
+      <div class="product-code">${escHtml(p.code)}</div>
+      <div class="product-name">${escHtml(p.name)}</div>
       <div class="product-price">${fmt(p.priceAfter)} ج</div>
       ${p.priceBefore > p.priceAfter && p.priceBefore ? `<div class="product-old-price">${fmt(p.priceBefore)}</div>` : ''}
       <div class="product-stock">${oos ? '❌ نفد' : `📦 ${p.qty}`}</div>

@@ -20,7 +20,7 @@ function buildSellersReport() {
 
   document.getElementById('sellersStatsGrid').innerHTML = rows.map(r => `
     <div class="stat-card">
-      <div class="stat-label">👤 ${r.name}</div>
+      <div class="stat-label">👤 ${escHtml(r.name)}</div>
       <div class="stat-value" style="font-size:20px;">${fmt(r.revenue)} ج</div>
       <div class="stat-sub">${r.count} فاتورة · ${r.units} وحدة</div>
     </div>`).join('');
@@ -31,7 +31,7 @@ function buildSellersReport() {
         const atv = r.count ? r.revenue/r.count : 0;
         const upt = r.count ? r.units/r.count : 0;
         return `<tr>
-          <td><strong>${r.name}</strong></td>
+          <td><strong>${escHtml(r.name)}</strong></td>
           <td>${r.count}</td>
           <td>${r.units}</td>
           <td>${fmt(r.revenue)} ج</td>

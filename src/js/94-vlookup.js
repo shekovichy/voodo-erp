@@ -77,7 +77,7 @@ function renderCategoryReport(fromDate, toDate) {
       var mg_bg  = _dark ? (margin>=30?'#0a2218':margin>=15?'#2d1f06':'#2d0e0e') : (margin>=30?'#dcfce7':margin>=15?'#fef9c3':'#fee2e2');
       var mg_tc  = _dark ? (margin>=30?'#4ade80':margin>=15?'#fbbf24':'#f87171') : (margin>=30?'#15803d':margin>=15?'#854d0e':'#b91c1c');
       t += '<tr style="border-bottom:1px solid var(--border);background:'+(i%2===0?'var(--card)':'var(--bg)')+'">';
-      t += '<td style="padding:8px 10px;font-weight:700;">'+r.name+'</td>';
+      t += '<td style="padding:8px 10px;font-weight:700;">'+escHtml(r.name)+'</td>';
       t += '<td style="padding:8px;text-align:center;font-weight:700;color:var(--primary);">'+fmt(r.revenue)+' ج</td>';
       t += '<td style="padding:8px;text-align:center;">'+fmt(r.cost)+' ج</td>';
       t += '<td style="padding:8px;text-align:center;"><span style="background:'+mg_bg+';color:'+mg_tc+';padding:2px 8px;border-radius:12px;font-size:11px;">'+margin+'%</span></td>';
@@ -85,7 +85,7 @@ function renderCategoryReport(fromDate, toDate) {
       t += '<td style="padding:8px;text-align:center;">';
       t += '<div style="background:var(--border);border-radius:4px;height:6px;margin-bottom:2px;"><div style="background:var(--primary);height:6px;border-radius:4px;width:'+Math.min(pct,100)+'%;"></div></div>';
       t += '<span style="font-size:11px;">'+pct+'%</span></td>';
-      t += '<td style="padding:8px;text-align:center;font-size:12px;">'+(topItem?topItem[0]+' (x'+topItem[1]+')':'-')+'</td>';
+      t += '<td style="padding:8px;text-align:center;font-size:12px;">'+(topItem?escHtml(topItem[0])+' (x'+topItem[1]+')':'-')+'</td>';
       t += '</tr>';
     });
     t += '</tbody></table></div>';
@@ -129,8 +129,8 @@ function openBulkCategoryModal() {
     var catOpts = cats.map(function(v){ return '<option value="'+v+'" '+(((p.category||'')===(v))?'selected':'')+'>'+( v||'— اختر الفئة —')+'</option>'; }).join('');
     var famOpts = fams.map(function(v){ return '<option value="'+v+'" '+(((p.family||'')===(v))?'selected':'')+'>'+( v||'— اختر المجموعة —')+'</option>'; }).join('');
     rows += '<tr style="border-bottom:1px solid var(--border);">';
-    rows += '<td style="padding:6px 8px;font-size:12px;"><strong>'+p.code+'</strong></td>';
-    rows += '<td style="padding:6px 8px;font-size:12px;">'+p.name+'</td>';
+    rows += '<td style="padding:6px 8px;font-size:12px;"><strong>'+escHtml(p.code)+'</strong></td>';
+    rows += '<td style="padding:6px 8px;font-size:12px;">'+escHtml(p.name)+'</td>';
     rows += '<td style="padding:4px 6px;"><select id="bcat_'+i+'" style="width:100%;font-size:12px;padding:4px;border:1px solid var(--border);border-radius:6px;">'+catOpts+'</select></td>';
     rows += '<td style="padding:4px 6px;"><select id="bfam_'+i+'" style="width:100%;font-size:12px;padding:4px;border:1px solid var(--border);border-radius:6px;">'+famOpts+'</select></td>';
     rows += '</tr>';
@@ -308,18 +308,18 @@ function previewVlookup() {
     var changesHtml = Object.entries(r.changes).map(function(e){
       var lbl = fieldLabel[e[0]] || e[0];
       var old = r.prod ? (r.prod[e[0]]||'—') : '—';
-      return '<div style="font-size:11px;"><span style="color:var(--text-muted);">'+lbl+':</span> <span style="text-decoration:line-through;color:#dc2626;">'+old+'</span> → <strong style="color:#15803d;">'+e[1]+'</strong></div>';
+      return '<div style="font-size:11px;"><span style="color:var(--text-muted);">'+escHtml(lbl)+':</span> <span style="text-decoration:line-through;color:#dc2626;">'+escHtml(old)+'</span> → <strong style="color:#15803d;">'+escHtml(e[1])+'</strong></div>';
     }).join('');
     tbody += '<tr style="border-bottom:1px solid var(--border);">';
-    tbody += '<td style="padding:8px;font-weight:700;font-size:13px;">'+r.keyVal+'</td>';
-    tbody += '<td style="padding:8px;font-size:13px;">'+(r.prod?r.prod.name:'')+'</td>';
+    tbody += '<td style="padding:8px;font-weight:700;font-size:13px;">'+escHtml(r.keyVal)+'</td>';
+    tbody += '<td style="padding:8px;font-size:13px;">'+(r.prod?escHtml(r.prod.name):'')+'</td>';
     tbody += '<td style="padding:8px;">'+changesHtml+'</td>';
     tbody += '</tr>';
   });
   if (notFound.length) {
     notFound.forEach(function(r){
       tbody += '<tr style="border-bottom:1px solid var(--border);opacity:.5;">';
-      tbody += '<td style="padding:8px;font-size:13px;">'+r.keyVal+'</td>';
+      tbody += '<td style="padding:8px;font-size:13px;">'+escHtml(r.keyVal)+'</td>';
       tbody += '<td colspan="2" style="padding:8px;font-size:12px;color:#dc2626;">❌ غير موجود في المخزون</td>';
       tbody += '</tr>';
     });

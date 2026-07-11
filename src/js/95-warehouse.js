@@ -36,15 +36,15 @@ function renderWarehousePage() {
       var rowBg  = low ? '#fff5f5' : (i%2===0 ? 'white' : '#fafafa');
       var qtyClr = low ? '#dc2626' : '#1d4ed8';
       tbody += '<tr style="border-bottom:1px solid var(--border);background:'+rowBg+';">';
-      tbody += '<td style="padding:8px 12px;font-size:12px;color:var(--text-muted);">'+p.code+'</td>';
-      tbody += '<td style="padding:8px 12px;font-weight:600;">'+p.name+'</td>';
-      tbody += '<td style="padding:8px;text-align:center;font-size:12px;">'+(p.category||'—')+'</td>';
-      tbody += '<td style="padding:8px;text-align:center;font-size:12px;">'+(p.family||'—')+'</td>';
+      tbody += '<td style="padding:8px 12px;font-size:12px;color:var(--text-muted);">'+escHtml(p.code)+'</td>';
+      tbody += '<td style="padding:8px 12px;font-weight:600;">'+escHtml(p.name)+'</td>';
+      tbody += '<td style="padding:8px;text-align:center;font-size:12px;">'+(escHtml(p.category)||'—')+'</td>';
+      tbody += '<td style="padding:8px;text-align:center;font-size:12px;">'+(escHtml(p.family)||'—')+'</td>';
       tbody += '<td style="padding:8px;text-align:center;font-weight:700;color:'+qtyClr+';">'+(p.qty||0)+(low?' ⚠️':'')+'</td>';
       tbody += '<td style="padding:8px;text-align:center;">'+fmt(p.cost||0)+'</td>';
       tbody += '<td style="padding:8px;text-align:center;font-weight:600;">'+fmt(val)+'</td>';
       tbody += '<td style="padding:8px;text-align:center;">';
-      tbody += '<button class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 8px;" onclick="openWhTransferModal(\''+p.code+'\')">📤 تحويل</button>';
+      tbody += '<button class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 8px;" onclick="openWhTransferModal(\''+escJsAttr(p.code)+'\')">📤 تحويل</button>';
       tbody += '</td>';
       tbody += '</tr>';
     });
@@ -63,10 +63,10 @@ function renderWarehousePage() {
     transfers.forEach(function(t){
       histHtml += '<tr style="border-bottom:1px solid var(--border);">';
       histHtml += '<td style="padding:7px 8px;font-size:12px;color:var(--text-muted);">'+(t.date?t.date.slice(0,10):'')+'</td>';
-      histHtml += '<td style="padding:7px 8px;font-weight:600;">'+(t.fromName||t.from)+'</td>';
-      histHtml += '<td style="padding:7px 8px;font-weight:600;">'+(t.toName||t.to)+'</td>';
+      histHtml += '<td style="padding:7px 8px;font-weight:600;">'+escHtml(t.fromName||t.from)+'</td>';
+      histHtml += '<td style="padding:7px 8px;font-weight:600;">'+escHtml(t.toName||t.to)+'</td>';
       histHtml += '<td style="padding:7px 8px;text-align:center;">'+(t.items?.length||0)+' صنف</td>';
-      histHtml += '<td style="padding:7px 8px;font-size:12px;color:var(--text-muted);">'+(t.note||'—')+'</td>';
+      histHtml += '<td style="padding:7px 8px;font-size:12px;color:var(--text-muted);">'+(escHtml(t.note)||'—')+'</td>';
       histHtml += '</tr>';
     });
     histHtml += '</tbody></table></div>';
@@ -80,7 +80,7 @@ function openWhTransferModal(preCode) {
   // Populate branch options (exclude wh)
   var branches = getBranches();
   var opts = BRANCH_IDS.filter(function(b){ return b !== 'wh'; })
-    .map(function(b){ return '<option value="'+b+'">'+(branches[b]||BRANCH_DEFAULTS[b])+'</option>'; }).join('');
+    .map(function(b){ return '<option value="'+b+'">'+escHtml(branches[b]||BRANCH_DEFAULTS[b])+'</option>'; }).join('');
   document.getElementById('whTrToBranch').innerHTML = opts;
   document.getElementById('whTrSearch').value = '';
   document.getElementById('whTrNote').value = '';
@@ -106,11 +106,20 @@ function whTrSearchProducts() {
   if (!matches.length) { resultsDiv.style.display='none'; return; }
   resultsDiv.style.display = 'block';
   resultsDiv.innerHTML = matches.map(function(p){
-    return '<div onclick="whTrAddItem('+JSON.stringify(p).replace(/"/g,"'")+'); this.parentNode.style.display=\'none\';" style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;" onmouseover="this.style.background=\'#f0f9ff\'" onmouseout="this.style.background=\'white\'">'
-      +'<span style="font-weight:600;font-size:13px;">'+p.name+'</span>'
+    return '<div onclick="whTrAddItemByCode(\''+escJsAttr(p.code)+'\'); this.parentNode.style.display=\'none\';" style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;" onmouseover="this.style.background=\'#f0f9ff\'" onmouseout="this.style.background=\'white\'">'
+      +'<span style="font-weight:600;font-size:13px;">'+escHtml(p.name)+'</span>'
       +'<span style="font-size:12px;color:var(--text-muted);">متاح: <strong style="color:#1d4ed8;">'+p.qty+'</strong></span>'
       +'</div>';
   }).join('');
+}
+
+// Looked up by code instead of passing the whole product object through the
+// onclick attribute — embedding JSON.stringify(p) with quotes swapped (the
+// old approach) let a product name containing a single quote break out of
+// the inline handler and inject arbitrary JS.
+function whTrAddItemByCode(code) {
+  var prod = getInv('wh').find(function(p){ return p.code === code; });
+  if (prod) whTrAddItem(prod);
 }
 
 function whTrAddItem(prod) {
@@ -128,7 +137,7 @@ function renderWhTrItems() {
   var html2 = '<div style="background:var(--bg-secondary);border-radius:8px;padding:10px;max-height:200px;overflow-y:auto;">';
   _whTrItems.forEach(function(item, idx){
     html2 += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:white;border-radius:6px;margin-bottom:6px;">';
-    html2 += '<div><div style="font-weight:600;font-size:13px;">'+item.name+'</div>';
+    html2 += '<div><div style="font-weight:600;font-size:13px;">'+escHtml(item.name)+'</div>';
     html2 += '<div style="font-size:11px;color:var(--text-muted);">متاح في المخزن: '+item.maxQty+'</div></div>';
     html2 += '<div style="display:flex;align-items:center;gap:6px;">';
     html2 += '<button onclick="whTrChangeQty('+idx+',-1)" class="btn btn-gray" style="padding:2px 8px;font-size:14px;min-width:28px;">−</button>';

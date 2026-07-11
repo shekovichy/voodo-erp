@@ -73,14 +73,14 @@ function renderSuppliersPage() {
     return;
   }
   tbody.innerHTML = list.map(s => `<tr>
-    <td style="font-weight:600;">${s.name}</td>
-    <td>${s.phone || '-'}</td>
-    <td style="font-size:12px; color:var(--text-muted);">${s.address || '-'}</td>
+    <td style="font-weight:600;">${escHtml(s.name)}</td>
+    <td>${escHtml(s.phone) || '-'}</td>
+    <td style="font-size:12px; color:var(--text-muted);">${escHtml(s.address) || '-'}</td>
     <td style="font-weight:600; color:${(s.balance||0)>0?'var(--danger)':'var(--success)'};">${fmt(s.balance||0)} ج</td>
-    <td style="font-size:12px; color:var(--text-muted);">${s.notes || '-'}</td>
+    <td style="font-size:12px; color:var(--text-muted);">${escHtml(s.notes) || '-'}</td>
     <td>
-      <button class="btn btn-sm" onclick="openSupplierModal('${s.id}')" style="font-size:11px; padding:3px 8px; margin-left:4px;">✏️</button>
-      <button class="btn btn-danger btn-sm" onclick="deleteSupplier('${s.id}')" style="font-size:11px; padding:3px 8px;">🗑️</button>
+      <button class="btn btn-sm" onclick="openSupplierModal('${escJsAttr(s.id)}')" style="font-size:11px; padding:3px 8px; margin-left:4px;">✏️</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteSupplier('${escJsAttr(s.id)}')" style="font-size:11px; padding:3px 8px;">🗑️</button>
     </td>
   </tr>`).join('');
 }
@@ -97,7 +97,7 @@ function openPOModal(id) {
   // Populate supplier dropdown
   const supSel = document.getElementById('poSupplierId');
   supSel.innerHTML = '<option value="">-- اختر مورد --</option>' +
-    getSuppliers().map(s => `<option value="${s.id}" ${po?.supplierId===s.id?'selected':''}>${s.name}</option>`).join('');
+    getSuppliers().map(s => `<option value="${escHtml(s.id)}" ${po?.supplierId===s.id?'selected':''}>${escHtml(s.name)}</option>`).join('');
   // Populate branch dropdown
   const brSel = document.getElementById('poBranchId');
   brSel.innerHTML = BRANCH_IDS.map(b => `<option value="${b}" ${(po?.branchId||currentBranch)===b?'selected':''}>${getBranchName(b)}</option>`).join('');
@@ -117,9 +117,9 @@ function poProdSearchFn() {
   const results = getInv().filter(i => i.name.toLowerCase().includes(q) || (i.code||'').toLowerCase().includes(q)).slice(0,8);
   if (!results.length) { dd.classList.add('hidden'); return; }
   dd.innerHTML = results.map(i => `<div style="padding:8px 12px; cursor:pointer; font-size:13px; border-bottom:1px solid var(--border);"
-    onmousedown="selectPOProduct('${i.code}','${i.name.replace(/'/g,"\\'")}',${i.cost||0})">
-    <span style="font-weight:600;">${i.name}</span>
-    <span style="color:var(--text-muted); font-size:11px; margin-right:8px;">${i.code}</span>
+    onmousedown="selectPOProduct('${escJsAttr(i.code)}','${escJsAttr(i.name)}',${i.cost||0})">
+    <span style="font-weight:600;">${escHtml(i.name)}</span>
+    <span style="color:var(--text-muted); font-size:11px; margin-right:8px;">${escHtml(i.code)}</span>
     <span style="color:var(--primary); font-size:11px;">تكلفة: ${fmt(i.cost||0)} ج</span>
   </div>`).join('');
   dd.classList.remove('hidden');
@@ -158,13 +158,13 @@ function renderPOItems() {
     return;
   }
   tbody.innerHTML = _poItems.map(i => `<tr>
-    <td style="font-size:13px;">${i.name}<br><span style="font-size:10px;color:var(--text-muted);">${i.code}</span></td>
+    <td style="font-size:13px;">${escHtml(i.name)}<br><span style="font-size:10px;color:var(--text-muted);">${escHtml(i.code)}</span></td>
     <td><input type="number" value="${i.qty}" min="1" style="width:60px;" class="form-control" style="padding:4px;"
-      oninput="updatePOItem('${i.code}','qty',this.value)" /></td>
+      oninput="updatePOItem('${escJsAttr(i.code)}','qty',this.value)" /></td>
     <td><input type="number" value="${i.cost}" min="0" step="0.01" style="width:80px;" class="form-control" style="padding:4px;"
-      oninput="updatePOItem('${i.code}','cost',this.value)" /></td>
-    <td id="po-line-total-${i.code}" style="font-weight:600;">${fmt(i.qty*i.cost)} ج</td>
-    <td><button class="btn btn-danger btn-sm" onclick="removePOItem('${i.code}')" style="padding:2px 6px; font-size:11px;">✕</button></td>
+      oninput="updatePOItem('${escJsAttr(i.code)}','cost',this.value)" /></td>
+    <td id="po-line-total-${escHtml(i.code)}" style="font-weight:600;">${fmt(i.qty*i.cost)} ج</td>
+    <td><button class="btn btn-danger btn-sm" onclick="removePOItem('${escJsAttr(i.code)}')" style="padding:2px 6px; font-size:11px;">✕</button></td>
   </tr>`).join('');
 }
 
@@ -218,7 +218,7 @@ function openPODetails(id) {
   const statusBg    = po.status === 'received' ? '#d1fae5' : po.status === 'partial' ? '#fef9c3' : '#dbeafe';
   document.getElementById('poDetailsBody').innerHTML = `
     <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:16px; background:var(--bg); border-radius:8px; padding:12px; border:1px solid var(--border);">
-      <div><div style="font-size:11px;color:var(--text-muted);">المورد</div><div style="font-weight:700;">${po.supplierName}</div></div>
+      <div><div style="font-size:11px;color:var(--text-muted);">المورد</div><div style="font-weight:700;">${escHtml(po.supplierName)}</div></div>
       <div><div style="font-size:11px;color:var(--text-muted);">الفرع</div><div style="font-weight:700;">${getBranchName(po.branchId)}</div></div>
       <div><div style="font-size:11px;color:var(--text-muted);">الحالة</div><span style="background:${statusBg};color:${statusColor};padding:2px 10px;border-radius:10px;font-size:12px;">${statusLabel}</span></div>
       <div><div style="font-size:11px;color:var(--text-muted);">تاريخ الإنشاء</div><div style="font-size:12px;">${new Date(po.createdAt).toLocaleDateString('ar-EG')}</div></div>
@@ -233,7 +233,7 @@ function openPODetails(id) {
         <th style="padding:8px; text-align:center; border:1px solid var(--border);">الإجمالي</th>
       </tr></thead>
       <tbody>${po.items.map(i=>`<tr>
-        <td style="padding:8px; border:1px solid var(--border);">${i.name}</td>
+        <td style="padding:8px; border:1px solid var(--border);">${escHtml(i.name)}</td>
         <td style="padding:8px; text-align:center; border:1px solid var(--border);">${i.qty}</td>
         <td style="padding:8px; text-align:center; border:1px solid var(--border);">${fmt(i.cost)} ج</td>
         <td style="padding:8px; text-align:center; border:1px solid var(--border);">${fmt(i.qty*i.cost)} ج</td>
@@ -244,7 +244,7 @@ function openPODetails(id) {
       <div>الشحن: <strong>${fmt(po.shipping||0)} ج</strong></div>
       <div style="font-size:16px; margin-top:4px;">الإجمالي الكلي: <strong style="color:var(--primary);">${fmt(po.total)} ج</strong></div>
     </div>
-    ${po.notes?`<div style="margin-top:12px; padding:8px; background:#fffbeb; border-radius:6px; font-size:13px;">📝 ${po.notes}</div>`:''}
+    ${po.notes?`<div style="margin-top:12px; padding:8px; background:#fffbeb; border-radius:6px; font-size:13px;">📝 ${escHtml(po.notes)}</div>`:''}
   `;
   const receiveSection = document.getElementById('poReceiveSection');
   const detailsFooter = document.getElementById('poDetailsFooter');
@@ -325,7 +325,7 @@ function populatePOFilters() {
   const supSel = document.getElementById('poSupplierFilter');
   if (supSel) {
     supSel.innerHTML = '<option value="">جميع الموردين</option>' +
-      getSuppliers().map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+      getSuppliers().map(s => `<option value="${escHtml(s.id)}">${escHtml(s.name)}</option>`).join('');
   }
   const brSel = document.getElementById('poBranchFilter');
   if (brSel) {
@@ -366,7 +366,7 @@ function renderPurchasesPage() {
     const statusColor = po.status==='received'?'#065f46':po.status==='partial'?'#92400e':'#1d4ed8';
     return `<tr>
       <td style="font-size:11px; color:var(--text-muted);">#${po.id.slice(-6)}</td>
-      <td style="font-weight:600;">${po.supplierName}</td>
+      <td style="font-weight:600;">${escHtml(po.supplierName)}</td>
       <td><span style="font-size:12px; background:#f0f4ff; color:#4338ca; padding:2px 8px; border-radius:10px;">${getBranchName(po.branchId)}</span></td>
       <td style="font-size:12px;">${po.items.length} صنف</td>
       <td>${fmt(po.shipping||0)} ج</td>

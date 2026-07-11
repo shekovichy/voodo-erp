@@ -24,28 +24,28 @@ function renderInventory() {
   if (famFilter) items = items.filter(p => (p.family||'') === famFilter);
   const _cf = document.getElementById('invCatFilter');
   const _ff = document.getElementById('invFamFilter');
-  if (_cf) { const _cv=_cf.value; const _cats=[...new Set(inv.map(x=>x.category).filter(Boolean))].sort(); _cf.innerHTML='<option value="">كل الفئات</option>'+_cats.map(c=>`<option value="${c}" ${c===_cv?'selected':''}>${c}</option>`).join(''); _cf.value=_cv; }
-  if (_ff) { const _fv=_ff.value; const _fams=[...new Set(inv.map(x=>x.family).filter(Boolean))].sort(); _ff.innerHTML='<option value="">كل المجموعات</option>'+_fams.map(f=>`<option value="${f}" ${f===_fv?'selected':''}>${f}</option>`).join(''); _ff.value=_fv; }
+  if (_cf) { const _cv=_cf.value; const _cats=[...new Set(inv.map(x=>x.category).filter(Boolean))].sort(); _cf.innerHTML='<option value="">كل الفئات</option>'+_cats.map(c=>`<option value="${escHtml(c)}" ${c===_cv?'selected':''}>${escHtml(c)}</option>`).join(''); _cf.value=_cv; }
+  if (_ff) { const _fv=_ff.value; const _fams=[...new Set(inv.map(x=>x.family).filter(Boolean))].sort(); _ff.innerHTML='<option value="">كل المجموعات</option>'+_fams.map(f=>`<option value="${escHtml(f)}" ${f===_fv?'selected':''}>${escHtml(f)}</option>`).join(''); _ff.value=_fv; }
 
   document.getElementById('inventoryBody').innerHTML = !items.length
     ? '<tr><td colspan="10" class="text-center text-muted" style="padding:40px;">لا توجد منتجات</td></tr>'
     : items.map(p => `<tr>
-        <td><strong>${p.code}</strong></td>
-        <td>${p.name}</td>
-        <td><span style="background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:12px;font-size:11px;">${p.category||'—'}</span></td>
-        <td><span style="background:#f3f4f6;color:#374151;padding:2px 8px;border-radius:12px;font-size:11px;">${p.family||'—'}</span></td>
+        <td><strong>${escHtml(p.code)}</strong></td>
+        <td>${escHtml(p.name)}</td>
+        <td><span style="background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:12px;font-size:11px;">${escHtml(p.category)||'—'}</span></td>
+        <td><span style="background:#f3f4f6;color:#374151;padding:2px 8px;border-radius:12px;font-size:11px;">${escHtml(p.family)||'—'}</span></td>
         <td>${fmt(p.cost||0)}</td>
         <td>${p.priceBefore ? fmt(p.priceBefore) : '-'}</td>
         <td><strong>${fmt(p.priceAfter)}</strong></td>
         <td><input type="number" value="${p.qty}" min="0"
-          onchange="updateQty('${p.code}',this.value)"
+          onchange="updateQty('${escJsAttr(p.code)}',this.value)"
           style="width:70px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;text-align:center;font-family:inherit;" /></td>
         <td><span class="badge ${p.qty<=0?'badge-danger':p.qty<=thresh?'badge-warning':'badge-success'}">
           ${p.qty<=0?'نفد':p.qty<=thresh?'منخفض':'متوفر'}
         </span></td>
         <td>
-          <button class="btn btn-gray btn-sm" onclick="editProduct('${p.code}')" style="margin-left:4px;">✏️</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.code}')">🗑️</button>
+          <button class="btn btn-gray btn-sm" onclick="editProduct('${escJsAttr(p.code)}')" style="margin-left:4px;">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteProduct('${escJsAttr(p.code)}')">🗑️</button>
         </td>
       </tr>`).join('');
 }

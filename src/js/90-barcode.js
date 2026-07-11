@@ -16,9 +16,9 @@ function renderBarcodeList() {
   const inv = getInv().filter(i => !q || i.name.toLowerCase().includes(q) || i.code.toLowerCase().includes(q));
   const container = document.getElementById('bcProductList'); if (!container) return;
   container.innerHTML = inv.map(i => `<div style="display:flex; align-items:center; gap:8px; padding:5px 4px; border-bottom:1px solid var(--border); font-size:12px;">
-    <input type="checkbox" ${_bcSelected.has(i.code)?'checked':''} onchange="bcToggle('${i.code}',this.checked)" style="cursor:pointer;" />
-    <span style="flex:1;">${i.name}</span>
-    <span style="color:var(--text-muted);">${i.code}</span>
+    <input type="checkbox" ${_bcSelected.has(i.code)?'checked':''} onchange="bcToggle('${escJsAttr(i.code)}',this.checked)" style="cursor:pointer;" />
+    <span style="flex:1;">${escHtml(i.name)}</span>
+    <span style="color:var(--text-muted);">${escHtml(i.code)}</span>
     <span style="color:var(--primary); font-weight:600;">${fmt(i.priceAfter)} ج</span>
   </div>`).join('');
 }
@@ -63,7 +63,7 @@ function buildPriceTag(item, showPrice, dim, preview) {
     showPrice === 'before' ? `<div style="font-size:${preview?'11px':'14px'}; font-weight:800; color:#1a5faf; margin-top:2px;">${fmt(item.priceBefore||item.priceAfter)} ج</div>` :
     `<div style="font-size:9px; color:#888; text-decoration:line-through;">${fmt(item.priceBefore||item.priceAfter)} ج</div><div style="font-size:${preview?'12px':'16px'}; font-weight:800; color:#1a5faf;">${fmt(item.priceAfter)} ج</div>`;
   return `<div style="width:${dim.w}; height:${dim.h}; border:1px solid #ccc; border-radius:4px; padding:3px; display:flex; flex-direction:column; align-items:center; justify-content:center; background:white; font-family:monospace; overflow:hidden;">
-    <div style="font-size:${dim.font}; font-weight:700; text-align:center; width:100%; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">${item.name}</div>
+    <div style="font-size:${dim.font}; font-weight:700; text-align:center; width:100%; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">${escHtml(item.name)}</div>
     <svg id="bc-${preview?'p':'pr'}-${item.code.replace(/[^a-zA-Z0-9]/g,'_')}" style="max-width:100%; height:${preview?'24px':'36px'};"></svg>
     ${priceHTML}
   </div>`;

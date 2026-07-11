@@ -15,7 +15,7 @@ function openLeaveRequestModal() {
   const empSel = document.getElementById('leaveReqEmpName');
   const emps = getSalespeople ? getSalespeople() : DB.g('pos_salespeople', []);
   const empNames = emps.map(e => typeof e === 'string' ? e : e.name).filter(Boolean);
-  if (empSel) empSel.innerHTML = empNames.map(n => '<option value="'+n+'">'+n+'</option>').join('');
+  if (empSel) empSel.innerHTML = empNames.map(n => '<option value="'+escHtml(n)+'">'+escHtml(n)+'</option>').join('');
   document.getElementById('leaveReqDate').value = new Date().toISOString().slice(0,10);
   document.getElementById('leaveReqType').value = 'leave';
   document.getElementById('leaveReqFromTime').value = '';
@@ -87,18 +87,18 @@ function renderLeaveRequestsPane() {
   cont.querySelector('#leaveReqList').innerHTML = reqs.map(r =>
     '<div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
     '<div style="flex:1;min-width:200px">' +
-      '<div style="font-weight:700;font-size:15px">👤 '+r.empName+' — <span style="color:#3d8fff">'+(TYPE_LABELS[r.type]||r.type)+'</span></div>' +
-      '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">🏬 '+getBranchName(r.branchId)+' · 📅 '+r.date+(r.type==='permission'&&r.fromTime?' · 🕐 '+r.fromTime+'–'+r.toTime:'')+(r.reason?' · '+r.reason:'')+'</div>' +
-      '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">👤 '+r.by+' · '+new Date(r.createdAt).toLocaleString('ar-EG')+'</div>' +
+      '<div style="font-weight:700;font-size:15px">👤 '+escHtml(r.empName)+' — <span style="color:#3d8fff">'+(TYPE_LABELS[r.type]||r.type)+'</span></div>' +
+      '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">🏬 '+escHtml(getBranchName(r.branchId))+' · 📅 '+r.date+(r.type==='permission'&&r.fromTime?' · 🕐 '+escHtml(r.fromTime)+'–'+escHtml(r.toTime):'')+(r.reason?' · '+escHtml(r.reason):'')+'</div>' +
+      '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">👤 '+escHtml(r.by)+' · '+new Date(r.createdAt).toLocaleString('ar-EG')+'</div>' +
     '</div>' +
     '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
       '<span style="padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700;background:'+(r.status==='pending'?'rgba(255,193,7,.15)':r.status==='approved'?'rgba(40,167,69,.15)':'rgba(220,53,69,.15)')+';color:'+(r.status==='pending'?'#e09000':r.status==='approved'?'#28a745':'#dc3545')+'">' +
         (r.status==='pending'?'⏳ بانتظار الموافقة':r.status==='approved'?'✅ موافق عليه':'❌ مرفوض') +
       '</span>' +
       (isAdmin && r.status==='pending' ?
-        '<button class="btn" style="background:#28a745;color:#fff;font-size:12px;padding:6px 14px" onclick="approveLeaveRequest(\''+r.id+'\')">✅ قبول</button>' +
-        '<button class="btn" style="background:#dc3545;color:#fff;font-size:12px;padding:6px 14px" onclick="rejectLeaveRequest(\''+r.id+'\')">❌ رفض</button>' : '') +
-      (r.status!=='pending' ? '<span style="font-size:11px;color:var(--text-muted)">'+r.reviewedBy+'</span>' : '') +
+        '<button class="btn" style="background:#28a745;color:#fff;font-size:12px;padding:6px 14px" onclick="approveLeaveRequest(\''+escJsAttr(r.id)+'\')">✅ قبول</button>' +
+        '<button class="btn" style="background:#dc3545;color:#fff;font-size:12px;padding:6px 14px" onclick="rejectLeaveRequest(\''+escJsAttr(r.id)+'\')">❌ رفض</button>' : '') +
+      (r.status!=='pending' ? '<span style="font-size:11px;color:var(--text-muted)">'+escHtml(r.reviewedBy)+'</span>' : '') +
     '</div></div>'
   ).join('');
 }

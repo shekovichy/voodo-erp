@@ -74,7 +74,7 @@ function renderApprovalsList() {
   el.innerHTML = list.map(function(req){
     var itemsHtml = req.items.filter(function(i){ return i.priceModified; }).map(function(i){
       return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f3f4f6;">'
-        + '<span style="font-weight:600;font-size:13px;">'+i.name+'</span>'
+        + '<span style="font-weight:600;font-size:13px;">'+escHtml(i.name)+'</span>'
         + '<span style="font-size:13px;">'
         + '<span style="text-decoration:line-through;color:#9ca3af;">'+fmt(i.originalPrice)+' ج</span>'
         + ' → <span style="color:#dc2626;font-weight:700;">'+fmt(i.price)+' ج</span>'
@@ -84,11 +84,11 @@ function renderApprovalsList() {
     return '<div style="background:white;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px;">'
       + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
       + '<div><div style="font-weight:700;font-size:14px;">📋 فاتورة #'+req.id+'</div>'
-      + '<div style="font-size:12px;color:var(--text-muted);">'+req.date.slice(0,16).replace('T',' ')+' — '+req.branchName+' — '+req.cashier+'</div></div>'
+      + '<div style="font-size:12px;color:var(--text-muted);">'+req.date.slice(0,16).replace('T',' ')+' — '+escHtml(req.branchName)+' — '+escHtml(req.cashier)+'</div></div>'
       + '<div style="font-size:20px;font-weight:800;color:#1d4ed8;">'+fmt(req.total)+' ج</div>'
       + '</div>'
       + '<div style="margin-bottom:10px;">'+itemsHtml+'</div>'
-      + (req.note ? '<div style="background:#fef9c3;padding:6px 10px;border-radius:6px;font-size:12px;margin-bottom:10px;">💬 '+req.note+'</div>' : '')
+      + (req.note ? '<div style="background:#fef9c3;padding:6px 10px;border-radius:6px;font-size:12px;margin-bottom:10px;">💬 '+escHtml(req.note)+'</div>' : '')
       + '<div style="display:flex;gap:8px;">'
       + '<input id="adminNote_'+req.id+'" class="form-control" placeholder="ملاحظة للكاشير (اختياري)" style="flex:1;font-size:12px;" />'
       + '<button onclick="approveRequest('+req.id+')" class="btn btn-success">✅ موافقة</button>'
@@ -170,18 +170,18 @@ function renderApprovedCartsList() {
   el.innerHTML = myApproved.map(function(req){
     var itemsHtml = req.items.map(function(i){
       return '<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;">'
-        + '<span>'+i.name+' × '+i.qty+'</span>'
+        + '<span>'+escHtml(i.name)+' × '+i.qty+'</span>'
         + '<span style="font-weight:700;'+(i.priceModified?'color:#dc2626;':'')+'">'+fmt(i.price)+' ج</span>'
         + '</div>';
     }).join('');
     return '<div style="background:white;border:2px solid #10b981;border-radius:10px;padding:14px;margin-bottom:10px;">'
       + '<div style="display:flex;justify-content:space-between;margin-bottom:8px;">'
-      + '<div><div style="font-weight:700;">✅ معتمدة — '+req.branchName+'</div>'
+      + '<div><div style="font-weight:700;">✅ معتمدة — '+escHtml(req.branchName)+'</div>'
       + '<div style="font-size:12px;color:var(--text-muted);">'+req.date.slice(0,16).replace('T',' ')+'</div></div>'
       + '<div style="font-size:20px;font-weight:800;color:#1d4ed8;">'+fmt(req.total)+' ج</div>'
       + '</div>'
       + '<div style="margin-bottom:10px;">'+itemsHtml+'</div>'
-      + (req.adminNote ? '<div style="background:#d1fae5;padding:6px 10px;border-radius:6px;font-size:12px;margin-bottom:8px;">💬 '+req.adminNote+'</div>' : '')
+      + (req.adminNote ? '<div style="background:#d1fae5;padding:6px 10px;border-radius:6px;font-size:12px;margin-bottom:8px;">💬 '+escHtml(req.adminNote)+'</div>' : '')
       + '<button onclick="resumeApprovedCart('+req.id+')" class="btn btn-success" style="width:100%;">🛒 تحميل الفاتورة وإتمام البيع</button>'
       + '</div>';
   }).join('');
@@ -247,7 +247,7 @@ function renderSuspApprovals() {
     var modItems = req.items.filter(function(i){ return i.priceModified; });
     var itemsHtml = modItems.map(function(i){
       return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f3f4f6;font-size:13px;">'
-        +'<span style="font-weight:600;">'+i.name+' × '+i.qty+'</span>'
+        +'<span style="font-weight:600;">'+escHtml(i.name)+' × '+i.qty+'</span>'
         +'<span><span style="text-decoration:line-through;color:#9ca3af;">'+fmt(i.originalPrice)+' ج</span>'
         +' → <span style="color:#dc2626;font-weight:700;">'+fmt(i.price)+' ج</span></span>'
         +'</div>';
@@ -256,12 +256,12 @@ function renderSuspApprovals() {
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
       +'<div>'
       +'<div style="font-weight:700;font-size:14px;">✏️ طلب تعديل سعر</div>'
-      +'<div style="font-size:12px;color:var(--text-muted);">'+req.date.slice(0,16).replace('T',' ')+' — '+req.branchName+' — '+req.cashier+'</div>'
+      +'<div style="font-size:12px;color:var(--text-muted);">'+req.date.slice(0,16).replace('T',' ')+' — '+escHtml(req.branchName)+' — '+escHtml(req.cashier)+'</div>'
       +'</div>'
       +'<div style="font-size:20px;font-weight:800;color:#1d4ed8;">'+fmt(req.total)+' ج</div>'
       +'</div>'
       +'<div style="margin-bottom:10px;">'+itemsHtml+'</div>'
-      +(req.note?'<div style="background:#fef9c3;padding:6px 10px;border-radius:6px;font-size:12px;margin-bottom:10px;">💬 '+req.note+'</div>':'')
+      +(req.note?'<div style="background:#fef9c3;padding:6px 10px;border-radius:6px;font-size:12px;margin-bottom:10px;">💬 '+escHtml(req.note)+'</div>':'')
       +'<div style="display:flex;gap:8px;align-items:center;">'
       +'<input id="sAdminNote_'+req.id+'" class="form-control" placeholder="ملاحظة للكاشير (اختياري)" style="flex:1;font-size:12px;" />'
       +'<button onclick="approveSuspRequest('+req.id+')" class="btn btn-success">✅ موافقة</button>'

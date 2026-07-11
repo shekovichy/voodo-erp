@@ -10,10 +10,10 @@ function renderBranchUsersSettings() {
     const uname = bu[b]?.username || '';
     const upass  = bu[b]?.password || '';
     return `<div style="border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:10px; background:var(--bg);">
-      <div style="font-weight:700; font-size:13px; margin-bottom:8px; color:var(--primary);">🏬 ${name}</div>
+      <div style="font-weight:700; font-size:13px; margin-bottom:8px; color:var(--primary);">🏬 ${escHtml(name)}</div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
         <div><label style="font-size:11px; color:var(--text-muted);">اسم المستخدم</label>
-          <input class="form-control" id="bu-user-${b}" value="${uname}" placeholder="username" style="margin-top:4px;" /></div>
+          <input class="form-control" id="bu-user-${b}" value="${escHtml(uname)}" placeholder="username" style="margin-top:4px;" /></div>
         <div><label style="font-size:11px; color:var(--text-muted);">كلمة المرور</label>
           <input class="form-control" id="bu-pass-${b}" value="" placeholder="password" style="margin-top:4px;" /></div>
       </div>
@@ -37,10 +37,7 @@ async function saveBranchUsers() {
     }
   }
   setBranchUsersLocal(bu);
-  if (typeof _fbReady !== 'undefined' && _fbReady && _db) {
-    _db.collection('pos_data').doc('auth').update({ branchUsers: bu, updatedAt: Date.now() })
-      .catch(() => _db.collection('pos_data').doc('auth').set({ users: getUsers(), branchUsers: bu, updatedAt: Date.now() }).catch(()=>{}));
-  }
+  // Passwords stay local only — never synced to Firestore (see CLAUDE.md security notes)
   showMsg('sBranchUsersMsg', '✅ تم حفظ بيانات دخول الفروع');
 }
 
@@ -54,10 +51,7 @@ function changePass(role) {
     hashPass(np).then(hashed => {
       users.admin = hashed;
       setUsersLocal(users);
-      if (typeof _fbReady !== 'undefined' && _fbReady && _db) {
-        _db.collection('pos_data').doc('auth').update({ users: users, updatedAt: Date.now() })
-          .catch(() => _db.collection('pos_data').doc('auth').set({ users: users, updatedAt: Date.now() }).catch(()=>{}));
-      }
+      // Password stays local only — never synced to Firestore (see CLAUDE.md security notes)
       showMsg('sAdminMsg','✅ تم تغيير كلمة المرور');
       document.getElementById('sCurrPass').value = '';
       document.getElementById('sNewPass').value  = '';
@@ -80,7 +74,7 @@ function renderSellersSettings() {
   const people = getSalespeople();
   wrap.innerHTML = people.map((n,i) => `
     <div style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:13px;font-weight:600;">
-      <span>👤 ${n}</span>
+      <span>👤 ${escHtml(n)}</span>
       <button onclick="removeSeller(${i})" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:14px;line-height:1;padding:0 2px;" title="حذف">×</button>
     </div>`).join('');
 }

@@ -4,9 +4,23 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ── POS DATA ─────────────────────────────────────────────
-    // Only authenticated users (Anonymous Auth from the app) can read/write
+    // Only authenticated users (Anonymous Auth from the app) can read/write.
+    // "auth" is excluded on purpose: pos_data/auth used to store password
+    // hashes and was readable by any anonymously-authenticated client (see
+    // CLAUDE.md security notes). The app no longer reads/writes it — block
+    // it outright. NOTE: Firestore rules are evaluated as OR across every
+    // match block that matches a path, so this exclusion must live INSIDE
+    // this rule (a separate `match /pos_data/auth { allow ...: if false }`
+    // block would NOT override this wildcard rule, since both would match
+    // and the "allow" here would still win).
+    //
+    // Beyond that, this rule does NOT distinguish admin vs cashier vs branch
+    // — anonymous auth means anyone who loads the app has an auth token.
+    // Real role-based enforcement requires migrating off the DIY localStorage
+    // password system to real Firebase Authentication (email/password +
+    // custom claims), which was deliberately deferred — see CLAUDE.md.
     match /pos_data/{document} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null && document != 'auth';
     }
 
     // ── INVENTORY per branch ──────────────────────────────────

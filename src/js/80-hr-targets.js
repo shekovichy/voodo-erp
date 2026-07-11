@@ -22,7 +22,7 @@ function openHRTargetModal() {
     tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted" style="padding:16px;">لا يوجد بائعون — أضفهم من الإعدادات أولاً</td></tr>';
   } else {
     tbody.innerHTML = salespeople.map(name => `<tr>
-      <td style="padding:8px; font-weight:600;">${name}</td>
+      <td style="padding:8px; font-weight:600;">${escHtml(name)}</td>
       <td style="padding:8px;"><input type="number" class="form-control" id="hr-target-${name}" value="${existing.targets[name]?.target||0}" min="0" placeholder="0" /></td>
       <td style="padding:8px;"><input type="number" class="form-control" id="hr-comm-${name}" value="${existing.targets[name]?.commPct||0}" min="0" max="100" step="0.5" placeholder="0" /></td>
     </tr>`).join('');
@@ -110,7 +110,7 @@ function renderHRPage() {
     const badge    = r.pct >= 100 ? '🏆 تجاوز الهدف!' : r.pct >= 70 ? '👍 جيد' : '⚠️ دون الهدف';
     return `<div class="card" style="margin-bottom:12px;">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
-        <div style="font-size:17px; font-weight:700;">👤 ${r.name}</div>
+        <div style="font-size:17px; font-weight:700;">👤 ${escHtml(r.name)}</div>
         <span style="background:${r.pct>=100?'#d1fae5':r.pct>=70?'#fef9c3':'#fee2e2'}; color:${r.pct>=100?'#065f46':r.pct>=70?'#92400e':'#991b1b'}; padding:4px 12px; border-radius:12px; font-size:13px;">${badge}</span>
       </div>
       <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; margin-bottom:14px;">

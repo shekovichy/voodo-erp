@@ -33,8 +33,8 @@ function renderLowStockPanel() {
   el.innerHTML = items.map(p => `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 4px;border-bottom:1px solid var(--border);">
       <div>
-        <div style="font-size:13px;font-weight:600;">${p.name}</div>
-        <div style="font-size:11px;color:var(--text-muted);">كود: ${p.code}</div>
+        <div style="font-size:13px;font-weight:600;">${escHtml(p.name)}</div>
+        <div style="font-size:11px;color:var(--text-muted);">كود: ${escHtml(p.code)}</div>
       </div>
       <span class="badge ${p.qty<=0?'badge-danger':'badge-warning'}" style="font-size:12px;padding:3px 10px;">
         ${p.qty<=0?'نفد':'متبقي '+p.qty}

@@ -80,18 +80,18 @@ function renderExpenseRequestsPane() {
   if (!reqs.length) { cont.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:32px">لا توجد طلبات مصاريف</p>'; return; }
   cont.innerHTML = reqs.map(r => '<div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
     '<div style="flex:1;min-width:200px">' +
-      '<div style="font-weight:700;font-size:15px">'+(EXP_CATS[r.category]||r.category)+' — <span style="color:#3d8fff">'+(r.amount||0).toLocaleString()+' ج</span></div>' +
-      '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">🏬 '+getBranchName(r.branchId)+' · 📅 '+r.date+(r.note?' · '+r.note:'')+'</div>' +
-      '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">👤 '+r.by+' · '+new Date(r.createdAt).toLocaleString('ar-EG')+'</div>' +
+      '<div style="font-weight:700;font-size:15px">'+escHtml(EXP_CATS[r.category]||r.category)+' — <span style="color:#3d8fff">'+(r.amount||0).toLocaleString()+' ج</span></div>' +
+      '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">🏬 '+escHtml(getBranchName(r.branchId))+' · 📅 '+r.date+(r.note?' · '+escHtml(r.note):'')+'</div>' +
+      '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">👤 '+escHtml(r.by)+' · '+new Date(r.createdAt).toLocaleString('ar-EG')+'</div>' +
     '</div>' +
     '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
       '<span style="padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700;background:'+(r.status==='pending'?'rgba(255,193,7,.15)':r.status==='approved'?'rgba(40,167,69,.15)':'rgba(220,53,69,.15)')+';color:'+(r.status==='pending'?'#e09000':r.status==='approved'?'#28a745':'#dc3545')+'">' +
         (r.status==='pending'?'⏳ بانتظار الاعتماد':r.status==='approved'?'✅ معتمد':'❌ مرفوض') +
       '</span>' +
       (isAdmin && r.status==='pending' ?
-        '<button class="btn" style="background:#28a745;color:#fff;font-size:12px;padding:6px 14px" onclick="approveExpenseRequest(\''+r.id+'\')">✅ قبول</button>' +
-        '<button class="btn" style="background:#dc3545;color:#fff;font-size:12px;padding:6px 14px" onclick="rejectExpenseRequest(\''+r.id+'\')">❌ رفض</button>' : '') +
-      (r.status!=='pending' ? '<div style="font-size:11px;color:var(--text-muted)">'+r.reviewedBy+'</div>' : '') +
+        '<button class="btn" style="background:#28a745;color:#fff;font-size:12px;padding:6px 14px" onclick="approveExpenseRequest(\''+escJsAttr(r.id)+'\')">✅ قبول</button>' +
+        '<button class="btn" style="background:#dc3545;color:#fff;font-size:12px;padding:6px 14px" onclick="rejectExpenseRequest(\''+escJsAttr(r.id)+'\')">❌ رفض</button>' : '') +
+      (r.status!=='pending' ? '<div style="font-size:11px;color:var(--text-muted)">'+escHtml(r.reviewedBy)+'</div>' : '') +
     '</div>' +
   '</div>').join('');
 }

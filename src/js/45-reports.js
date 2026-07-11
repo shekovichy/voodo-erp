@@ -119,7 +119,7 @@ function buildSalesReport() {
   const sorted = Object.values(bd).sort((a,b)=>b.rev-a.rev);
   document.getElementById('rs-breakdown').innerHTML = !sorted.length
     ? '<tr><td colspan="3" class="text-center text-muted" style="padding:16px;">لا توجد مبيعات</td></tr>'
-    : sorted.map(d=>`<tr><td>${d.name}</td><td>${d.qty}</td><td><strong>${fmt(d.rev)} ج</strong></td></tr>`).join('');
+    : sorted.map(d=>`<tr><td>${escHtml(d.name)}</td><td>${d.qty}</td><td><strong>${fmt(d.rev)} ج</strong></td></tr>`).join('');
 }
 
 function buildInventoryReport() {
@@ -150,7 +150,7 @@ function buildInventoryReport() {
     const stockVal = p.priceAfter*p.qty;
     const profit   = (p.priceAfter-(p.cost||0))*p.qty;
     return `<tr>
-      <td>${p.code}</td><td>${p.name}</td><td><strong>${p.qty}</strong></td>
+      <td>${escHtml(p.code)}</td><td>${escHtml(p.name)}</td><td><strong>${p.qty}</strong></td>
       <td>${fmt(p.cost||0)}</td><td>${fmt(p.priceAfter)}</td>
       <td>${fmt(stockVal)} ج</td>
       <td style="color:${profit>=0?'var(--success)':'var(--danger)'};">${fmt(profit)} ج</td>
@@ -246,7 +246,7 @@ function buildProfitReport() {
     ? '<tr><td colspan="6" class="text-center text-muted" style="padding:16px;">لا توجد بيانات</td></tr>'
     : sorted2.map(d => {
         const p=d.rev-d.cost, m=d.rev?p/d.rev*100:0;
-        return `<tr><td>${d.name}</td><td>${d.qty}</td><td>${fmt(d.rev)} ج</td><td>${fmt(d.cost)} ج</td>
+        return `<tr><td>${escHtml(d.name)}</td><td>${d.qty}</td><td>${fmt(d.rev)} ج</td><td>${fmt(d.cost)} ج</td>
           <td style="color:${p>=0?'var(--success)':'var(--danger)'};font-weight:700;">${fmt(p)} ج</td>
           <td>${m.toFixed(1)}%</td></tr>`;
       }).join('');

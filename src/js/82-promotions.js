@@ -57,8 +57,8 @@ function renderPromoBundleItems() {
   }
   el.innerHTML = _promoBundleItems.map((bi, idx) => `
     <div style="display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border);">
-      <span style="flex:1; font-size:13px;">${bi.name}</span>
-      <span style="font-size:11px; color:var(--text-muted);">${bi.code}</span>
+      <span style="flex:1; font-size:13px;">${escHtml(bi.name)}</span>
+      <span style="font-size:11px; color:var(--text-muted);">${escHtml(bi.code)}</span>
       <span style="font-size:12px;">كمية:</span>
       <input type="number" value="${bi.minQty}" min="1" style="width:52px; padding:3px 5px; border:1px solid var(--border); border-radius:4px; font-size:12px;"
         onchange="_promoBundleItems[${idx}].minQty = Math.max(1, parseInt(this.value)||1)" />
@@ -76,8 +76,8 @@ function addPromoProductSearch() {
   if (!matches.length) { dd.innerHTML = '<div style="padding:8px; font-size:12px; color:var(--text-muted);">لا نتائج</div>'; dd.classList.remove('hidden'); return; }
   dd.innerHTML = matches.slice(0,8).map(p => `
     <div style="padding:7px 10px; cursor:pointer; font-size:13px; border-bottom:1px solid #f0f0f0;"
-      onmousedown="selectPromoProduct('${p.code}','${p.name.replace(/'/g,'')}')">
-      <span>${p.name}</span> <span style="color:var(--text-muted); font-size:11px;">${p.code}</span>
+      onmousedown="selectPromoProduct('${escJsAttr(p.code)}','${escJsAttr(p.name)}')">
+      <span>${escHtml(p.name)}</span> <span style="color:var(--text-muted); font-size:11px;">${escHtml(p.code)}</span>
     </div>`).join('');
   dd.classList.remove('hidden');
 }
@@ -169,7 +169,7 @@ function renderPromosPage() {
       }, 0);
       const saving = Math.max(0, itemsTotal - p.bundlePrice);
       detail = `<div style="font-size:12px; color:var(--text-muted); margin-top:4px;">
-        ${(p.items||[]).map(bi => `${bi.name} ×${bi.minQty}`).join(' + ')}
+        ${(p.items||[]).map(bi => `${escHtml(bi.name)} ×${bi.minQty}`).join(' + ')}
       </div>
       <div style="font-size:13px; margin-top:6px;">
         سعر الحزمة: <strong>${fmt(p.bundlePrice)} ج</strong>
@@ -179,15 +179,15 @@ function renderPromosPage() {
       const discLabel = p.discountType === 'percent' ? `${p.discountValue}%` : `${fmt(p.discountValue)} ج`;
       detail = `<div style="font-size:13px; margin-top:6px;">عند فاتورة ≥ <strong>${fmt(p.minAmount)} ج</strong> — خصم <strong>${discLabel}</strong></div>`;
     } else if (p.type === 'category') {
-      detail = `<div style="font-size:13px; margin-top:6px;">خصم <strong>${p.categoryDisc}%</strong> على فئة: <strong>${p.categoryName}</strong></div>`;
+      detail = `<div style="font-size:13px; margin-top:6px;">خصم <strong>${p.categoryDisc}%</strong> على فئة: <strong>${escHtml(p.categoryName)}</strong></div>`;
     } else if (p.type === 'bxgy') {
-      detail = `<div style="font-size:13px; margin-top:6px;">اشتري <strong>${p.buyQty}</strong> من ${(p.items||[]).map(i=>i.name).join('+')} — خد <strong>${p.getQty}</strong> مجاناً</div>`;
+      detail = `<div style="font-size:13px; margin-top:6px;">اشتري <strong>${p.buyQty}</strong> من ${(p.items||[]).map(i=>escHtml(i.name)).join('+')} — خد <strong>${p.getQty}</strong> مجاناً</div>`;
     }
     const dateRange = (p.startDate || p.endDate) ? `<div style="font-size:11px;color:var(--text-muted);margin-top:3px;">📅 ${p.startDate||'—'} → ${p.endDate||'—'}</div>` : '';
     return `<div style="border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:10px; opacity:${p.active ? 1 : 0.55};">
       <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
         <div style="flex:1;">
-          <div style="font-weight:700; font-size:15px;">${p.name}
+          <div style="font-weight:700; font-size:15px;">${escHtml(p.name)}
             ${p.active ? '<span style="background:#d1fae5; color:#065f46; font-size:11px; padding:2px 7px; border-radius:99px; margin-right:6px;">نشط</span>'
                        : '<span style="background:#f3f4f6; color:#6b7280; font-size:11px; padding:2px 7px; border-radius:99px; margin-right:6px;">متوقف</span>'}
           </div>
@@ -301,7 +301,7 @@ function renderEligiblePromos() {
     const badge = promo.type === 'bundle' ? '📦' : '💰';
     return `<div style="background:#faf5ff; border:1px dashed #7c3aed; border-radius:8px; padding:8px 10px; margin-bottom:6px; font-size:12px;">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
-        <span>${badge} <strong>${promo.name}</strong> — وفر ${fmt(disc)} ج</span>
+        <span>${badge} <strong>${escHtml(promo.name)}</strong> — وفر ${fmt(disc)} ج</span>
         <button class="btn btn-sm btn-primary" style="padding:3px 10px; font-size:11px;" onclick="applyPromo(${promo.id})">تطبيق</button>
       </div>
     </div>`;

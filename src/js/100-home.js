@@ -33,7 +33,7 @@ function handleFingerprintFile(input) {
       if (!empName) { skipped++; return; }
       const status = checkIn ? 'present' : 'absent';
       saveAttendanceRecord(empName, date, status, checkIn, checkOut, 'استيراد البصمة');
-      imported++; logs.push('✅ '+empName+' — '+date+(checkIn?' ('+checkIn+'-'+checkOut+')':''));
+      imported++; logs.push('✅ '+escHtml(empName)+' — '+date+(checkIn?' ('+escHtml(checkIn)+'-'+escHtml(checkOut)+')':''));
     });
     logEl.innerHTML =
       '<div style="color:#28a745;font-weight:700;margin-bottom:8px">تم الاستيراد: '+imported+' سجل</div>'+
@@ -144,7 +144,7 @@ function renderHomeIcons() {
           .map(function(e) { return typeof e === 'string' ? e : e.name; })
           .filter(Boolean);
         empSel.innerHTML = filtered.map(function(n) {
-          return '<option value="' + n + '">' + n + '</option>';
+          return '<option value="' + escHtml(n) + '">' + escHtml(n) + '</option>';
         }).join('');
       }
     }

@@ -3,6 +3,20 @@
 // ══════════════════════════════════════════════
 const fmt = (n) => (parseFloat(n) || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
+// Escape free-text values before interpolating into innerHTML — any field a
+// user can type (names, notes, reasons...) must go through this, since
+// Firestore currently accepts writes from any anonymous client (see
+// CLAUDE.md security notes) and this app has no other XSS defense.
+const escHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// Escape a value for use as a single-quoted JS string literal *inside* an
+// inline onclick="fn('${...}')" HTML attribute (e.g. product code/name).
+// escHtml() alone is NOT enough here: the browser decodes HTML entities in
+// the attribute text before parsing it as JS, so an unescaped quote would
+// still break out of the string. JS-escape first, then HTML-escape the
+// result so it also survives the surrounding double-quoted attribute.
+const escJsAttr = (s) => escHtml(String(s ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+
 function showMsg(id, msg, type='success') {
   const el = document.getElementById(id);
   el.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
@@ -356,36 +370,14 @@ function applyMobileUI() {
 }
 
 window.addEventListener('resize', applyMobileUI);
-// ── PRE-INIT: load passwords from Firebase before showing login ──
-async function preInitFirebase() {
+// ── PRE-INIT: hide loading overlay ──
+// Passwords are no longer fetched from Firestore before login (they used to be
+// readable by any anonymous client via pos_data/auth — see CLAUDE.md). Each
+// device manages its own local admin/cashier credentials, so there is nothing
+// to wait on here.
+function preInitFirebase() {
   const overlay = document.getElementById('appLoadingOverlay');
-  try {
-    if (!FIREBASE_CONFIG.projectId) { if(overlay) overlay.style.display='none'; return; }
-    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
-    const db = firebase.firestore();
-    // fetch auth doc with a short timeout (3s)
-    // Must sign in anonymously first — Firestore rules require auth
-    await Promise.race([
-      firebase.auth().signInAnonymously(),
-      new Promise((_,reject) => setTimeout(() => reject(new Error('auth timeout')), 5000))
-    ]);
-    // Now fetch passwords
-    const snap = await Promise.race([
-      db.collection('pos_data').doc('auth').get(),
-      new Promise((_,reject) => setTimeout(() => reject(new Error('read timeout')), 4000))
-    ]);
-    if (snap.exists) {
-      const data = snap.data();
-      const localU = DB.g('users', { admin: '', cashier: '' });
-      if (data.users && !localU.admin) DB.s('users', data.users);
-      const localBU = DB.g('pos_branch_users', null);
-      if (data.branchUsers && !localBU) DB.s('pos_branch_users', data.branchUsers);
-    }
-  } catch(e) {
-    console.warn('preInitFirebase failed:', e);
-  } finally {
-    if (overlay) overlay.style.display = 'none';
-  }
+  if (overlay) overlay.style.display = 'none';
 }
 preInitFirebase();
 

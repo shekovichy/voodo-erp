@@ -43,7 +43,7 @@ function searchSalesForReturn() {
   body.innerHTML = results.map(s => {
     const d = new Date(s.date).toLocaleDateString('ar-EG');
     const t = new Date(s.date).toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'});
-    const itemsPreview = (s.items||[]).slice(0,2).map(i=>i.name).join('، ') + ((s.items||[]).length>2?' ...':'');
+    const itemsPreview = (s.items||[]).slice(0,2).map(i=>escHtml(i.name)).join('، ') + ((s.items||[]).length>2?' ...':'');
     const alreadyReturned = getSales().some(r => r.isReturn && r.originalSaleId === s.id);
     return `<div onclick="${alreadyReturned ? '' : `openCashierReturnItems(${s.id})`}"
       style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;
@@ -52,8 +52,8 @@ function searchSalesForReturn() {
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
         <div>
           <span style="font-weight:700;font-size:13px;">#${String(s.id).slice(-6)}</span>
-          ${s.customerName?`<span style="margin-inline-start:8px;font-size:12px;color:var(--text-muted);">👤 ${s.customerName}</span>`:''}
-          ${(s.customerPhone||s.phone)?`<span style="margin-inline-start:8px;font-size:12px;color:var(--text-muted);">📞 ${s.customerPhone||s.phone}</span>`:''}
+          ${s.customerName?`<span style="margin-inline-start:8px;font-size:12px;color:var(--text-muted);">👤 ${escHtml(s.customerName)}</span>`:''}
+          ${(s.customerPhone||s.phone)?`<span style="margin-inline-start:8px;font-size:12px;color:var(--text-muted);">📞 ${escHtml(s.customerPhone||s.phone)}</span>`:''}
           ${alreadyReturned?'<span style="margin-inline-start:8px;font-size:11px;color:var(--danger);font-weight:600;">✓ تم الإرجاع</span>':''}
         </div>
         <div style="text-align:end;flex-shrink:0;">
@@ -76,12 +76,12 @@ function openCashierReturnItems(saleId) {
       <div><b>فاتورة #${String(sale.id).slice(-6)}</b> · ${d}</div>
       <div style="color:var(--primary);font-weight:700;">${fmt(sale.total)} ج</div>
     </div>
-    ${sale.customerName?`<div style="margin-top:4px;">👤 ${sale.customerName}${(sale.customerPhone||sale.phone)?' · 📞 '+(sale.customerPhone||sale.phone):''}</div>`:''}`;
+    ${sale.customerName?`<div style="margin-top:4px;">👤 ${escHtml(sale.customerName)}${(sale.customerPhone||sale.phone)?' · 📞 '+escHtml(sale.customerPhone||sale.phone):''}</div>`:''}`;
   document.getElementById('crItemsList').innerHTML = sale.items.map((item, idx) => `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 4px;border-bottom:1px solid var(--border);">
       <div style="flex:1;">
-        <div style="font-size:13px;font-weight:600;">${item.name}</div>
-        <div style="font-size:11px;color:var(--text-muted);">كود: ${item.code} · ${fmt(item.price)} ج × ${item.qty}</div>
+        <div style="font-size:13px;font-weight:600;">${escHtml(item.name)}</div>
+        <div style="font-size:11px;color:var(--text-muted);">كود: ${escHtml(item.code)} · ${fmt(item.price)} ج × ${item.qty}</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
         <label style="font-size:12px;color:var(--text-muted);">إرجاع:</label>

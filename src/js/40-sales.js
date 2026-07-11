@@ -40,8 +40,8 @@ function renderSales() {
     : sales.map(s => `<tr class="${s.isReturn ? 'return-row' : ''}">
         <td>${s.isReturn ? `<span class="badge-return">مرتجع #${String(s.id).slice(-6)}</span>` : `<span class="badge badge-info">#${String(s.id).slice(-6)}</span>`}</td>
         <td style="white-space:nowrap;">${new Date(s.date).toLocaleString('ar-EG')}</td>
-        <td><span style="font-size:11px;background:#eff6ff;color:#1d4ed8;padding:1px 6px;border-radius:8px;">${s.branchName||getBranchName(s.branchId||'b1')}</span></td>
-        <td>${s.salesperson||s.cashier||'-'}</td>
+        <td><span style="font-size:11px;background:#eff6ff;color:#1d4ed8;padding:1px 6px;border-radius:8px;">${escHtml(s.branchName||getBranchName(s.branchId||'b1'))}</span></td>
+        <td>${escHtml(s.salesperson||s.cashier||'-')}</td>
         <td>${s.items.reduce((x,i)=>x+i.qty,0)}</td>
         <td>${fmt(s.sub)} ج</td>
         <td>${s.disc>0?fmt(s.disc)+' ج':'-'}</td>
@@ -58,13 +58,13 @@ function viewSale(id) {
     <div class="grid-2" style="font-size:13px;margin-bottom:14px;gap:8px;">
       <div><strong>رقم الفاتورة:</strong> ${String(sale.id).slice(-8)}</div>
       <div><strong>التاريخ:</strong> ${new Date(sale.date).toLocaleString('ar-EG')}</div>
-      <div><strong>البائع:</strong> ${sale.salesperson || sale.cashier || '-'}</div>
+      <div><strong>البائع:</strong> ${escHtml(sale.salesperson || sale.cashier || '-')}</div>
       <div><strong>الدفع:</strong> ${sale.payMethod==='cash'?'💵 نقدي':'💳 كارت'}</div>
     </div>
     <div class="table-wrap">
       <table style="font-size:13px;">
         <thead><tr><th>المنتج</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead>
-        <tbody>${sale.items.map(i=>`<tr><td>${i.name}</td><td>${i.qty}</td><td>${fmt(i.price)} ج</td><td><strong>${fmt(i.price*i.qty)} ج</strong></td></tr>`).join('')}</tbody>
+        <tbody>${sale.items.map(i=>`<tr><td>${escHtml(i.name)}</td><td>${i.qty}</td><td>${fmt(i.price)} ج</td><td><strong>${fmt(i.price*i.qty)} ج</strong></td></tr>`).join('')}</tbody>
       </table>
     </div>
     <div style="background:#f8fafc;border-radius:8px;padding:12px;margin-top:12px;font-size:14px;">

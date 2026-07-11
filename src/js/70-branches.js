@@ -88,8 +88,8 @@ function addTrProductSearch() {
   if (!matches.length) { dd.innerHTML='<div style="padding:8px;font-size:12px;color:var(--text-muted);">لا نتائج</div>'; dd.classList.remove('hidden'); return; }
   dd.innerHTML = matches.slice(0,8).map(p=>`
     <div style="padding:7px 10px;cursor:pointer;font-size:13px;border-bottom:1px solid #f0f0f0;"
-      onmousedown="selectTrProduct('${p.code}','${p.name.replace(/'/g,'')}',${p.qty})">
-      <span>${p.name}</span>
+      onmousedown="selectTrProduct('${escJsAttr(p.code)}','${escJsAttr(p.name)}',${p.qty})">
+      <span>${escHtml(p.name)}</span>
       <span style="color:var(--text-muted);font-size:11px;margin-right:6px;">متاح: ${p.qty}</span>
     </div>`).join('');
   dd.classList.remove('hidden');
@@ -108,7 +108,7 @@ function renderTrItems() {
   if (!_trItems.length) { el.innerHTML='<div style="color:var(--text-muted);font-size:12px;padding:8px;">لم يتم إضافة أصناف</div>'; return; }
   el.innerHTML = _trItems.map((item,idx) => `
     <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">
-      <span style="flex:1;font-size:13px;">${item.name}</span>
+      <span style="flex:1;font-size:13px;">${escHtml(item.name)}</span>
       <span style="font-size:11px;color:var(--text-muted);">متاح: ${item.maxQty}</span>
       <input type="number" value="${item.qty}" min="1" max="${item.maxQty}" style="width:60px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px;"
         onchange="updateTrQty(${idx}, this.value)" />
@@ -187,12 +187,12 @@ function renderTransfersPage() {
   }
   tbody.innerHTML = list.map(t => `<tr>
     <td style="white-space:nowrap;font-size:12px;">${new Date(t.date).toLocaleString('ar-EG')}</td>
-    <td><span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:10px;font-size:12px;">${t.fromName}</span></td>
-    <td><span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:10px;font-size:12px;">${t.toName}</span></td>
-    <td style="font-size:12px;">${t.items.map(i=>`${i.name} ×${i.qty}`).join(' · ')}</td>
+    <td><span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:10px;font-size:12px;">${escHtml(t.fromName)}</span></td>
+    <td><span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:10px;font-size:12px;">${escHtml(t.toName)}</span></td>
+    <td style="font-size:12px;">${t.items.map(i=>`${escHtml(i.name)} ×${i.qty}`).join(' · ')}</td>
     <td><span style="background:${t.status==='completed'?'#d1fae5':'#fef9c3'};color:${t.status==='completed'?'#065f46':'#92400e'};padding:2px 8px;border-radius:10px;font-size:11px;">${t.status==='completed'?'✅ مكتمل':'⏳ معلق'}</span></td>
-    <td style="font-size:12px;color:var(--text-muted);">${t.note||'-'}</td>
-    <td style="font-size:11px;color:var(--text-muted);">${t.by||''}</td>
+    <td style="font-size:12px;color:var(--text-muted);">${escHtml(t.note)||'-'}</td>
+    <td style="font-size:11px;color:var(--text-muted);">${escHtml(t.by)||''}</td>
   </tr>`).join('');
 }
 
