@@ -82,6 +82,15 @@ GitHub Actions تنشر تلقائياً على https://shekovichy.github.io/voo
 ---
 
 ## بعد أي تعديل
-1. `python build.py` — يولّد index.html
-2. `git add -A && git commit -m "وصف التغيير" && git push`
-3. GitHub Actions تنشر خلال ~30 ثانية
+
+### تعديل كود (src/)
+1. **اختبر محلياً الأول** — شغّل `dev.bat` (بيعمل build.py ويفتح المتصفح على `localhost:8765`). جرّب الفيتشر فعلياً قبل الدفع — ده بالظبط اللي كان ناقص لما حصلت مشكلة اختفاء المبيعات في 2026-07-11.
+2. لو تمام: `python build.py` (لو لسه ماعملتوش) → `git add -A && git commit -m "وصف التغيير" && git push`
+3. GitHub Actions تنشر على GitHub Pages خلال ~30 ثانية، وVercel بينشر تلقائي كمان.
+4. لتجربة تغيير كبير قبل ما يوصل لـ main، ادفعه على فرع `staging` الأول (`git push origin HEAD:staging`) — لو Vercel مضبوط يعمل preview للفروع هيديك لينك منفصل تجرب عليه.
+
+### تعديل Firestore Rules (`firestore.rules`)
+⚠️ **ممنوع تنشر Rules جديدة على الـ Console مباشرة من غير تجربة.** في 2026-07-11 نشر Rules ناقصة (من غير قاعدة لـ `pos_sales`) قفل وصول المبيعات كلها في الإنتاج فجأة.
+1. عدّل `firestore.rules` في الكود، اعمل commit وpush زي أي تعديل عادي (الملف مش جزء من build.py، بس لازم يفضل متزامن مع اللي منشور فعلاً).
+2. **قبل الضغط على Publish في Firebase Console**: افتح تبويب Rules → **"Rules playground"** (موجودة تحت في نفس الصفحة) والصق القواعد الجديدة فيها، وجرّب محاكاة get/list على أهم المسارات (خصوصاً `pos_data/{doc}` و`pos_sales/{doc}`) وشوف النتيجة Allow ولا Deny قبل ما تنشر فعلياً.
+3. بعد التأكد، انشر، وبعدها افتح التطبيق وتأكد إن البيانات بترجع تظهر.
