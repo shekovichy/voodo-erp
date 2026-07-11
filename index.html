@@ -180,44 +180,53 @@ select.form-control { cursor:pointer; }
 .stat-value { font-size:26px; font-weight:800; margin-top:6px; color:var(--primary); }
 .stat-sub { font-size:12px; color:var(--text-muted); margin-top:3px; }
 
-/* ---- DASHBOARD MOTION (prototype — page-dashboard only for now) ----
-   Scoped to #page-dashboard so this doesn't change any other page until
-   the direction is approved and rolled out everywhere. */
+/* ---- APP-WIDE MOTION ----
+   Rolled out from the dashboard prototype to every page (any [id^="page-"]
+   container — this naturally excludes the login screen and modals, which
+   live outside the page-* containers and keep their own transitions). */
 @media (prefers-reduced-motion: no-preference) {
-  #page-dashboard .stat-card,
-  #page-dashboard .card {
+  [id^="page-"] .stat-card,
+  [id^="page-"] .card {
     animation: dashFadeUp .5s cubic-bezier(.22,1,.36,1) both;
   }
-  /* Stagger the 6 main KPI cards + comparison/exec rows as they appear */
-  #page-dashboard .stats-grid .stat-card:nth-child(1) { animation-delay: .02s; }
-  #page-dashboard .stats-grid .stat-card:nth-child(2) { animation-delay: .06s; }
-  #page-dashboard .stats-grid .stat-card:nth-child(3) { animation-delay: .10s; }
-  #page-dashboard .stats-grid .stat-card:nth-child(4) { animation-delay: .14s; }
-  #page-dashboard .stats-grid .stat-card:nth-child(5) { animation-delay: .18s; }
-  #page-dashboard .stats-grid .stat-card:nth-child(6) { animation-delay: .22s; }
-  #page-dashboard .grid-2 .card:nth-child(1) { animation-delay: .1s; }
-  #page-dashboard .grid-2 .card:nth-child(2) { animation-delay: .16s; }
+  /* Stagger the first cards in any stats row / 2-column grid as they appear */
+  [id^="page-"] .stats-grid .stat-card:nth-child(1) { animation-delay: .02s; }
+  [id^="page-"] .stats-grid .stat-card:nth-child(2) { animation-delay: .06s; }
+  [id^="page-"] .stats-grid .stat-card:nth-child(3) { animation-delay: .10s; }
+  [id^="page-"] .stats-grid .stat-card:nth-child(4) { animation-delay: .14s; }
+  [id^="page-"] .stats-grid .stat-card:nth-child(5) { animation-delay: .18s; }
+  [id^="page-"] .stats-grid .stat-card:nth-child(6) { animation-delay: .22s; }
+  [id^="page-"] .grid-2 .card:nth-child(1) { animation-delay: .1s; }
+  [id^="page-"] .grid-2 .card:nth-child(2) { animation-delay: .16s; }
 }
 @keyframes dashFadeUp {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-#page-dashboard .stat-card {
+[id^="page-"] .stat-card {
   transition: transform .2s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease, border-color .2s ease;
 }
-#page-dashboard .stat-card:hover {
+[id^="page-"] .stat-card:hover {
   transform: translateY(-3px);
   box-shadow: 0 8px 20px rgba(0,0,0,.09);
   border-color: var(--primary);
 }
-#page-dashboard .stat-value { transition: color .3s ease; }
-#page-dashboard .card canvas { transition: opacity .3s ease; }
+[id^="page-"] .stat-value { transition: color .3s ease; }
+[id^="page-"] .card canvas { transition: opacity .3s ease; }
 @keyframes dashPulse {
   0%   { transform: scale(1); }
   30%  { transform: scale(1.12); }
   100% { transform: scale(1); }
 }
-#page-dashboard .stat-sub.dash-pulse { animation: dashPulse .4s ease; display:inline-block; }
+[id^="page-"] .stat-sub.dash-pulse,
+[id^="page-"] .dash-pulse { animation: dashPulse .4s ease; display:inline-block; }
+
+/* Buttons, table rows and badges get a touch more life app-wide */
+.btn { transition: all .2s cubic-bezier(.34,1.56,.64,1); }
+.btn:active { transform: scale(.96); }
+[id^="page-"] tbody tr { transition: background .15s ease; }
+.badge { transition: transform .15s ease; }
+
 
 /* ---- TABLES ---- */
 .table-wrap { overflow-x:auto; }
@@ -5175,7 +5184,7 @@ function renderSales() {
   if (to)   sales = sales.filter(s => s.date.slice(0,10) <= to);
   sales.sort((a,b) => new Date(b.date) - new Date(a.date));
 
-  document.getElementById('salesFilterTotal').textContent = fmt(sales.reduce((s,x)=>s+x.total,0));
+  animateNumber(document.getElementById('salesFilterTotal'), sales.reduce((s,x)=>s+x.total,0), { format: fmt });
   document.getElementById('salesBody').innerHTML = !sales.length
     ? '<tr><td colspan="10" class="text-center text-muted" style="padding:40px;">لا توجد مبيعات</td></tr>'
     : sales.map(s => `<tr class="${s.isReturn ? 'return-row' : ''}">
@@ -5305,10 +5314,10 @@ function buildSalesReport() {
   }
   const net = sales.reduce((s,x)=>s+x.total,0);
   const sub = sales.reduce((s,x)=>s+x.sub,0);
-  document.getElementById('rs-total').textContent = fmt(sub)+' ج';
-  document.getElementById('rs-net').textContent   = fmt(net)+' ج';
-  document.getElementById('rs-count').textContent = sales.length;
-  document.getElementById('rs-avg').textContent   = fmt(sales.length ? net/sales.length : 0)+' ج';
+  animateNumber(document.getElementById('rs-total'), sub, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('rs-net'),   net, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('rs-count'), sales.length);
+  animateNumber(document.getElementById('rs-avg'),   sales.length ? net/sales.length : 0, { format: fmt, suffix: ' ج' });
 
   if (period !== 'custom') {
     let prevSales = getPrevSales(period, 'rptSalesFrom', 'rptSalesTo');
@@ -5365,10 +5374,10 @@ function buildInventoryReport() {
   const costVal = inv.reduce((s,p)=>s+(p.cost||0)*p.qty,0);
   const sellVal = inv.reduce((s,p)=>s+p.priceAfter*p.qty,0);
   const units   = inv.reduce((s,p)=>s+p.qty,0);
-  document.getElementById('ri-count').textContent = inv.length;
-  document.getElementById('ri-cost').textContent  = fmt(costVal)+' ج';
-  document.getElementById('ri-sell').textContent  = fmt(sellVal)+' ج';
-  document.getElementById('ri-units').textContent = units;
+  animateNumber(document.getElementById('ri-count'), inv.length);
+  animateNumber(document.getElementById('ri-cost'),  costVal, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('ri-sell'),  sellVal, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('ri-units'), units);
   const sorted = [...inv].sort((a,b)=>a.qty-b.qty);
   document.getElementById('ri-body').innerHTML = sorted.map(p => {
     const stockVal = p.priceAfter*p.qty;
@@ -5426,11 +5435,11 @@ function buildProfitReport() {
   const profit     = revenue - totalCost;
   const margin     = revenue ? profit/revenue*100 : 0;
 
-  document.getElementById('rp-revenue').textContent   = fmt(revenue)+' ج';
-  document.getElementById('rp-cost').textContent      = fmt(totalCost)+' ج';
-  document.getElementById('rp-profit').textContent    = fmt(profit)+' ج';
-  document.getElementById('rp-margin').textContent    = margin.toFixed(1)+'%';
-  document.getElementById('rp-discounts').textContent = fmt(totalDisc)+' ج';
+  animateNumber(document.getElementById('rp-revenue'),   revenue, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('rp-cost'),      totalCost, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('rp-profit'),    profit, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('rp-margin'),    margin, { format: (n) => n.toFixed(1), suffix: '%' });
+  animateNumber(document.getElementById('rp-discounts'), totalDisc, { format: fmt, suffix: ' ج' });
 
   if (period !== 'custom') {
     let prevSales = getPrevSales(period, 'rptProfitFrom', 'rptProfitTo');
@@ -5585,15 +5594,15 @@ function buildKPIReport() {
   const invValue = inv.reduce((s,p)=>s+(p.cost||0)*p.qty, 0);
   const turnover = invValue ? cogs / invValue : 0;
 
-  document.getElementById('kpi-atv').textContent      = fmt(atv)+' ج';
-  document.getElementById('kpi-upt').textContent      = upt.toFixed(2);
-  document.getElementById('kpi-gm').textContent       = gm.toFixed(1)+'%';
-  document.getElementById('kpi-turnover').textContent = turnover.toFixed(2)+'×';
-  document.getElementById('kpi-card-pct').textContent = cardPct.toFixed(1)+'%';
-  document.getElementById('kpi-disc-pct').textContent = discPct.toFixed(1)+'%';
-  document.getElementById('tv-cogs').textContent      = fmt(cogs)+' ج';
-  document.getElementById('tv-inv').textContent       = fmt(invValue)+' ج';
-  document.getElementById('tv-rate').textContent      = turnover.toFixed(2)+'×';
+  animateNumber(document.getElementById('kpi-atv'),      atv, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('kpi-upt'),      upt, { format: (n) => n.toFixed(2) });
+  animateNumber(document.getElementById('kpi-gm'),       gm, { format: (n) => n.toFixed(1), suffix: '%' });
+  animateNumber(document.getElementById('kpi-turnover'), turnover, { format: (n) => n.toFixed(2), suffix: '×' });
+  animateNumber(document.getElementById('kpi-card-pct'), cardPct, { format: (n) => n.toFixed(1), suffix: '%' });
+  animateNumber(document.getElementById('kpi-disc-pct'), discPct, { format: (n) => n.toFixed(1), suffix: '%' });
+  animateNumber(document.getElementById('tv-cogs'),      cogs, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('tv-inv'),       invValue, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('tv-rate'),      turnover, { format: (n) => n.toFixed(2), suffix: '×' });
 
   const dayMap = {};
   sales.forEach(s => { const d=s.date.slice(0,10); dayMap[d]=(dayMap[d]||0)+s.total; });
@@ -6808,9 +6817,9 @@ function renderTransfersPage() {
   const list    = getTransfers();
   const done    = list.filter(t=>t.status==='completed').length;
   const pending = list.filter(t=>t.status==='pending').length;
-  document.getElementById('tr-count').textContent   = list.length;
-  document.getElementById('tr-done').textContent    = done;
-  document.getElementById('tr-pending').textContent = pending;
+  animateNumber(document.getElementById('tr-count'),   list.length);
+  animateNumber(document.getElementById('tr-done'),    done);
+  animateNumber(document.getElementById('tr-pending'), pending);
 
   const tbody = document.getElementById('transfersBody'); if (!tbody) return;
   if (!list.length) {
@@ -6901,8 +6910,8 @@ function renderSuppliersPage() {
   let list = getSuppliers();
   if (q) list = list.filter(s => s.name.toLowerCase().includes(q) || s.phone.includes(q));
   const totalDebt = getSuppliers().reduce((s, x) => s + (x.balance || 0), 0);
-  const el = document.getElementById('sup-count'); if (el) el.textContent = getSuppliers().length;
-  const elD = document.getElementById('sup-debt'); if (elD) elD.textContent = fmt(totalDebt) + ' ج';
+  animateNumber(document.getElementById('sup-count'), getSuppliers().length);
+  animateNumber(document.getElementById('sup-debt'),  totalDebt, { format: fmt, suffix: ' ج' });
   const tbody = document.getElementById('suppliersBody'); if (!tbody) return;
   if (!list.length) {
     tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:24px;">لا يوجد موردون بعد — أضف أول مورد</td></tr>';
@@ -7177,10 +7186,10 @@ function renderPurchasesPage() {
   const pending  = list.filter(p=>p.status==='pending'||p.status==='partial').length;
   const received = list.filter(p=>p.status==='received').length;
   const total    = list.reduce((s,p)=>s+p.total,0);
-  const elC = document.getElementById('po-count');    if (elC) elC.textContent = list.length;
-  const elP = document.getElementById('po-pending');  if (elP) elP.textContent = pending;
-  const elR = document.getElementById('po-received'); if (elR) elR.textContent = received;
-  const elT = document.getElementById('po-total');    if (elT) elT.textContent = fmt(total) + ' ج';
+  animateNumber(document.getElementById('po-count'),    list.length);
+  animateNumber(document.getElementById('po-pending'),  pending);
+  animateNumber(document.getElementById('po-received'), received);
+  animateNumber(document.getElementById('po-total'),    total, { format: fmt, suffix: ' ج' });
 
   // Filters
   populatePOFilters();
@@ -7315,10 +7324,10 @@ function renderHRPage() {
   const totalSales  = rows.reduce((s,r)=>s+r.actual,0);
   const totalComm   = rows.reduce((s,r)=>s+r.commission,0);
   const achievePct  = totalTarget > 0 ? Math.round(totalSales/totalTarget*100) : 0;
-  const el1 = document.getElementById('hr-total-target');    if (el1) el1.textContent = fmt(totalTarget) + ' ج';
-  const el2 = document.getElementById('hr-total-sales');     if (el2) el2.textContent = fmt(totalSales) + ' ج';
-  const el3 = document.getElementById('hr-achieve-pct');     if (el3) el3.textContent = achievePct + '%';
-  const el4 = document.getElementById('hr-total-commission'); if (el4) el4.textContent = fmt(totalComm) + ' ج';
+  animateNumber(document.getElementById('hr-total-target'),     totalTarget, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('hr-total-sales'),      totalSales, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('hr-achieve-pct'),      achievePct, { suffix: '%' });
+  animateNumber(document.getElementById('hr-total-commission'), totalComm, { format: fmt, suffix: ' ج' });
 
   // Render cards
   const container = document.getElementById('hrSalespeople'); if (!container) return;
@@ -7699,10 +7708,10 @@ function renderCustomers() {
   const vipCount   = custs.filter(c => (c.totalSpent||0) >= 5000).length;
   const totalSpent = custs.reduce((s,c) => s + (c.totalSpent||0), 0);
   const totalPts   = custs.reduce((s,c) => s + (c.loyaltyPoints||0), 0);
-  const countEl = document.getElementById('cust-count'); if (countEl) countEl.textContent = custs.length;
-  const vipEl   = document.getElementById('cust-vip');   if (vipEl)   vipEl.textContent   = vipCount;
-  const spentEl = document.getElementById('cust-spent'); if (spentEl) spentEl.textContent = fmt(totalSpent)+' ج';
-  const ptsEl   = document.getElementById('cust-pts');   if (ptsEl)   ptsEl.textContent   = totalPts+' نقطة';
+  animateNumber(document.getElementById('cust-count'), custs.length);
+  animateNumber(document.getElementById('cust-vip'),   vipCount);
+  animateNumber(document.getElementById('cust-spent'), totalSpent, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('cust-pts'),   totalPts, { suffix: ' نقطة' });
 
   const tbody = document.getElementById('customersBody'); if (!tbody) return;
   if (!items.length) {
@@ -8019,9 +8028,9 @@ function buildReturnsReport() {
   const count = returns.length;
   const total = returns.reduce((s,r) => s + Math.abs(r.total), 0);
   const units = returns.reduce((s,r) => s + r.items.reduce((a,i) => a + Math.abs(i.qty), 0), 0);
-  document.getElementById('ret-count').textContent = count;
-  document.getElementById('ret-total').textContent = fmt(total)+' ج';
-  document.getElementById('ret-units').textContent = units;
+  animateNumber(document.getElementById('ret-count'), count);
+  animateNumber(document.getElementById('ret-total'), total, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('ret-units'), units);
   document.getElementById('ret-body').innerHTML = !returns.length
     ? '<tr><td colspan="6" class="text-center text-muted" style="padding:24px;">لا توجد مرتجعات في هذه الفترة</td></tr>'
     : returns.sort((a,b) => new Date(b.date)-new Date(a.date)).map(r => `<tr>
@@ -8147,10 +8156,10 @@ function renderExpensesPage() {
     const c=i.cost>0?i.cost:(inv.find(x=>x.code===i.code)?.cost||0); return a+(i.price-c)*i.qty; },0)-s.disc, 0);
   const netProfit = grossProfit - totalAll;
 
-  const el1=document.getElementById('exp-total');    if(el1) el1.textContent=fmt(totalAll)+' ج';
-  const el2=document.getElementById('exp-branches'); if(el2) el2.textContent=fmt(totalBr)+' ج';
-  const el3=document.getElementById('exp-company');  if(el3) el3.textContent=fmt(totalCo)+' ج';
-  const el4=document.getElementById('exp-net-profit'); if(el4) { el4.textContent=fmt(netProfit)+' ج'; el4.style.color=netProfit>=0?'var(--success)':'var(--danger)'; }
+  animateNumber(document.getElementById('exp-total'),    totalAll, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('exp-branches'), totalBr, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('exp-company'),  totalCo, { format: fmt, suffix: ' ج' });
+  const el4=document.getElementById('exp-net-profit'); if(el4) { animateNumber(el4, netProfit, { format: fmt, suffix: ' ج' }); el4.style.color=netProfit>=0?'var(--success)':'var(--danger)'; }
 
   // Branch breakdown cards
   const breakdown = document.getElementById('expBranchBreakdown');
@@ -8239,10 +8248,10 @@ function renderAuditPage() {
   const saleCount     = list.filter(a=>a.action.startsWith('sale')).length;
   const settingsCount = list.filter(a=>a.action.startsWith('settings')||a.action.startsWith('auth')).length;
 
-  const el1=document.getElementById('audit-total');    if(el1) el1.textContent=totalCount;
-  const el2=document.getElementById('audit-inv');      if(el2) el2.textContent=invCount;
-  const el3=document.getElementById('audit-sales');    if(el3) el3.textContent=saleCount;
-  const el4=document.getElementById('audit-settings'); if(el4) el4.textContent=settingsCount;
+  animateNumber(document.getElementById('audit-total'),    totalCount);
+  animateNumber(document.getElementById('audit-inv'),      invCount);
+  animateNumber(document.getElementById('audit-sales'),    saleCount);
+  animateNumber(document.getElementById('audit-settings'), settingsCount);
 
   const actionLabels = {
     'inv.add':'➕ إضافة صنف', 'inv.edit':'✏️ تعديل صنف', 'inv.delete':'🗑️ حذف صنف',
@@ -9537,10 +9546,10 @@ function renderWarehousePage() {
   var totalValue = inv.reduce(function(s,p){ return s+(p.qty||0)*(p.cost||0); }, 0);
   var lowItems   = inv.filter(function(p){ return (p.qty||0) <= getThreshold(); }).length;
 
-  document.getElementById('wh-items').textContent = totalItems;
-  document.getElementById('wh-units').textContent = totalUnits.toLocaleString();
-  document.getElementById('wh-value').textContent = fmt(totalValue) + ' ج';
-  document.getElementById('wh-low').textContent   = lowItems;
+  animateNumber(document.getElementById('wh-items'), totalItems);
+  animateNumber(document.getElementById('wh-units'), totalUnits);
+  animateNumber(document.getElementById('wh-value'), totalValue, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('wh-low'),   lowItems);
 
   // Table
   var tbody = '';

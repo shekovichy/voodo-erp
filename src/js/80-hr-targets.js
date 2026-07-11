@@ -94,10 +94,10 @@ function renderHRPage() {
   const totalSales  = rows.reduce((s,r)=>s+r.actual,0);
   const totalComm   = rows.reduce((s,r)=>s+r.commission,0);
   const achievePct  = totalTarget > 0 ? Math.round(totalSales/totalTarget*100) : 0;
-  const el1 = document.getElementById('hr-total-target');    if (el1) el1.textContent = fmt(totalTarget) + ' ج';
-  const el2 = document.getElementById('hr-total-sales');     if (el2) el2.textContent = fmt(totalSales) + ' ج';
-  const el3 = document.getElementById('hr-achieve-pct');     if (el3) el3.textContent = achievePct + '%';
-  const el4 = document.getElementById('hr-total-commission'); if (el4) el4.textContent = fmt(totalComm) + ' ج';
+  animateNumber(document.getElementById('hr-total-target'),     totalTarget, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('hr-total-sales'),      totalSales, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('hr-achieve-pct'),      achievePct, { suffix: '%' });
+  animateNumber(document.getElementById('hr-total-commission'), totalComm, { format: fmt, suffix: ' ج' });
 
   // Render cards
   const container = document.getElementById('hrSalespeople'); if (!container) return;

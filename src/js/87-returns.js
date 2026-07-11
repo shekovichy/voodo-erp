@@ -105,9 +105,9 @@ function buildReturnsReport() {
   const count = returns.length;
   const total = returns.reduce((s,r) => s + Math.abs(r.total), 0);
   const units = returns.reduce((s,r) => s + r.items.reduce((a,i) => a + Math.abs(i.qty), 0), 0);
-  document.getElementById('ret-count').textContent = count;
-  document.getElementById('ret-total').textContent = fmt(total)+' ج';
-  document.getElementById('ret-units').textContent = units;
+  animateNumber(document.getElementById('ret-count'), count);
+  animateNumber(document.getElementById('ret-total'), total, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('ret-units'), units);
   document.getElementById('ret-body').innerHTML = !returns.length
     ? '<tr><td colspan="6" class="text-center text-muted" style="padding:24px;">لا توجد مرتجعات في هذه الفترة</td></tr>'
     : returns.sort((a,b) => new Date(b.date)-new Date(a.date)).map(r => `<tr>

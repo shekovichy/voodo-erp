@@ -156,44 +156,53 @@ select.form-control { cursor:pointer; }
 .stat-value { font-size:26px; font-weight:800; margin-top:6px; color:var(--primary); }
 .stat-sub { font-size:12px; color:var(--text-muted); margin-top:3px; }
 
-/* ---- DASHBOARD MOTION (prototype — page-dashboard only for now) ----
-   Scoped to #page-dashboard so this doesn't change any other page until
-   the direction is approved and rolled out everywhere. */
+/* ---- APP-WIDE MOTION ----
+   Rolled out from the dashboard prototype to every page (any [id^="page-"]
+   container — this naturally excludes the login screen and modals, which
+   live outside the page-* containers and keep their own transitions). */
 @media (prefers-reduced-motion: no-preference) {
-  #page-dashboard .stat-card,
-  #page-dashboard .card {
+  [id^="page-"] .stat-card,
+  [id^="page-"] .card {
     animation: dashFadeUp .5s cubic-bezier(.22,1,.36,1) both;
   }
-  /* Stagger the 6 main KPI cards + comparison/exec rows as they appear */
-  #page-dashboard .stats-grid .stat-card:nth-child(1) { animation-delay: .02s; }
-  #page-dashboard .stats-grid .stat-card:nth-child(2) { animation-delay: .06s; }
-  #page-dashboard .stats-grid .stat-card:nth-child(3) { animation-delay: .10s; }
-  #page-dashboard .stats-grid .stat-card:nth-child(4) { animation-delay: .14s; }
-  #page-dashboard .stats-grid .stat-card:nth-child(5) { animation-delay: .18s; }
-  #page-dashboard .stats-grid .stat-card:nth-child(6) { animation-delay: .22s; }
-  #page-dashboard .grid-2 .card:nth-child(1) { animation-delay: .1s; }
-  #page-dashboard .grid-2 .card:nth-child(2) { animation-delay: .16s; }
+  /* Stagger the first cards in any stats row / 2-column grid as they appear */
+  [id^="page-"] .stats-grid .stat-card:nth-child(1) { animation-delay: .02s; }
+  [id^="page-"] .stats-grid .stat-card:nth-child(2) { animation-delay: .06s; }
+  [id^="page-"] .stats-grid .stat-card:nth-child(3) { animation-delay: .10s; }
+  [id^="page-"] .stats-grid .stat-card:nth-child(4) { animation-delay: .14s; }
+  [id^="page-"] .stats-grid .stat-card:nth-child(5) { animation-delay: .18s; }
+  [id^="page-"] .stats-grid .stat-card:nth-child(6) { animation-delay: .22s; }
+  [id^="page-"] .grid-2 .card:nth-child(1) { animation-delay: .1s; }
+  [id^="page-"] .grid-2 .card:nth-child(2) { animation-delay: .16s; }
 }
 @keyframes dashFadeUp {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-#page-dashboard .stat-card {
+[id^="page-"] .stat-card {
   transition: transform .2s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease, border-color .2s ease;
 }
-#page-dashboard .stat-card:hover {
+[id^="page-"] .stat-card:hover {
   transform: translateY(-3px);
   box-shadow: 0 8px 20px rgba(0,0,0,.09);
   border-color: var(--primary);
 }
-#page-dashboard .stat-value { transition: color .3s ease; }
-#page-dashboard .card canvas { transition: opacity .3s ease; }
+[id^="page-"] .stat-value { transition: color .3s ease; }
+[id^="page-"] .card canvas { transition: opacity .3s ease; }
 @keyframes dashPulse {
   0%   { transform: scale(1); }
   30%  { transform: scale(1.12); }
   100% { transform: scale(1); }
 }
-#page-dashboard .stat-sub.dash-pulse { animation: dashPulse .4s ease; display:inline-block; }
+[id^="page-"] .stat-sub.dash-pulse,
+[id^="page-"] .dash-pulse { animation: dashPulse .4s ease; display:inline-block; }
+
+/* Buttons, table rows and badges get a touch more life app-wide */
+.btn { transition: all .2s cubic-bezier(.34,1.56,.64,1); }
+.btn:active { transform: scale(.96); }
+[id^="page-"] tbody tr { transition: background .15s ease; }
+.badge { transition: transform .15s ease; }
+
 
 /* ---- TABLES ---- */
 .table-wrap { overflow-x:auto; }

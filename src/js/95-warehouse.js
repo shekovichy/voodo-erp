@@ -20,10 +20,10 @@ function renderWarehousePage() {
   var totalValue = inv.reduce(function(s,p){ return s+(p.qty||0)*(p.cost||0); }, 0);
   var lowItems   = inv.filter(function(p){ return (p.qty||0) <= getThreshold(); }).length;
 
-  document.getElementById('wh-items').textContent = totalItems;
-  document.getElementById('wh-units').textContent = totalUnits.toLocaleString();
-  document.getElementById('wh-value').textContent = fmt(totalValue) + ' ج';
-  document.getElementById('wh-low').textContent   = lowItems;
+  animateNumber(document.getElementById('wh-items'), totalItems);
+  animateNumber(document.getElementById('wh-units'), totalUnits);
+  animateNumber(document.getElementById('wh-value'), totalValue, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('wh-low'),   lowItems);
 
   // Table
   var tbody = '';

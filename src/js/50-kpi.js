@@ -58,15 +58,15 @@ function buildKPIReport() {
   const invValue = inv.reduce((s,p)=>s+(p.cost||0)*p.qty, 0);
   const turnover = invValue ? cogs / invValue : 0;
 
-  document.getElementById('kpi-atv').textContent      = fmt(atv)+' ج';
-  document.getElementById('kpi-upt').textContent      = upt.toFixed(2);
-  document.getElementById('kpi-gm').textContent       = gm.toFixed(1)+'%';
-  document.getElementById('kpi-turnover').textContent = turnover.toFixed(2)+'×';
-  document.getElementById('kpi-card-pct').textContent = cardPct.toFixed(1)+'%';
-  document.getElementById('kpi-disc-pct').textContent = discPct.toFixed(1)+'%';
-  document.getElementById('tv-cogs').textContent      = fmt(cogs)+' ج';
-  document.getElementById('tv-inv').textContent       = fmt(invValue)+' ج';
-  document.getElementById('tv-rate').textContent      = turnover.toFixed(2)+'×';
+  animateNumber(document.getElementById('kpi-atv'),      atv, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('kpi-upt'),      upt, { format: (n) => n.toFixed(2) });
+  animateNumber(document.getElementById('kpi-gm'),       gm, { format: (n) => n.toFixed(1), suffix: '%' });
+  animateNumber(document.getElementById('kpi-turnover'), turnover, { format: (n) => n.toFixed(2), suffix: '×' });
+  animateNumber(document.getElementById('kpi-card-pct'), cardPct, { format: (n) => n.toFixed(1), suffix: '%' });
+  animateNumber(document.getElementById('kpi-disc-pct'), discPct, { format: (n) => n.toFixed(1), suffix: '%' });
+  animateNumber(document.getElementById('tv-cogs'),      cogs, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('tv-inv'),       invValue, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('tv-rate'),      turnover, { format: (n) => n.toFixed(2), suffix: '×' });
 
   const dayMap = {};
   sales.forEach(s => { const d=s.date.slice(0,10); dayMap[d]=(dayMap[d]||0)+s.total; });

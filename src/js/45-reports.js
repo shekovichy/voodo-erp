@@ -81,10 +81,10 @@ function buildSalesReport() {
   }
   const net = sales.reduce((s,x)=>s+x.total,0);
   const sub = sales.reduce((s,x)=>s+x.sub,0);
-  document.getElementById('rs-total').textContent = fmt(sub)+' ج';
-  document.getElementById('rs-net').textContent   = fmt(net)+' ج';
-  document.getElementById('rs-count').textContent = sales.length;
-  document.getElementById('rs-avg').textContent   = fmt(sales.length ? net/sales.length : 0)+' ج';
+  animateNumber(document.getElementById('rs-total'), sub, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('rs-net'),   net, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('rs-count'), sales.length);
+  animateNumber(document.getElementById('rs-avg'),   sales.length ? net/sales.length : 0, { format: fmt, suffix: ' ج' });
 
   if (period !== 'custom') {
     let prevSales = getPrevSales(period, 'rptSalesFrom', 'rptSalesTo');
@@ -141,10 +141,10 @@ function buildInventoryReport() {
   const costVal = inv.reduce((s,p)=>s+(p.cost||0)*p.qty,0);
   const sellVal = inv.reduce((s,p)=>s+p.priceAfter*p.qty,0);
   const units   = inv.reduce((s,p)=>s+p.qty,0);
-  document.getElementById('ri-count').textContent = inv.length;
-  document.getElementById('ri-cost').textContent  = fmt(costVal)+' ج';
-  document.getElementById('ri-sell').textContent  = fmt(sellVal)+' ج';
-  document.getElementById('ri-units').textContent = units;
+  animateNumber(document.getElementById('ri-count'), inv.length);
+  animateNumber(document.getElementById('ri-cost'),  costVal, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('ri-sell'),  sellVal, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('ri-units'), units);
   const sorted = [...inv].sort((a,b)=>a.qty-b.qty);
   document.getElementById('ri-body').innerHTML = sorted.map(p => {
     const stockVal = p.priceAfter*p.qty;
@@ -202,11 +202,11 @@ function buildProfitReport() {
   const profit     = revenue - totalCost;
   const margin     = revenue ? profit/revenue*100 : 0;
 
-  document.getElementById('rp-revenue').textContent   = fmt(revenue)+' ج';
-  document.getElementById('rp-cost').textContent      = fmt(totalCost)+' ج';
-  document.getElementById('rp-profit').textContent    = fmt(profit)+' ج';
-  document.getElementById('rp-margin').textContent    = margin.toFixed(1)+'%';
-  document.getElementById('rp-discounts').textContent = fmt(totalDisc)+' ج';
+  animateNumber(document.getElementById('rp-revenue'),   revenue, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('rp-cost'),      totalCost, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('rp-profit'),    profit, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('rp-margin'),    margin, { format: (n) => n.toFixed(1), suffix: '%' });
+  animateNumber(document.getElementById('rp-discounts'), totalDisc, { format: fmt, suffix: ' ج' });
 
   if (period !== 'custom') {
     let prevSales = getPrevSales(period, 'rptProfitFrom', 'rptProfitTo');

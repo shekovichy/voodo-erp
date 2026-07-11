@@ -110,10 +110,10 @@ function renderExpensesPage() {
     const c=i.cost>0?i.cost:(inv.find(x=>x.code===i.code)?.cost||0); return a+(i.price-c)*i.qty; },0)-s.disc, 0);
   const netProfit = grossProfit - totalAll;
 
-  const el1=document.getElementById('exp-total');    if(el1) el1.textContent=fmt(totalAll)+' ج';
-  const el2=document.getElementById('exp-branches'); if(el2) el2.textContent=fmt(totalBr)+' ج';
-  const el3=document.getElementById('exp-company');  if(el3) el3.textContent=fmt(totalCo)+' ج';
-  const el4=document.getElementById('exp-net-profit'); if(el4) { el4.textContent=fmt(netProfit)+' ج'; el4.style.color=netProfit>=0?'var(--success)':'var(--danger)'; }
+  animateNumber(document.getElementById('exp-total'),    totalAll, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('exp-branches'), totalBr, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('exp-company'),  totalCo, { format: fmt, suffix: ' ج' });
+  const el4=document.getElementById('exp-net-profit'); if(el4) { animateNumber(el4, netProfit, { format: fmt, suffix: ' ج' }); el4.style.color=netProfit>=0?'var(--success)':'var(--danger)'; }
 
   // Branch breakdown cards
   const breakdown = document.getElementById('expBranchBreakdown');
@@ -202,10 +202,10 @@ function renderAuditPage() {
   const saleCount     = list.filter(a=>a.action.startsWith('sale')).length;
   const settingsCount = list.filter(a=>a.action.startsWith('settings')||a.action.startsWith('auth')).length;
 
-  const el1=document.getElementById('audit-total');    if(el1) el1.textContent=totalCount;
-  const el2=document.getElementById('audit-inv');      if(el2) el2.textContent=invCount;
-  const el3=document.getElementById('audit-sales');    if(el3) el3.textContent=saleCount;
-  const el4=document.getElementById('audit-settings'); if(el4) el4.textContent=settingsCount;
+  animateNumber(document.getElementById('audit-total'),    totalCount);
+  animateNumber(document.getElementById('audit-inv'),      invCount);
+  animateNumber(document.getElementById('audit-sales'),    saleCount);
+  animateNumber(document.getElementById('audit-settings'), settingsCount);
 
   const actionLabels = {
     'inv.add':'➕ إضافة صنف', 'inv.edit':'✏️ تعديل صنف', 'inv.delete':'🗑️ حذف صنف',

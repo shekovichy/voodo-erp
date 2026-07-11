@@ -176,9 +176,9 @@ function renderTransfersPage() {
   const list    = getTransfers();
   const done    = list.filter(t=>t.status==='completed').length;
   const pending = list.filter(t=>t.status==='pending').length;
-  document.getElementById('tr-count').textContent   = list.length;
-  document.getElementById('tr-done').textContent    = done;
-  document.getElementById('tr-pending').textContent = pending;
+  animateNumber(document.getElementById('tr-count'),   list.length);
+  animateNumber(document.getElementById('tr-done'),    done);
+  animateNumber(document.getElementById('tr-pending'), pending);
 
   const tbody = document.getElementById('transfersBody'); if (!tbody) return;
   if (!list.length) {

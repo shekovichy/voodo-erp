@@ -65,8 +65,8 @@ function renderSuppliersPage() {
   let list = getSuppliers();
   if (q) list = list.filter(s => s.name.toLowerCase().includes(q) || s.phone.includes(q));
   const totalDebt = getSuppliers().reduce((s, x) => s + (x.balance || 0), 0);
-  const el = document.getElementById('sup-count'); if (el) el.textContent = getSuppliers().length;
-  const elD = document.getElementById('sup-debt'); if (elD) elD.textContent = fmt(totalDebt) + ' ج';
+  animateNumber(document.getElementById('sup-count'), getSuppliers().length);
+  animateNumber(document.getElementById('sup-debt'),  totalDebt, { format: fmt, suffix: ' ج' });
   const tbody = document.getElementById('suppliersBody'); if (!tbody) return;
   if (!list.length) {
     tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:24px;">لا يوجد موردون بعد — أضف أول مورد</td></tr>';
@@ -341,10 +341,10 @@ function renderPurchasesPage() {
   const pending  = list.filter(p=>p.status==='pending'||p.status==='partial').length;
   const received = list.filter(p=>p.status==='received').length;
   const total    = list.reduce((s,p)=>s+p.total,0);
-  const elC = document.getElementById('po-count');    if (elC) elC.textContent = list.length;
-  const elP = document.getElementById('po-pending');  if (elP) elP.textContent = pending;
-  const elR = document.getElementById('po-received'); if (elR) elR.textContent = received;
-  const elT = document.getElementById('po-total');    if (elT) elT.textContent = fmt(total) + ' ج';
+  animateNumber(document.getElementById('po-count'),    list.length);
+  animateNumber(document.getElementById('po-pending'),  pending);
+  animateNumber(document.getElementById('po-received'), received);
+  animateNumber(document.getElementById('po-total'),    total, { format: fmt, suffix: ' ج' });
 
   // Filters
   populatePOFilters();

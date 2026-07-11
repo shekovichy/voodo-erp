@@ -34,7 +34,7 @@ function renderSales() {
   if (to)   sales = sales.filter(s => s.date.slice(0,10) <= to);
   sales.sort((a,b) => new Date(b.date) - new Date(a.date));
 
-  document.getElementById('salesFilterTotal').textContent = fmt(sales.reduce((s,x)=>s+x.total,0));
+  animateNumber(document.getElementById('salesFilterTotal'), sales.reduce((s,x)=>s+x.total,0), { format: fmt });
   document.getElementById('salesBody').innerHTML = !sales.length
     ? '<tr><td colspan="10" class="text-center text-muted" style="padding:40px;">لا توجد مبيعات</td></tr>'
     : sales.map(s => `<tr class="${s.isReturn ? 'return-row' : ''}">

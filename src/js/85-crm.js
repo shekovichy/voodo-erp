@@ -22,10 +22,10 @@ function renderCustomers() {
   const vipCount   = custs.filter(c => (c.totalSpent||0) >= 5000).length;
   const totalSpent = custs.reduce((s,c) => s + (c.totalSpent||0), 0);
   const totalPts   = custs.reduce((s,c) => s + (c.loyaltyPoints||0), 0);
-  const countEl = document.getElementById('cust-count'); if (countEl) countEl.textContent = custs.length;
-  const vipEl   = document.getElementById('cust-vip');   if (vipEl)   vipEl.textContent   = vipCount;
-  const spentEl = document.getElementById('cust-spent'); if (spentEl) spentEl.textContent = fmt(totalSpent)+' ج';
-  const ptsEl   = document.getElementById('cust-pts');   if (ptsEl)   ptsEl.textContent   = totalPts+' نقطة';
+  animateNumber(document.getElementById('cust-count'), custs.length);
+  animateNumber(document.getElementById('cust-vip'),   vipCount);
+  animateNumber(document.getElementById('cust-spent'), totalSpent, { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('cust-pts'),   totalPts, { suffix: ' نقطة' });
 
   const tbody = document.getElementById('customersBody'); if (!tbody) return;
   if (!items.length) {
