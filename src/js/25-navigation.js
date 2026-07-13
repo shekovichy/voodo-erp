@@ -10,9 +10,7 @@ function showPage(page) {
   var content = document.querySelector('.main-content');
   if (content) content.classList.toggle('home-mode', page === 'home');
   if (page === 'home') { updateHomeClock(); updateSuspendedBadge(); }
-  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-  document.querySelector(`[data-page="${page}"]`)?.classList.add('active');
-  const titles = { dashboard:'الرئيسية', inventory:'إدارة المخزون', sales:'سجل المبيعات', suspended:'فواتير معلقة', reports:'التقارير', customized:'تقارير مخصصة', home:'الرئيسية', warehouse:'المخزن الرئيسي', settings:'الإعدادات', customers:'العملاء', purchases:'المشتريات', hr:'الموارد البشرية', expenses:'المصاريف', audit:'سجل التغييرات', accounting:'المحاسبة الرسمية' };
+  const titles ={ dashboard:'الرئيسية', inventory:'إدارة المخزون', sales:'سجل المبيعات', suspended:'فواتير معلقة', reports:'التقارير', customized:'تقارير مخصصة', home:'الرئيسية', warehouse:'المخزن الرئيسي', settings:'الإعدادات', customers:'العملاء', purchases:'المشتريات', hr:'الموارد البشرية', expenses:'المصاريف', audit:'سجل التغييرات', accounting:'المحاسبة الرسمية' };
   document.getElementById('pageTitle').textContent = titles[page] || '';
   if (page === 'dashboard')  buildDashboard();
   if (page === 'inventory')  renderInventory();
