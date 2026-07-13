@@ -636,11 +636,27 @@ body.pos-fullscreen #cartFab { z-index:700; }
   pointer-events: none;
 }
 .app-tile svg { width: 38px; height: 38px; position: relative; z-index: 1; }
-.folder-tile {
-  display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
-  gap: 4px; padding: 9px;
+/* Folder tiles: a stack of cards (like a phone's app folder), not a busy
+   grid — the front card shows the folder's primary icon at full clarity,
+   with 0-2 plain color slivers peeking out behind it to signal "more
+   inside" without needing to render tiny illegible icons. */
+.app-tile.folder-tile { overflow: visible; box-shadow: none; background: none; }
+.app-tile.folder-tile::before { content: none; }
+.folder-peek {
+  position: absolute; inset: 0; border-radius: 20px;
+  box-shadow:
+    0 6px 16px rgba(0,0,0,.35),
+    inset 0 1px 0 rgba(255,255,255,.28),
+    inset 0 -1px 0 rgba(0,0,0,.18);
 }
-.folder-tile svg { width: 100%; height: 100%; }
+.folder-peek.p2 { transform: rotate(-11deg) translate(-5px,4px) scale(.88); z-index: 1; }
+.folder-peek.p3 { transform: rotate(10deg) translate(5px,4px) scale(.88); z-index: 2; }
+.folder-peek.front {
+  z-index: 3; display: flex; align-items: center; justify-content: center;
+}
+.folder-peek.front svg { width: 36px; height: 36px; }
+@media (max-width: 500px) { .folder-peek.front svg { width: 30px; height: 30px; } }
+@media (min-width: 768px) { .folder-peek.front svg { width: 40px; height: 40px; } }
 .app-name {
   color: rgba(255,255,255,.95);
   font-size: 11px; font-weight: 600;

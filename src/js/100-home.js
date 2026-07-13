@@ -138,16 +138,20 @@ const HOME_FOLDERS = {
   ]},
 };
 
-// Mini 2x2 preview grid inside each folder tile — classic phone-folder look
+// Stacked-card preview inside each folder tile — the first item's icon
+// shown full-size and clear, with up to 2 plain color slivers peeking out
+// behind it (from the 2nd/3rd items, if any) signaling "more inside".
 function renderFolderPreviews() {
   Object.keys(HOME_FOLDERS).forEach(function(id) {
     const el = document.getElementById('folderPreview_' + id);
     if (!el) return;
-    const icons = HOME_FOLDERS[id].icons.slice(0, 4);
-    el.innerHTML = icons.map(function(i) {
-      return '<div style="background:linear-gradient(145deg,' + i.grad + ');border-radius:6px;display:flex;align-items:center;justify-content:center;">'
-        + '<svg viewBox="0 0 48 48" fill="none" style="width:60%;height:60%;">' + i.svg + '</svg></div>';
-    }).join('');
+    const icons = HOME_FOLDERS[id].icons;
+    let html = '';
+    if (icons[2]) html += '<div class="folder-peek p3" style="background:linear-gradient(145deg,' + icons[2].grad + ');"></div>';
+    if (icons[1]) html += '<div class="folder-peek p2" style="background:linear-gradient(145deg,' + icons[1].grad + ');"></div>';
+    html += '<div class="folder-peek front" style="background:linear-gradient(145deg,' + icons[0].grad + ');">'
+      + '<svg viewBox="0 0 48 48" fill="none">' + icons[0].svg + '</svg></div>';
+    el.innerHTML = html;
   });
 }
 
