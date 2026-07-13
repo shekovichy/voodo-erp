@@ -5,6 +5,28 @@ const DB = {
   g: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
   s: (k, v) => localStorage.setItem(k, JSON.stringify(v))
 };
+
+// ══ LAZY-LOADED PAGES ══════════════════════════════════════════════
+// A handful of independent, heavy pages (accounting, warehouse,
+// manufacturing, purchases — see LAZY_CHUNKS in build.py) ship as separate
+// .js files instead of being inlined into index.html, so a cashier who
+// never opens them never downloads them. showPage() in 25-navigation.js
+// calls _loadChunk() before rendering one of these pages.
+const _CHUNK_FILES = {
+  accounting:    'chunk-accounting.js',
+  warehouse:     'chunk-warehouse.js',
+  manufacturing: 'chunk-manufacturing.js',
+  purchases:     'chunk-purchases.js',
+};
+const _loadedChunks = new Set();
+function _loadChunk(page, cb) {
+  if (!_CHUNK_FILES[page] || _loadedChunks.has(page)) { cb(); return; }
+  const s = document.createElement('script');
+  s.src = _CHUNK_FILES[page];
+  s.onload  = () => { _loadedChunks.add(page); cb(); };
+  s.onerror = () => { console.error('Failed to load module for page:', page); alert('تعذّر تحميل الصفحة — تأكد من الاتصال بالإنترنت وحاول تاني'); };
+  document.body.appendChild(s);
+}
 // ══ CLOUD DATA CACHES — synced with Firestore in real-time ══════════════
 const BRANCH_IDS      = ['wh','b1','b2','b3','b4'];
 const BRANCH_DEFAULTS = { wh:'🏭 المخزن الرئيسي', b1:'الفرع الأول', b2:'الفرع الثاني', b3:'الفرع الثالث', b4:'الفرع الرابع' };

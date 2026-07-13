@@ -1,11 +1,22 @@
-// VOODO ERP — Service Worker v1
-const CACHE_NAME = 'voodo-erp-v1';
+// VOODO ERP — Service Worker v2
+const CACHE_NAME = 'voodo-erp-v2';
 const OFFLINE_URL = '/';
+
+// Lazy-loaded admin pages (see LAZY_CHUNKS in build.py) — precached so they
+// still work offline after the first successful load, same as everything
+// else, even though they're no longer inlined into index.html.
+const LAZY_CHUNKS = [
+  '/chunk-accounting.js',
+  '/chunk-warehouse.js',
+  '/chunk-manufacturing.js',
+  '/chunk-purchases.js'
+];
 
 // Files to cache for offline use
 const STATIC_ASSETS = [
   '/',
   '/index.html',
+  ...LAZY_CHUNKS,
   'https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700;800&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
 ];
@@ -14,7 +25,7 @@ const STATIC_ASSETS = [
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(['/index.html']).catch(() => {});
+      return cache.addAll(['/index.html', ...LAZY_CHUNKS]).catch(() => {});
     }).then(() => self.skipWaiting())
   );
 });
@@ -42,7 +53,7 @@ self.addEventListener('fetch', event => {
     fetch(event.request)
       .then(response => {
         // Cache successful responses for the app shell
-        if (response.ok && (url.pathname === '/' || url.pathname === '/index.html')) {
+        if (response.ok && (url.pathname === '/' || url.pathname === '/index.html' || LAZY_CHUNKS.includes(url.pathname))) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         }

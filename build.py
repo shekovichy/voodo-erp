@@ -20,6 +20,21 @@ OUTPUT       = 'index.html'
 CSS_PLACEHOLDER = '<!-- BUILD:CSS -->'
 JS_PLACEHOLDER  = '<!-- BUILD:JS -->'
 
+# Pages verified to have zero inbound calls from the always-loaded "core"
+# code (no other module reads their functions unconditionally, no Firestore
+# listener calls into them without a visibility guard). Their scripts are
+# written as separate chunk files and lazy-loaded on first visit instead of
+# being inlined into index.html — see _loadChunk()/showPage() in 25-navigation.js.
+# Do NOT add a file here without re-checking for cross-file calls the way
+# these four were checked (grep every other src/js/*.js for its function
+# names) — an unverified addition can silently break navigation app-wide.
+LAZY_CHUNKS = {
+    '93-accounting.js':     'chunk-accounting.js',
+    '95-warehouse.js':      'chunk-warehouse.js',
+    '105-manufacturing.js': 'chunk-manufacturing.js',
+    '75-purchases.js':      'chunk-purchases.js',
+}
+
 
 def collect_css():
     files = []
@@ -39,9 +54,20 @@ def collect_css():
 def collect_js():
     parts = []
     for f in sorted(glob.glob(os.path.join(JS_DIR, '*.js'))):
+        if os.path.basename(f) in LAZY_CHUNKS:
+            continue
         with open(f, encoding='utf-8') as fh:
             parts.append(fh.read())
     return '\n'.join(parts)
+
+
+def write_lazy_chunks():
+    for src_name, out_name in LAZY_CHUNKS.items():
+        src_path = os.path.join(JS_DIR, src_name)
+        with open(src_path, encoding='utf-8') as fh:
+            content = fh.read()
+        with open(out_name, 'w', encoding='utf-8') as fh:
+            fh.write(content)
 
 
 def build():
@@ -56,8 +82,10 @@ def build():
 
     with open(OUTPUT, 'w', encoding='utf-8') as fh:
         fh.write(html)
+    write_lazy_chunks()
 
-    print(f'Built {OUTPUT} ({len(html):,} bytes)')
+    chunk_sizes = ', '.join(f'{name} {os.path.getsize(name):,}b' for name in LAZY_CHUNKS.values())
+    print(f'Built {OUTPUT} ({len(html):,} bytes) + chunks: {chunk_sizes}')
 
 
 def watch():

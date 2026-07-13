@@ -8,10 +8,19 @@
 ## Build
 ```
 cd C:\Projects\voodo-erp
-python build.py        # يولّد index.html من src/
+python build.py        # يولّد index.html من src/ + chunk-*.js
 git add -A && git commit -m "..." && git push
 ```
 GitHub Actions تنشر تلقائياً على https://shekovichy.github.io/voodo-erp/
+
+### تحميل كسول (Lazy chunks)
+4 صفحات مستقلة تماماً (`93-accounting.js`, `95-warehouse.js`, `105-manufacturing.js`, `75-purchases.js`) بتتبني كملفات `chunk-*.js` منفصلة بدل ما تتلزق جوه `index.html` — `showPage()` في `25-navigation.js` بيحمّلها ديناميكياً أول مرة المستخدم يدخل الصفحة (شوف `_loadChunk`/`_CHUNK_FILES` في `00-core.js`).
+
+⚠️ **لو هتضيف ملف جديد للتحميل الكسول**: لازم تتأكد أولاً إن مفيش ملف "أساسي" (مش هو نفسه) بينادي على أي دالة فيه بشكل غير مشروط (يعني من غير `visRefresh`/فحص `!hidden` قبلها) — لأن ده هيبوّظ لو الملف لسه ماتحمّلش. افحص بـ:
+```
+grep -oE '^function [a-zA-Z0-9_]+|^const [a-zA-Z0-9_]+ = ' src/js/الملف.js
+```
+وبعدين دوّر على كل اسم دالة طلعلك في باقي ملفات `src/js/*.js` وشوف هل فيه نداء غير محمي عليه. لو لقيت، إما سيب الملف في الحزمة الأساسية، أو انقل بس الدالة/المتغيّر المشترك لملف `00-core.js`.
 
 ---
 

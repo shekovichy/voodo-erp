@@ -1,7 +1,22 @@
 // ══════════════════════════════════════════════
 // MANAGER PAGES
 // ══════════════════════════════════════════════
+
+// showPage() is the public entry point — it makes sure a lazy chunk (see
+// _CHUNK_FILES in 00-core.js) is loaded before handing off to the real
+// implementation, so every existing onclick="showPage('x')" in the HTML
+// keeps working unchanged whether or not that page's code has loaded yet.
 function showPage(page) {
+  if (_CHUNK_FILES[page] && !_loadedChunks.has(page)) {
+    const t = document.getElementById('pageTitle');
+    if (t) t.textContent = '⏳ جاري التحميل...';
+    _loadChunk(page, () => showPage(page));
+    return;
+  }
+  _showPageImpl(page);
+}
+
+function _showPageImpl(page) {
   if (window._whMode && !['warehouse','transfers'].includes(page)) return;
   ['home','dashboard','inventory','sales','suspended','reports','customized','warehouse','settings','customers','promos','transfers','purchases','hr','expenses','audit','accounting','manufacturing'].forEach(p => {
     document.getElementById('page-'+p)?.classList.add('hidden');
