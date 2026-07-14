@@ -35,6 +35,21 @@ function deltaBadge(curr, prev, isPercent) {
           <span style="color:#94a3b8; font-size:10px; margin-right:4px;">vs السابق</span>`;
 }
 
+// Branch managers (isBranchManager) see the dashboard locked to their own
+// branch — the branch filter is disabled, and the cross-branch comparison
+// chart (which always compares ALL branches regardless of the filter) is
+// hidden outright since it would leak other branches' revenue otherwise.
+function applyBranchDashboardFilter() {
+  const isAdmin = (currentUser === 'admin');
+  const dbf = document.getElementById('dashBranchFilter');
+  if (dbf) {
+    dbf.disabled = !isAdmin;
+    if (!isAdmin) dbf.value = currentBranch;
+  }
+  const cmpCard = document.getElementById('dashBranchCompareCard');
+  if (cmpCard) cmpCard.style.display = isAdmin ? '' : 'none';
+}
+
 function buildDashboard() {
   // Populate branch filter dropdown
   const dbf = document.getElementById('dashBranchFilter');
@@ -47,6 +62,7 @@ function buildDashboard() {
       }
     });
   }
+  applyBranchDashboardFilter();
   const branchFilter = dbf?.value || 'all';
 
   const allSales = getSales().filter(s => !s.isReturn);

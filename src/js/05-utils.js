@@ -87,6 +87,7 @@ async function doLogin() {
   if (user === 'admin' && await checkPass(pass, users.admin)) {
     await upgradePassIfNeeded(pass, users.admin, 'admin');
     currentUser = 'admin';
+    isBranchManager = false;
     document.getElementById('loginPage').classList.add('hidden');
     document.getElementById('managerView').classList.remove('hidden');
     document.getElementById('todayDate').textContent =
@@ -100,6 +101,7 @@ async function doLogin() {
   } else if (user === 'cashier' && pass === users.cashier) {
     // Legacy cashier (all branches)
     currentUser = 'cashier';
+    isBranchManager = false;
     document.getElementById('loginPage').classList.add('hidden');
     document.getElementById('cashierView').classList.remove('hidden');
     initFirebase();
@@ -121,6 +123,7 @@ async function doLogin() {
     }
     if (matchedBranch) {
       currentUser = 'cashier';
+      isBranchManager = branchUsers[matchedBranch].role === 'manager';
       currentBranch = matchedBranch;
       DB.s('currentBranch', matchedBranch);
       document.getElementById('loginPage').classList.add('hidden');
@@ -346,7 +349,7 @@ setTimeout(() => checkAutoBackup(false), 5000);
 
 function logout() {
   if (!confirm('هل تريد تسجيل الخروج؟')) return;
-  currentUser = null; cart = [];
+  currentUser = null; isBranchManager = false; cart = [];
   document.getElementById('loginPage').classList.remove('hidden');
   document.getElementById('cashierView').classList.add('hidden');
   document.getElementById('managerView').classList.add('hidden');

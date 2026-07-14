@@ -90,6 +90,8 @@ function renderHomeIcons() {
   const branchGrid = document.getElementById('homeGrid_branch');
   if (adminGrid) adminGrid.style.display = isAdmin ? '' : 'none';
   if (branchGrid) branchGrid.style.display = isAdmin ? 'none' : '';
+  const branchDash = document.getElementById('homeAppBranchDashboard');
+  if (branchDash) branchDash.style.display = (!isAdmin && isBranchManager) ? '' : 'none';
   // Update pending badges on admin home icons
   if (isAdmin) {
     try {

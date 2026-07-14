@@ -1068,7 +1068,7 @@ body.warehouse-mode #cartFab {
         <!-- Charts Row 2: 6-month trend + Branch comparison -->
         <div class="grid-2" style="gap:16px; margin-bottom:16px;">
           <div class="card"><div class="card-title">📉 اتجاه الإيرادات — آخر 6 أشهر</div><canvas id="chartTrend" height="180"></canvas></div>
-          <div class="card"><div class="card-title">🏬 مقارنة الفروع — الشهر الحالي</div><canvas id="chartBranches" height="180"></canvas></div>
+          <div class="card" id="dashBranchCompareCard"><div class="card-title">🏬 مقارنة الفروع — الشهر الحالي</div><canvas id="chartBranches" height="180"></canvas></div>
         </div>
 
         <div class="card">
@@ -1715,8 +1715,16 @@ body.warehouse-mode #cartFab {
                 <span class="app-name" style="font-weight:700; font-size:14px;">التقارير</span>
               </div>
 
+              <!-- Branch managers only (isBranchManager) — see renderHomeIcons() -->
+              <div class="app-icon branch-card" id="homeAppBranchDashboard" onclick="showPage('dashboard')" style="display:none; background: linear-gradient(145deg,rgba(6,182,212,.18),rgba(8,145,178,.1)); border: 1px solid rgba(6,182,212,.3); border-radius: 20px; padding: 20px 12px 16px; gap: 10px;">
+                <div class="app-tile" style="background: linear-gradient(135deg, #06b6d4, #0891b2); width:64px; height:64px;">
+                  <svg viewBox="0 0 48 48" fill="none"><rect x="6" y="28" width="9" height="13" rx="2" fill="white"/><rect x="20" y="18" width="9" height="23" rx="2" fill="white"/><rect x="34" y="8" width="9" height="33" rx="2" fill="white"/></svg>
+                </div>
+                <span class="app-name" style="font-weight:700; font-size:14px;">الداشبورد</span>
+              </div>
+
             </div>
-          </div><!-- /homeGrid_branch --><!-- /homeGrid_branch -->
+          </div><!-- /homeGrid_branch -->
 
           </div><!-- /homeContent -->
         </div><!-- /homeWallpaper -->
@@ -3062,6 +3070,11 @@ function setSalespeople(arr) {
 // STATE
 // ══════════════════════════════════════════════
 let currentUser = null;
+// A branch manager is still currentUser==='cashier' (keeps every existing
+// admin-vs-cashier check working unchanged) with this extra flag layering
+// on a couple of additional, branch-scoped, read-only pages — see doLogin()
+// in 05-utils.js and renderHomeIcons()/buildDashboard().
+let isBranchManager = false;
 let cart = [];
 let payMethod = 'cash';
 let chartWeekly = null, chartTop = null, chartRptSales = null, chartProfit = null;
@@ -3355,6 +3368,7 @@ async function doLogin() {
   if (user === 'admin' && await checkPass(pass, users.admin)) {
     await upgradePassIfNeeded(pass, users.admin, 'admin');
     currentUser = 'admin';
+    isBranchManager = false;
     document.getElementById('loginPage').classList.add('hidden');
     document.getElementById('managerView').classList.remove('hidden');
     document.getElementById('todayDate').textContent =
@@ -3368,6 +3382,7 @@ async function doLogin() {
   } else if (user === 'cashier' && pass === users.cashier) {
     // Legacy cashier (all branches)
     currentUser = 'cashier';
+    isBranchManager = false;
     document.getElementById('loginPage').classList.add('hidden');
     document.getElementById('cashierView').classList.remove('hidden');
     initFirebase();
@@ -3389,6 +3404,7 @@ async function doLogin() {
     }
     if (matchedBranch) {
       currentUser = 'cashier';
+      isBranchManager = branchUsers[matchedBranch].role === 'manager';
       currentBranch = matchedBranch;
       DB.s('currentBranch', matchedBranch);
       document.getElementById('loginPage').classList.add('hidden');
@@ -3614,7 +3630,7 @@ setTimeout(() => checkAutoBackup(false), 5000);
 
 function logout() {
   if (!confirm('هل تريد تسجيل الخروج؟')) return;
-  currentUser = null; cart = [];
+  currentUser = null; isBranchManager = false; cart = [];
   document.getElementById('loginPage').classList.remove('hidden');
   document.getElementById('cashierView').classList.add('hidden');
   document.getElementById('managerView').classList.add('hidden');
@@ -3833,6 +3849,8 @@ function renderHomeIcons() {
   const branchGrid = document.getElementById('homeGrid_branch');
   if (adminGrid) adminGrid.style.display = isAdmin ? '' : 'none';
   if (branchGrid) branchGrid.style.display = isAdmin ? 'none' : '';
+  const branchDash = document.getElementById('homeAppBranchDashboard');
+  if (branchDash) branchDash.style.display = (!isAdmin && isBranchManager) ? '' : 'none';
   // Update pending badges on admin home icons
   if (isAdmin) {
     try {
@@ -4349,6 +4367,21 @@ function deltaBadge(curr, prev, isPercent) {
           <span style="color:#94a3b8; font-size:10px; margin-right:4px;">vs السابق</span>`;
 }
 
+// Branch managers (isBranchManager) see the dashboard locked to their own
+// branch — the branch filter is disabled, and the cross-branch comparison
+// chart (which always compares ALL branches regardless of the filter) is
+// hidden outright since it would leak other branches' revenue otherwise.
+function applyBranchDashboardFilter() {
+  const isAdmin = (currentUser === 'admin');
+  const dbf = document.getElementById('dashBranchFilter');
+  if (dbf) {
+    dbf.disabled = !isAdmin;
+    if (!isAdmin) dbf.value = currentBranch;
+  }
+  const cmpCard = document.getElementById('dashBranchCompareCard');
+  if (cmpCard) cmpCard.style.display = isAdmin ? '' : 'none';
+}
+
 function buildDashboard() {
   // Populate branch filter dropdown
   const dbf = document.getElementById('dashBranchFilter');
@@ -4361,6 +4394,7 @@ function buildDashboard() {
       }
     });
   }
+  applyBranchDashboardFilter();
   const branchFilter = dbf?.value || 'all';
 
   const allSales = getSales().filter(s => !s.isReturn);
@@ -5469,13 +5503,19 @@ function renderBranchUsersSettings() {
     const name = getBranchName(b);
     const uname = bu[b]?.username || '';
     const upass  = bu[b]?.password || '';
+    const role   = bu[b]?.role || 'cashier';
     return `<div style="border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:10px; background:var(--bg);">
       <div style="font-weight:700; font-size:13px; margin-bottom:8px; color:var(--primary);">🏬 ${escHtml(name)}</div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
         <div><label style="font-size:11px; color:var(--text-muted);">اسم المستخدم</label>
           <input class="form-control" id="bu-user-${b}" value="${escHtml(uname)}" placeholder="username" style="margin-top:4px;" /></div>
         <div><label style="font-size:11px; color:var(--text-muted);">كلمة المرور</label>
           <input class="form-control" id="bu-pass-${b}" value="" placeholder="password" style="margin-top:4px;" /></div>
+        <div><label style="font-size:11px; color:var(--text-muted);">الصلاحية</label>
+          <select class="form-control" id="bu-role-${b}" style="margin-top:4px;">
+            <option value="cashier" ${role==='cashier'?'selected':''}>كاشير</option>
+            <option value="manager" ${role==='manager'?'selected':''}>مدير فرع</option>
+          </select></div>
       </div>
     </div>`;
   }).join('');
@@ -5486,13 +5526,14 @@ async function saveBranchUsers() {
   for (const b of BRANCH_IDS) {
     const uname = document.getElementById(`bu-user-${b}`)?.value.trim();
     const upass  = document.getElementById(`bu-pass-${b}`)?.value.trim();
+    const role   = document.getElementById(`bu-role-${b}`)?.value || 'cashier';
     if (uname) {
       if (upass && upass.length >= 4) {
         const hashed = await hashPass(upass);
-        bu[b] = { username: uname, password: hashed };
+        bu[b] = { username: uname, password: hashed, role };
       } else if (upass === '') {
         // Keep existing password hash unchanged
-        bu[b] = { username: uname, password: bu[b]?.password || '' };
+        bu[b] = { username: uname, password: bu[b]?.password || '', role };
       }
     }
   }

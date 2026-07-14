@@ -129,6 +129,11 @@ function setSalespeople(arr) {
 // STATE
 // ══════════════════════════════════════════════
 let currentUser = null;
+// A branch manager is still currentUser==='cashier' (keeps every existing
+// admin-vs-cashier check working unchanged) with this extra flag layering
+// on a couple of additional, branch-scoped, read-only pages — see doLogin()
+// in 05-utils.js and renderHomeIcons()/buildDashboard().
+let isBranchManager = false;
 let cart = [];
 let payMethod = 'cash';
 let chartWeekly = null, chartTop = null, chartRptSales = null, chartProfit = null;

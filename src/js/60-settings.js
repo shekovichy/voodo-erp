@@ -9,13 +9,19 @@ function renderBranchUsersSettings() {
     const name = getBranchName(b);
     const uname = bu[b]?.username || '';
     const upass  = bu[b]?.password || '';
+    const role   = bu[b]?.role || 'cashier';
     return `<div style="border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:10px; background:var(--bg);">
       <div style="font-weight:700; font-size:13px; margin-bottom:8px; color:var(--primary);">🏬 ${escHtml(name)}</div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
         <div><label style="font-size:11px; color:var(--text-muted);">اسم المستخدم</label>
           <input class="form-control" id="bu-user-${b}" value="${escHtml(uname)}" placeholder="username" style="margin-top:4px;" /></div>
         <div><label style="font-size:11px; color:var(--text-muted);">كلمة المرور</label>
           <input class="form-control" id="bu-pass-${b}" value="" placeholder="password" style="margin-top:4px;" /></div>
+        <div><label style="font-size:11px; color:var(--text-muted);">الصلاحية</label>
+          <select class="form-control" id="bu-role-${b}" style="margin-top:4px;">
+            <option value="cashier" ${role==='cashier'?'selected':''}>كاشير</option>
+            <option value="manager" ${role==='manager'?'selected':''}>مدير فرع</option>
+          </select></div>
       </div>
     </div>`;
   }).join('');
@@ -26,13 +32,14 @@ async function saveBranchUsers() {
   for (const b of BRANCH_IDS) {
     const uname = document.getElementById(`bu-user-${b}`)?.value.trim();
     const upass  = document.getElementById(`bu-pass-${b}`)?.value.trim();
+    const role   = document.getElementById(`bu-role-${b}`)?.value || 'cashier';
     if (uname) {
       if (upass && upass.length >= 4) {
         const hashed = await hashPass(upass);
-        bu[b] = { username: uname, password: hashed };
+        bu[b] = { username: uname, password: hashed, role };
       } else if (upass === '') {
         // Keep existing password hash unchanged
-        bu[b] = { username: uname, password: bu[b]?.password || '' };
+        bu[b] = { username: uname, password: bu[b]?.password || '', role };
       }
     }
   }
