@@ -1,5 +1,5 @@
-// VOODO ERP — Service Worker v2
-const CACHE_NAME = 'voodo-erp-v2';
+// VOODO ERP — Service Worker v3
+const CACHE_NAME = 'voodo-erp-v3';
 const OFFLINE_URL = '/';
 
 // Lazy-loaded admin pages (see LAZY_CHUNKS in build.py) — precached so they
@@ -9,7 +9,8 @@ const LAZY_CHUNKS = [
   '/chunk-accounting.js',
   '/chunk-warehouse.js',
   '/chunk-manufacturing.js',
-  '/chunk-purchases.js'
+  '/chunk-purchases.js',
+  '/chunk-helpdesk.js'
 ];
 
 // Files to cache for offline use

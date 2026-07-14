@@ -150,6 +150,15 @@ function initFirebase() {
         visRefresh('page-purchases', renderPurchasesPage);
       }, err => { _purchaseCache = DB.g('pos_purchases', []); });
 
+    // Helpdesk tickets listener — renderHelpdeskPage lives in 110-helpdesk.js (a
+    // lazy chunk); visRefresh only calls it once page-helpdesk is visible, which
+    // can't happen before the chunk has loaded (see showPage()).
+    _db.collection('pos_data').doc('helpdesk')
+      .onSnapshot(snap => {
+        _helpdeskCache = snap.exists ? (snap.data().list || []) : DB.g('pos_helpdesk', []);
+        visRefresh('page-helpdesk', renderHelpdeskPage);
+      }, err => { _helpdeskCache = DB.g('pos_helpdesk', []); });
+
     // HR listener
     _db.collection('pos_data').doc('hr')
       .onSnapshot(snap => {

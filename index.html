@@ -1715,6 +1715,13 @@ body.warehouse-mode #cartFab {
                 <span class="app-name" style="font-weight:700; font-size:14px;">التقارير</span>
               </div>
 
+              <div class="app-icon branch-card" onclick="showPage('helpdesk')" style="background: linear-gradient(145deg,rgba(251,146,60,.18),rgba(194,65,12,.1)); border: 1px solid rgba(251,146,60,.3); border-radius: 20px; padding: 20px 12px 16px; gap: 10px;">
+                <div class="app-tile" style="background: linear-gradient(135deg, #fb923c, #c2410c); width:64px; height:64px;">
+                  <svg viewBox="0 0 48 48" fill="none"><path d="M8 34V16a6 6 0 016-6h20a6 6 0 016 6v10a6 6 0 01-6 6H20l-8 8v-6z" stroke="white" stroke-width="2.5" stroke-linejoin="round"/><circle cx="18" cy="21" r="2" fill="white"/><circle cx="24" cy="21" r="2" fill="white"/><circle cx="30" cy="21" r="2" fill="white"/></svg>
+                </div>
+                <span class="app-name" style="font-weight:700; font-size:14px;">الدعم الفني</span>
+              </div>
+
               <!-- Branch managers only (isBranchManager) — see renderHomeIcons() -->
               <div class="app-icon branch-card" id="homeAppBranchDashboard" onclick="showPage('dashboard')" style="display:none; background: linear-gradient(145deg,rgba(6,182,212,.18),rgba(8,145,178,.1)); border: 1px solid rgba(6,182,212,.3); border-radius: 20px; padding: 20px 12px 16px; gap: 10px;">
                 <div class="app-tile" style="background: linear-gradient(135deg, #06b6d4, #0891b2); width:64px; height:64px;">
@@ -2489,6 +2496,34 @@ body.warehouse-mode #cartFab {
         </div>
       </div>
 
+      <!-- ══ HELPDESK ══ -->
+      <div id="page-helpdesk" class="hidden">
+        <div class="flex items-center justify-between mb-16" style="flex-wrap:wrap; gap:8px;">
+          <div><h2 style="margin:0; font-size:20px;">🎫 الدعم الفني</h2><p style="font-size:12px; color:var(--text-muted); margin:4px 0 0;">تذاكر الدعم بين الفروع والإدارة</p></div>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <select class="form-control" id="hdBranchFilter" onchange="renderHelpdeskPage()" style="width:auto;"><option value="">كل الفروع</option></select>
+            <select class="form-control" id="hdStatusFilter" onchange="renderHelpdeskPage()" style="width:auto;">
+              <option value="">كل الحالات</option>
+              <option value="open">مفتوحة</option>
+              <option value="in_progress">قيد المعالجة</option>
+              <option value="closed">مغلقة</option>
+            </select>
+            <button class="btn btn-primary" onclick="openHelpdeskTicketModal()">➕ فتح تذكرة</button>
+          </div>
+        </div>
+        <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); margin-bottom:16px;">
+          <div class="stat-card"><div class="stat-label">🔴 مفتوحة</div><div class="stat-value" id="hd-open" style="font-size:22px;">0</div></div>
+          <div class="stat-card"><div class="stat-label">🟡 قيد المعالجة</div><div class="stat-value" id="hd-progress" style="font-size:22px; color:#d97706;">0</div></div>
+          <div class="stat-card"><div class="stat-label">🟢 مغلقة</div><div class="stat-value" id="hd-closed" style="font-size:22px; color:var(--success);">0</div></div>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table><thead><tr><th>التاريخ</th><th>الموضوع</th><th>الفرع</th><th>النوع</th><th>الأولوية</th><th>الحالة</th><th></th></tr></thead>
+            <tbody id="helpdeskBody"></tbody></table>
+          </div>
+        </div>
+      </div>
+
       <!-- ── SETTINGS ── -->
       <div id="page-settings" class="hidden">
         <div class="grid-2">
@@ -2974,6 +3009,84 @@ body.warehouse-mode #cartFab {
   </div>
 </div>
 
+<!-- ════════════════ NEW HELPDESK TICKET MODAL ════════════════ -->
+<div id="helpdeskTicketModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:460px;width:94%;">
+    <div class="modal-header"><h3 style="margin:0;font-size:17px;">🎫 فتح تذكرة دعم فني</h3></div>
+    <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+      <div class="form-group" id="hdBranchRow">
+        <label>الفرع</label>
+        <select class="form-control" id="hdBranch"></select>
+      </div>
+      <div class="form-group">
+        <label>الموضوع</label>
+        <input class="form-control" id="hdSubject" placeholder="وصف مختصر للمشكلة" />
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label>النوع</label>
+          <select class="form-control" id="hdCategory">
+            <option value="pos">🖥️ نظام الكاشير</option>
+            <option value="inventory">📦 المخزون</option>
+            <option value="hardware">🔧 أجهزة/طابعة</option>
+            <option value="network">🌐 الشبكة/الإنترنت</option>
+            <option value="other">❓ أخرى</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>الأولوية</label>
+          <select class="form-control" id="hdPriority">
+            <option value="low">منخفضة</option>
+            <option value="medium" selected>متوسطة</option>
+            <option value="high">عالية</option>
+            <option value="urgent">عاجلة</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>وصف المشكلة</label>
+        <textarea class="form-control" id="hdDescription" rows="4" placeholder="اشرح المشكلة بالتفصيل..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeHelpdeskTicketModal()">إلغاء</button>
+      <button class="btn btn-primary" onclick="submitHelpdeskTicket()">📨 إرسال</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ HELPDESK TICKET DETAIL MODAL ════════════════ -->
+<div id="helpdeskDetailModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:480px;width:94%;">
+    <input type="hidden" id="hdDetailId" value="" />
+    <div class="modal-header"><h3 style="margin:0;font-size:17px;" id="hdDetailTitle"></h3></div>
+    <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+      <div id="hdDetailMeta" style="font-size:12px;color:var(--text-muted);"></div>
+      <div id="hdDetailDescription" style="font-size:13px;background:var(--bg-secondary);border-radius:8px;padding:10px 12px;white-space:pre-wrap;"></div>
+      <div class="form-group">
+        <label>الحالة</label>
+        <select class="form-control" id="hdDetailStatus" onchange="changeHelpdeskStatus()">
+          <option value="open">مفتوحة</option>
+          <option value="in_progress">قيد المعالجة</option>
+          <option value="closed">مغلقة</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--text-muted);">الردود</label>
+        <div id="hdDetailReplies" style="margin-top:6px;max-height:220px;overflow-y:auto;"></div>
+      </div>
+      <div class="form-group">
+        <label>إضافة رد</label>
+        <textarea class="form-control" id="hdReplyText" rows="2" placeholder="اكتب رد..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeHelpdeskDetail()">إغلاق</button>
+      <button class="btn btn-primary" onclick="addHelpdeskReply()">💬 إرسال الرد</button>
+    </div>
+  </div>
+</div>
+
 <!-- ════════════════ FINGERPRINT IMPORT MODAL ════════════════ -->
 <div id="fingerprintModal" class="modal-overlay hidden">
   <div class="modal-box" style="max-width:500px;width:94%;">
@@ -3016,6 +3129,7 @@ const _CHUNK_FILES = {
   warehouse:     'chunk-warehouse.js',
   manufacturing: 'chunk-manufacturing.js',
   purchases:     'chunk-purchases.js',
+  helpdesk:      'chunk-helpdesk.js',
 };
 const _loadedChunks = new Set();
 function _loadChunk(page, cb) {
@@ -3039,6 +3153,7 @@ let _purchaseCache      = [];                        // purchase orders
 let _hrCache            = [];                        // salesperson targets & commission
 let _expensesCache      = [];                        // expenses per branch + company
 let _auditCache         = [];                        // audit log entries (last 500)
+let _helpdeskCache      = [];                        // support tickets
 
 // Helper: current branch display name
 function getBranchName(b) { return ((_settingsCache.branches) || BRANCH_DEFAULTS)[b] || b; }
@@ -3406,6 +3521,30 @@ function showMsg(id, msg, type='success') {
   const el = document.getElementById(id);
   el.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
   setTimeout(() => el.innerHTML = '', 3500);
+}
+
+// Floating toast for actions with no dedicated inline message slot (unlike
+// showMsg(), which targets a specific element id). Was called from ~30 spots
+// across the app (barcode printer, Google Drive backup, expense/leave
+// approvals, Excel export, fingerprint import) but never defined, so every
+// one of those silently crashed right at that line — this was purely a gap.
+function showToast(msg) {
+  let host = document.getElementById('toastHost');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'toastHost';
+    host.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;';
+    document.body.appendChild(host);
+  }
+  const el = document.createElement('div');
+  el.textContent = msg;
+  el.style.cssText = 'background:#1f2937;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25);opacity:0;transform:translateY(8px);transition:opacity .25s,transform .25s;max-width:90vw;text-align:center;';
+  host.appendChild(el);
+  requestAnimationFrame(() => { el.style.opacity = '1'; el.style.transform = 'translateY(0)'; });
+  setTimeout(() => {
+    el.style.opacity = '0'; el.style.transform = 'translateY(8px)';
+    setTimeout(() => el.remove(), 250);
+  }, 3000);
 }
 
 function getDateRange(period, fromId, toId) {
@@ -3999,6 +4138,7 @@ const HOME_FOLDERS = {
   system: { name: '⚙️ النظام والإدارة', icons: [
     { page:'audit',    label:'سجل التغييرات', grad:'#94a3b8,#334155', svg:'<rect x="10" y="6" width="28" height="36" rx="3" stroke="white" stroke-width="2.5"/><path d="M16 16h16M16 22h16M16 28h8" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M30 32l2 2 4-4" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' },
     { page:'settings', label:'الإعدادات',     grad:'#a1a1aa,#3f3f46', svg:'<circle cx="24" cy="24" r="5" stroke="white" stroke-width="2.5"/><path d="M24 8v4M24 36v4M8 24h4M36 24h4M13.4 13.4l2.8 2.8M31.8 31.8l2.8 2.8M13.4 34.6l2.8-2.8M31.8 16.2l2.8-2.8" stroke="white" stroke-width="2.5" stroke-linecap="round"/>' },
+    { page:'helpdesk', label:'الدعم الفني',   grad:'#fb923c,#c2410c', svg:'<path d="M8 34V16a6 6 0 016-6h20a6 6 0 016 6v10a6 6 0 01-6 6H20l-8 8v-6z" stroke="white" stroke-width="2.5" stroke-linejoin="round"/><circle cx="18" cy="21" r="2" fill="white"/><circle cx="24" cy="21" r="2" fill="white"/><circle cx="30" cy="21" r="2" fill="white"/>' },
   ]},
 };
 
@@ -4392,14 +4532,14 @@ function showPage(page) {
 
 function _showPageImpl(page) {
   if (window._whMode && !['warehouse','transfers'].includes(page)) return;
-  ['home','dashboard','inventory','sales','suspended','reports','customized','warehouse','settings','customers','promos','transfers','purchases','hr','expenses','audit','accounting','manufacturing'].forEach(p => {
+  ['home','dashboard','inventory','sales','suspended','reports','customized','warehouse','settings','customers','promos','transfers','purchases','hr','expenses','audit','accounting','manufacturing','helpdesk'].forEach(p => {
     document.getElementById('page-'+p)?.classList.add('hidden');
   });
   document.getElementById('page-'+page).classList.remove('hidden');
   var content = document.querySelector('.main-content');
   if (content) content.classList.toggle('home-mode', page === 'home');
   if (page === 'home') { updateHomeClock(); updateSuspendedBadge(); }
-  const titles ={ dashboard:'الرئيسية', inventory:'إدارة المخزون', sales:'سجل المبيعات', suspended:'فواتير معلقة', reports:'التقارير', customized:'تقارير مخصصة', home:'الرئيسية', warehouse:'المخزن الرئيسي', settings:'الإعدادات', customers:'العملاء', purchases:'المشتريات', hr:'الموارد البشرية', expenses:'المصاريف', audit:'سجل التغييرات', accounting:'المحاسبة الرسمية' };
+  const titles ={ dashboard:'الرئيسية', inventory:'إدارة المخزون', sales:'سجل المبيعات', suspended:'فواتير معلقة', reports:'التقارير', customized:'تقارير مخصصة', home:'الرئيسية', warehouse:'المخزن الرئيسي', settings:'الإعدادات', customers:'العملاء', purchases:'المشتريات', hr:'الموارد البشرية', expenses:'المصاريف', audit:'سجل التغييرات', accounting:'المحاسبة الرسمية', helpdesk:'الدعم الفني' };
   document.getElementById('pageTitle').textContent = titles[page] || '';
   if (page === 'dashboard')  buildDashboard();
   if (page === 'inventory')  renderInventory();
@@ -4430,6 +4570,7 @@ function _showPageImpl(page) {
   if (page === 'warehouse')  renderWarehousePage();
   if (page === 'expenses')   renderExpensesPage();
   if (page === 'audit')      renderAuditPage();
+  if (page === 'helpdesk')   renderHelpdeskPage();
 }
 
 
@@ -5993,6 +6134,15 @@ function initFirebase() {
         _purchaseCache = snap.exists ? (snap.data().list || []) : DB.g('pos_purchases', []);
         visRefresh('page-purchases', renderPurchasesPage);
       }, err => { _purchaseCache = DB.g('pos_purchases', []); });
+
+    // Helpdesk tickets listener — renderHelpdeskPage lives in 110-helpdesk.js (a
+    // lazy chunk); visRefresh only calls it once page-helpdesk is visible, which
+    // can't happen before the chunk has loaded (see showPage()).
+    _db.collection('pos_data').doc('helpdesk')
+      .onSnapshot(snap => {
+        _helpdeskCache = snap.exists ? (snap.data().list || []) : DB.g('pos_helpdesk', []);
+        visRefresh('page-helpdesk', renderHelpdeskPage);
+      }, err => { _helpdeskCache = DB.g('pos_helpdesk', []); });
 
     // HR listener
     _db.collection('pos_data').doc('hr')

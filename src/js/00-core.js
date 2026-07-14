@@ -17,6 +17,7 @@ const _CHUNK_FILES = {
   warehouse:     'chunk-warehouse.js',
   manufacturing: 'chunk-manufacturing.js',
   purchases:     'chunk-purchases.js',
+  helpdesk:      'chunk-helpdesk.js',
 };
 const _loadedChunks = new Set();
 function _loadChunk(page, cb) {
@@ -40,6 +41,7 @@ let _purchaseCache      = [];                        // purchase orders
 let _hrCache            = [];                        // salesperson targets & commission
 let _expensesCache      = [];                        // expenses per branch + company
 let _auditCache         = [];                        // audit log entries (last 500)
+let _helpdeskCache      = [];                        // support tickets
 
 // Helper: current branch display name
 function getBranchName(b) { return ((_settingsCache.branches) || BRANCH_DEFAULTS)[b] || b; }

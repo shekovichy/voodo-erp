@@ -51,6 +51,30 @@ function showMsg(id, msg, type='success') {
   setTimeout(() => el.innerHTML = '', 3500);
 }
 
+// Floating toast for actions with no dedicated inline message slot (unlike
+// showMsg(), which targets a specific element id). Was called from ~30 spots
+// across the app (barcode printer, Google Drive backup, expense/leave
+// approvals, Excel export, fingerprint import) but never defined, so every
+// one of those silently crashed right at that line — this was purely a gap.
+function showToast(msg) {
+  let host = document.getElementById('toastHost');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'toastHost';
+    host.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;';
+    document.body.appendChild(host);
+  }
+  const el = document.createElement('div');
+  el.textContent = msg;
+  el.style.cssText = 'background:#1f2937;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25);opacity:0;transform:translateY(8px);transition:opacity .25s,transform .25s;max-width:90vw;text-align:center;';
+  host.appendChild(el);
+  requestAnimationFrame(() => { el.style.opacity = '1'; el.style.transform = 'translateY(0)'; });
+  setTimeout(() => {
+    el.style.opacity = '0'; el.style.transform = 'translateY(8px)';
+    setTimeout(() => el.remove(), 250);
+  }, 3000);
+}
+
 function getDateRange(period, fromId, toId) {
   const now = new Date();
   let from, to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);

@@ -33,6 +33,7 @@ LAZY_CHUNKS = {
     '95-warehouse.js':      'chunk-warehouse.js',
     '105-manufacturing.js': 'chunk-manufacturing.js',
     '75-purchases.js':      'chunk-purchases.js',
+    '110-helpdesk.js':      'chunk-helpdesk.js',
 }
 
 
