@@ -1992,16 +1992,22 @@ body.warehouse-mode #cartFab {
       <!-- ══ ACCOUNTING ══ -->
       <div id="page-accounting" class="hidden">
         <div class="flex items-center justify-between mb-16" style="flex-wrap:wrap;gap:8px;">
-          <div><h2 style="margin:0;font-size:20px;">🏦 المحاسبة الرسمية</h2><p style="font-size:12px;color:var(--text-muted);margin:4px 0 0;">قائمة الدخل • التدفق النقدي • الملخص السنوي</p></div>
+          <div><h2 style="margin:0;font-size:20px;">🏦 المحاسبة الرسمية</h2><p style="font-size:12px;color:var(--text-muted);margin:4px 0 0;">قائمة الدخل • التدفق النقدي • دفتر الأستاذ • الميزانية • أعمار الديون</p></div>
           <select class="form-control" id="accMonthFilter" onchange="renderAccTab(_accTab)" style="width:auto;"></select>
         </div>
-        <div style="display:flex;gap:4px;margin-bottom:16px;background:var(--bg-secondary);padding:4px;border-radius:10px;width:fit-content;">
+        <div style="display:flex;gap:4px;margin-bottom:16px;background:var(--bg-secondary);padding:4px;border-radius:10px;width:fit-content;flex-wrap:wrap;">
           <button id="accTab_pnl"      class="btn" style="font-size:13px;padding:6px 16px;border-radius:7px;background:white;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.1);" onclick="switchAccTab('pnl')">📋 قائمة الدخل</button>
           <button id="accTab_cashflow" class="btn" style="font-size:13px;padding:6px 16px;border-radius:7px;" onclick="switchAccTab('cashflow')">💵 التدفق النقدي</button>
+          <button id="accTab_ledger"   class="btn" style="font-size:13px;padding:6px 16px;border-radius:7px;" onclick="switchAccTab('ledger')">📒 دفتر الأستاذ</button>
+          <button id="accTab_balance"  class="btn" style="font-size:13px;padding:6px 16px;border-radius:7px;" onclick="switchAccTab('balance')">⚖️ الميزانية العمومية</button>
+          <button id="accTab_apaging"  class="btn" style="font-size:13px;padding:6px 16px;border-radius:7px;" onclick="switchAccTab('apaging')">📅 أعمار الذمم الدائنة</button>
           <button id="accTab_summary"  class="btn" style="font-size:13px;padding:6px 16px;border-radius:7px;" onclick="switchAccTab('summary')">📊 الملخص الكلي</button>
         </div>
         <div id="accPane_pnl"></div>
         <div id="accPane_cashflow" class="hidden"></div>
+        <div id="accPane_ledger"   class="hidden"></div>
+        <div id="accPane_balance"  class="hidden"></div>
+        <div id="accPane_apaging"  class="hidden"></div>
         <div id="accPane_summary"  class="hidden"></div>
       </div>
 
@@ -9841,6 +9847,25 @@ function switchHRTab(tab) {
     <div class="modal-footer">
       <button class="btn btn-gray" onclick="closeSupplierPaymentModal()">إلغاء</button>
       <button class="btn btn-primary" onclick="saveSupplierPayment()">💾 تسجيل الدفعة</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ LEDGER ACCOUNT DRILL-DOWN MODAL ════════════════ -->
+<div id="ledgerDrillModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:640px;width:96%;">
+    <div class="modal-header">
+      <h3 style="margin:0;font-size:16px;" id="ledgerDrillTitle"></h3>
+      <p style="margin:4px 0 0;font-size:12px;color:var(--text-muted);"><span id="ledgerDrillCount">0</span> قيد</p>
+    </div>
+    <div class="modal-body" style="padding:16px 20px;max-height:60vh;overflow-y:auto;">
+      <div class="table-wrap">
+        <table><thead><tr><th>التاريخ</th><th>الوصف</th><th>مدين</th><th>دائن</th><th>الحساب المقابل</th></tr></thead>
+        <tbody id="ledgerDrillBody"></tbody></table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeLedgerDrill()">إغلاق</button>
     </div>
   </div>
 </div>

@@ -5,7 +5,7 @@ let _accTab = 'pnl';
 
 function switchAccTab(tab) {
   _accTab = tab;
-  ['pnl','cashflow','summary'].forEach(t => {
+  ['pnl','cashflow','ledger','balance','apaging','summary'].forEach(t => {
     const btn  = document.getElementById('accTab_'+t);
     const pane = document.getElementById('accPane_'+t);
     if (btn)  { btn.style.background = t===tab?'white':''; btn.style.fontWeight = t===tab?'700':'400'; btn.style.boxShadow = t===tab?'0 1px 4px rgba(0,0,0,.1)':''; }
@@ -37,6 +37,9 @@ function getAccMonth() {
 function renderAccTab(tab) {
   if (tab==='pnl')      renderPnL();
   if (tab==='cashflow') renderCashFlow();
+  if (tab==='ledger')   renderLedger();
+  if (tab==='balance')  renderBalanceSheet();
+  if (tab==='apaging')  renderAPAging();
   if (tab==='summary')  renderAccSummary();
 }
 
@@ -147,6 +150,286 @@ function renderCashFlow() {
         <tr style="background:var(--bg-secondary);"><td style="padding:10px;font-weight:800;">🏦 صافي التدفق</td><td style="padding:10px;font-weight:800;text-align:left;direction:ltr;color:${net>=0?'#15803d':'#dc2626'};font-size:15px;">${(net>=0?'+':'')+fmt(net)} ج</td></tr>
       </table>
     </div>`;
+}
+
+// ══════════════════════════════════════════════
+// CHART OF ACCOUNTS + GENERAL LEDGER + BALANCE SHEET + AP AGING
+// ══════════════════════════════════════════════
+// No real double-entry bookkeeping exists anywhere else in the app — this
+// is built from scratch. Journal entries are DERIVED live from the same
+// source data the P&L/cash-flow reports above already read (sales,
+// expenses, purchase orders, supplier payments), the same way those
+// reports already work, rather than maintained as a separately-persisted
+// ledger that transaction-creating code all over the app would have to
+// remember to keep in sync — that would silently drift and produce wrong
+// financial statements, which is worse than not having them at all.
+const CHART_OF_ACCOUNTS = {
+  cash:      { code:'1010', name:'النقدية والبنوك',              type:'asset' },
+  inventory: { code:'1020', name:'المخزون',                      type:'asset' },
+  ar:        { code:'1030', name:'ذمم مدينة - عملاء',            type:'asset' },
+  ap:        { code:'2010', name:'ذمم دائنة - موردين',           type:'liability' },
+  equity:    { code:'3010', name:'حقوق الملكية (الأرباح المرحلة)', type:'equity' },
+  revenue:   { code:'4010', name:'إيرادات المبيعات',             type:'revenue' },
+  returns:   { code:'4020', name:'مرتجعات المبيعات',             type:'revenue' },
+  cogs:      { code:'5010', name:'تكلفة البضاعة المباعة',        type:'expense' },
+  payroll:   { code:'6050', name:'الرواتب (حضور وانصراف)',       type:'expense' },
+  exp_rent:        { code:'6110', name:'إيجار',            type:'expense' },
+  exp_electricity: { code:'6120', name:'كهرباء',           type:'expense' },
+  exp_water:       { code:'6130', name:'مياه',             type:'expense' },
+  exp_internet:    { code:'6140', name:'إنترنت/تليفون',    type:'expense' },
+  exp_salaries:    { code:'6150', name:'رواتب (مصروف يدوي)', type:'expense' },
+  exp_maintenance: { code:'6160', name:'صيانة',            type:'expense' },
+  exp_marketing:   { code:'6170', name:'تسويق',            type:'expense' },
+  exp_transport:   { code:'6180', name:'نقل/شحن',          type:'expense' },
+  exp_other:       { code:'6190', name:'أخرى',             type:'expense' },
+};
+const ACCT_TYPE_LABEL = { asset:'أصول', liability:'التزامات', equity:'حقوق ملكية', revenue:'إيرادات', expense:'مصروفات' };
+
+// Builds one journal entry per financial event in [from,to]. Each entry has
+// exactly one debit account and one credit account (amounts always equal —
+// the double-entry invariant holds by construction, not by manual balancing).
+// _purchaseCache is read directly (not getPurchases()) — see the note on
+// renderCashFlow()'s purOut fix above; same cross-chunk-safety reasoning
+// applies to every lazy-chunk-owned cache read in this function.
+function buildJournalEntries(from, to) {
+  const entries = [];
+  const push = (date, desc, debit, credit, amount, source) => {
+    if (!amount) return;
+    entries.push({ date, desc, debit, credit, amount, source });
+  };
+
+  getSales().forEach(sale => {
+    const d = new Date(sale.date);
+    if (d < from || d > to) return;
+    const cogsAmt = (sale.items||[]).reduce((s,i)=>s+(i.cost||0)*i.qty,0);
+    const ref = '#'+String(sale.id).slice(-6);
+    if (sale.isReturn) {
+      push(sale.date, `مرتجع فاتورة ${ref}`, 'returns', 'cash', Math.abs(sale.total), {type:'sale-return', id:sale.id});
+      if (cogsAmt) push(sale.date, `عكس تكلفة مرتجع ${ref}`, 'inventory', 'cogs', cogsAmt, {type:'sale-return-cogs', id:sale.id});
+    } else {
+      push(sale.date, `فاتورة مبيعات ${ref}`, 'cash', 'revenue', sale.total, {type:'sale', id:sale.id});
+      if (cogsAmt) push(sale.date, `تكلفة البضاعة ${ref}`, 'cogs', 'inventory', cogsAmt, {type:'sale-cogs', id:sale.id});
+    }
+  });
+
+  getExpenses().forEach(exp => {
+    const d = new Date(exp.date);
+    if (d < from || d > to) return;
+    const acctKey = 'exp_' + exp.category;
+    push(exp.date, EXP_CATS[exp.category] || exp.category, CHART_OF_ACCOUNTS[acctKey] ? acctKey : 'exp_other', 'cash', exp.amount, {type:'expense', id:exp.id});
+  });
+
+  _purchaseCache.filter(po => po.status === 'received' && po.receivedAt).forEach(po => {
+    const d = new Date(po.receivedAt);
+    if (d < from || d > to) return;
+    push(new Date(po.receivedAt).toISOString(), `استلام أمر شراء #${po.id.slice(-6)} — ${po.supplierName}`, 'inventory', 'ap', po.total, {type:'po-receive', id:po.id});
+  });
+
+  _supplierPaymentsCache.forEach(pay => {
+    const d = new Date(pay.date);
+    if (d < from || d > to) return;
+    push(pay.date, `دفعة لمورد ${pay.supplierName}`, 'ap', 'cash', pay.amount, {type:'supplier-payment', id:pay.id});
+  });
+
+  // Payroll is computed monthly (calcMonthlyPayroll), not a stored
+  // transaction — post one entry per covered month, dated to that month.
+  if (typeof calcMonthlyPayroll === 'function') {
+    const seen = new Set();
+    const cursor = new Date(from.getFullYear(), from.getMonth(), 1);
+    while (cursor <= to) {
+      const m = cursor.toISOString().slice(0,7);
+      if (!seen.has(m)) {
+        seen.add(m);
+        const total = calcMonthlyPayroll(m).reduce((s,p)=>s+p.net,0);
+        if (total) push(new Date(cursor).toISOString(), `رواتب شهر ${m}`, 'payroll', 'cash', total, {type:'payroll', id:m});
+      }
+      cursor.setMonth(cursor.getMonth()+1);
+    }
+  }
+
+  return entries.sort((a,b) => new Date(a.date) - new Date(b.date));
+}
+
+function accountBalance(accountKey, entries) {
+  const isDebitNormal = CHART_OF_ACCOUNTS[accountKey].type === 'asset' || CHART_OF_ACCOUNTS[accountKey].type === 'expense';
+  let balance = 0;
+  entries.forEach(e => {
+    if (e.debit === accountKey)  balance += isDebitNormal ?  e.amount : -e.amount;
+    if (e.credit === accountKey) balance += isDebitNormal ? -e.amount :  e.amount;
+  });
+  return balance;
+}
+
+let _ledgerEntries = [];
+
+function renderLedger() {
+  const month = getAccMonth();
+  const [y, m] = month.split('-').map(Number);
+  const from = new Date(y, m-1, 1);
+  const to   = new Date(y, m, 0, 23, 59, 59);
+  _ledgerEntries = buildJournalEntries(from, to);
+
+  const rows = Object.keys(CHART_OF_ACCOUNTS).map(key => {
+    const acct = CHART_OF_ACCOUNTS[key];
+    const debitTotal  = _ledgerEntries.filter(e=>e.debit===key).reduce((s,e)=>s+e.amount,0);
+    const creditTotal = _ledgerEntries.filter(e=>e.credit===key).reduce((s,e)=>s+e.amount,0);
+    const balance = accountBalance(key, _ledgerEntries);
+    const count = _ledgerEntries.filter(e=>e.debit===key||e.credit===key).length;
+    return { key, acct, debitTotal, creditTotal, balance, count };
+  }).filter(r => r.count > 0);
+
+  const totalDebit  = rows.reduce((s,r)=>s+r.debitTotal,0);
+  const totalCredit = rows.reduce((s,r)=>s+r.creditTotal,0);
+
+  const pane = document.getElementById('accPane_ledger');
+  if (!pane) return;
+  pane.innerHTML = `
+    <div style="font-size:15px;font-weight:800;margin-bottom:14px;color:var(--primary);">📒 دفتر الأستاذ العام — ميزان المراجعة — ${month}</div>
+    <div class="table-wrap">
+      <table><thead><tr><th>الكود</th><th>الحساب</th><th>النوع</th><th>مدين</th><th>دائن</th><th>الرصيد</th><th></th></tr></thead>
+      <tbody>
+        ${rows.length ? rows.map(r => `<tr>
+          <td style="font-size:11px;color:var(--text-muted);">${r.acct.code}</td>
+          <td style="font-weight:600;">${escHtml(r.acct.name)}</td>
+          <td style="font-size:11px;color:var(--text-muted);">${ACCT_TYPE_LABEL[r.acct.type]}</td>
+          <td>${r.debitTotal ? fmt(r.debitTotal)+' ج' : '-'}</td>
+          <td>${r.creditTotal ? fmt(r.creditTotal)+' ج' : '-'}</td>
+          <td style="font-weight:700;">${fmt(r.balance)} ج</td>
+          <td><button class="btn btn-outline btn-sm" onclick="showLedgerAccountDetail('${r.key}')">🔍 القيود (${r.count})</button></td>
+        </tr>`).join('') : '<tr><td colspan="7" class="text-center text-muted" style="padding:20px;">لا توجد قيود هذا الشهر</td></tr>'}
+        <tr style="background:var(--bg-secondary);font-weight:800;"><td colspan="3">الإجمالي</td><td>${fmt(totalDebit)} ج</td><td>${fmt(totalCredit)} ج</td><td colspan="2"></td></tr>
+      </tbody></table>
+    </div>`;
+}
+
+// Dedicated modal for journal-entry drill-down (own DOM ids, own close
+// function) — deliberately NOT reusing the pivot analyzer's analysisDrillModal:
+// 93-accounting.js and 115-pivot-reports.js are separate lazy chunks, and
+// that modal's buttons call closeDrillDown()/exportDrillExcel() which only
+// exist once the pivot chunk has loaded. Journal entries (debit/credit/
+// description) also don't fit that modal's sales-line columns anyway.
+function showLedgerAccountDetail(accountKey) {
+  const acct = CHART_OF_ACCOUNTS[accountKey];
+  const rows = _ledgerEntries.filter(e => e.debit === accountKey || e.credit === accountKey);
+  document.getElementById('ledgerDrillTitle').textContent = `📒 ${acct.name} (${acct.code})`;
+  document.getElementById('ledgerDrillCount').textContent = rows.length;
+  document.getElementById('ledgerDrillBody').innerHTML = rows.length ? rows.map(e => `<tr>
+    <td style="font-size:11px;color:var(--text-muted);white-space:nowrap;">${new Date(e.date).toLocaleString('ar-EG')}</td>
+    <td style="font-size:12px;">${escHtml(e.desc)}</td>
+    <td style="font-size:12px;">${e.debit===accountKey?fmt(e.amount)+' ج':'-'}</td>
+    <td style="font-size:12px;">${e.credit===accountKey?fmt(e.amount)+' ج':'-'}</td>
+    <td style="font-size:12px;color:var(--text-muted);">${escHtml((e.debit===accountKey?CHART_OF_ACCOUNTS[e.credit]:CHART_OF_ACCOUNTS[e.debit])?.name||'')}</td>
+  </tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:20px;">لا توجد قيود</td></tr>';
+  document.getElementById('ledgerDrillModal').classList.remove('hidden');
+}
+function closeLedgerDrill() { document.getElementById('ledgerDrillModal').classList.add('hidden'); }
+
+function renderBalanceSheet() {
+  const month = getAccMonth();
+  const [y, m] = month.split('-').map(Number);
+  const asOf = new Date(y, m, 0, 23, 59, 59); // last moment of the selected month
+  const entries = buildJournalEntries(new Date(0), asOf);
+
+  const cash = accountBalance('cash', entries);
+  const inventoryValue = Object.values(_invCacheByBranch).flat().reduce((s,p)=>s+(p.cost||0)*(p.qty||0),0);
+  const ar = 0; // no credit-sale feature exists — every POS sale is fully paid at checkout
+  const totalAssets = cash + inventoryValue + ar;
+
+  const ap = accountBalance('ap', entries);
+  const totalLiabilities = ap;
+
+  const equity = totalAssets - totalLiabilities; // plug — no separate owner-capital-injection tracking exists
+
+  const pane = document.getElementById('accPane_balance');
+  if (!pane) return;
+  const line = (label, amt, bold) => `<tr><td style="padding:8px;${bold?'font-weight:800;':''}">${label}</td><td style="padding:8px;text-align:left;direction:ltr;${bold?'font-weight:800;':''}">${fmt(amt)} ج</td></tr>`;
+  pane.innerHTML = `
+    <div style="font-size:15px;font-weight:800;margin-bottom:6px;color:var(--primary);">⚖️ الميزانية العمومية — كما في نهاية ${month}</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">
+      💡 "النقدية" رقم مُشتق من كل العمليات المسجلة في النظام من بداية استخدامه (إيرادات - مصروفات - مشتريات مدفوعة) وليس رصيد بنكي فعلي مُطابَق.
+      "الذمم المدينة" = صفر لأن كل بيع في السيستم يُدفع بالكامل وقت البيع.
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:760px;">
+      <div style="background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,.07);">
+        <div style="background:var(--sidebar);color:white;padding:10px 8px;font-weight:700;">الأصول</div>
+        <table style="width:100%;font-size:13px;border-collapse:collapse;">
+          ${line('💵 النقدية (مُشتقة)', cash)}
+          ${line('📦 المخزون', inventoryValue)}
+          ${line('🧾 ذمم مدينة - عملاء', ar)}
+          <tr style="border-top:2px solid var(--border);background:var(--bg-secondary);">${line('إجمالي الأصول', totalAssets, true).replace('<tr>','').replace('</tr>','')}</tr>
+        </table>
+      </div>
+      <div>
+        <div style="background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,.07);margin-bottom:16px;">
+          <div style="background:#7c3aed;color:white;padding:10px 8px;font-weight:700;">الالتزامات</div>
+          <table style="width:100%;font-size:13px;border-collapse:collapse;">
+            ${line('🏭 ذمم دائنة - موردين', ap)}
+            <tr style="border-top:2px solid var(--border);background:var(--bg-secondary);">${line('إجمالي الالتزامات', totalLiabilities, true).replace('<tr>','').replace('</tr>','')}</tr>
+          </table>
+        </div>
+        <div style="background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,.07);">
+          <div style="background:#059669;color:white;padding:10px 8px;font-weight:700;">حقوق الملكية</div>
+          <table style="width:100%;font-size:13px;border-collapse:collapse;">
+            ${line('حقوق الملكية (الأرباح المرحلة)', equity)}
+          </table>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:16px;max-width:760px;background:#eff6ff;border-radius:8px;padding:12px 16px;font-size:13px;font-weight:700;color:#1d4ed8;">
+      ✓ الأصول (${fmt(totalAssets)} ج) = الالتزامات (${fmt(totalLiabilities)} ج) + حقوق الملكية (${fmt(equity)} ج)
+    </div>`;
+}
+
+function renderAPAging() {
+  const asOf = new Date();
+  const buckets = { current:0, '1-30':0, '31-60':0, '61-90':0, '90+':0 };
+  const bySupplier = {};
+  _purchaseCache.filter(po => po.status === 'received' && (po.payStatus||'unpaid') !== 'paid').forEach(po => {
+    const outstanding = po.total - (po.paidAmount || 0);
+    if (outstanding <= 0) return;
+    const due = po.dueDate ? new Date(po.dueDate) : null;
+    const daysOverdue = due ? Math.floor((asOf - due) / 86400000) : 0;
+    let bucket = 'current';
+    if (daysOverdue > 90) bucket = '90+';
+    else if (daysOverdue > 60) bucket = '61-90';
+    else if (daysOverdue > 30) bucket = '31-60';
+    else if (daysOverdue > 0) bucket = '1-30';
+    buckets[bucket] += outstanding;
+    (bySupplier[po.supplierId] = bySupplier[po.supplierId] || { name: po.supplierName, rows: [], total: 0 });
+    bySupplier[po.supplierId].rows.push({ po, outstanding, daysOverdue, bucket });
+    bySupplier[po.supplierId].total += outstanding;
+  });
+
+  const bucketLabels = { current:'لم يستحق بعد', '1-30':'1-30 يوم', '31-60':'31-60 يوم', '61-90':'61-90 يوم', '90+':'أكثر من 90 يوم' };
+  const bucketColors = { current:'#0891b2', '1-30':'#d97706', '31-60':'#ea580c', '61-90':'#dc2626', '90+':'#991b1b' };
+  const totalAP = Object.values(buckets).reduce((s,v)=>s+v,0);
+
+  const pane = document.getElementById('accPane_apaging');
+  if (!pane) return;
+  const suppliers = Object.values(bySupplier).sort((a,b)=>b.total-a.total);
+  pane.innerHTML = `
+    <div style="font-size:15px;font-weight:800;margin-bottom:14px;color:var(--primary);">📅 أعمار الذمم الدائنة — كما اليوم</div>
+    <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));margin-bottom:16px;">
+      ${Object.keys(buckets).map(b => `<div class="stat-card"><div class="stat-label">${bucketLabels[b]}</div><div class="stat-value" style="font-size:18px;color:${bucketColors[b]};">${fmt(buckets[b])} ج</div></div>`).join('')}
+    </div>
+    ${!suppliers.length ? '<div class="text-center text-muted" style="padding:30px;">لا توجد فواتير شراء مستحقة</div>' : suppliers.map(s => `
+      <div class="card" style="margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="font-weight:700;">🏭 ${escHtml(s.name)}</div>
+          <div style="font-weight:800;color:var(--danger);">${fmt(s.total)} ج</div>
+        </div>
+        <div class="table-wrap">
+          <table><thead><tr><th>أمر الشراء</th><th>تاريخ الاستحقاق</th><th>المتأخر</th><th>الفئة</th><th>المتبقي</th></tr></thead>
+          <tbody>${s.rows.sort((a,b)=>b.daysOverdue-a.daysOverdue).map(r => `<tr>
+            <td style="font-size:12px;">#${r.po.id.slice(-6)}</td>
+            <td style="font-size:12px;">${r.po.dueDate?new Date(r.po.dueDate).toLocaleDateString('ar-EG'):'-'}</td>
+            <td style="font-size:12px;">${r.daysOverdue>0?r.daysOverdue+' يوم':'-'}</td>
+            <td><span style="background:${bucketColors[r.bucket]}22;color:${bucketColors[r.bucket]};padding:2px 8px;border-radius:10px;font-size:11px;">${bucketLabels[r.bucket]}</span></td>
+            <td style="font-weight:700;">${fmt(r.outstanding)} ج</td>
+          </tr>`).join('')}</tbody></table>
+        </div>
+      </div>`).join('')}
+    <div style="margin-top:8px;font-weight:800;font-size:14px;">إجمالي الذمم الدائنة: <span style="color:var(--danger);">${fmt(totalAP)} ج</span></div>`;
 }
 
 function renderAccSummary() {
