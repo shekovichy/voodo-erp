@@ -16,6 +16,17 @@ function setPurchases(list) {
   try { _db && _db.collection('pos_data').doc('purchases').set({ list, updatedAt: Date.now() }); } catch(e) {}
 }
 
+// Payments recorded against a supplier's balance (accounts payable) — each
+// payment auto-allocates FIFO across that supplier's oldest unpaid/partial
+// purchase orders, so AP Aging can be computed per-invoice, not just as one
+// running balance. See recordSupplierPayment() below.
+const getSupplierPayments = () => _supplierPaymentsCache;
+function setSupplierPayments(list) {
+  _supplierPaymentsCache = list;
+  DB.s('pos_supplier_payments', list);
+  try { _db && _db.collection('pos_data').doc('supplier_payments').set({ list, updatedAt: Date.now() }); } catch(e) {}
+}
+
 // ── Supplier CRUD ──
 function openSupplierModal(id) {
   const sup = id ? getSuppliers().find(s => s.id === id) : null;
@@ -25,6 +36,7 @@ function openSupplierModal(id) {
   document.getElementById('supPhone').value    = sup?.phone || '';
   document.getElementById('supAddress').value  = sup?.address || '';
   document.getElementById('supBalance').value  = sup?.balance || 0;
+  document.getElementById('supPaymentTerms').value = sup?.paymentTerms ?? 30;
   document.getElementById('supNotes').value    = sup?.notes || '';
   document.getElementById('supplierModal').classList.remove('hidden');
 }
@@ -40,6 +52,7 @@ function saveSupplier() {
     phone:   document.getElementById('supPhone').value.trim(),
     address: document.getElementById('supAddress').value.trim(),
     balance: parseFloat(document.getElementById('supBalance').value) || 0,
+    paymentTerms: parseInt(document.getElementById('supPaymentTerms').value) || 30,
     notes:   document.getElementById('supNotes').value.trim(),
     createdAt: editId ? (list.find(s=>s.id===editId)?.createdAt || Date.now()) : Date.now()
   };
@@ -79,6 +92,7 @@ function renderSuppliersPage() {
     <td style="font-weight:600; color:${(s.balance||0)>0?'var(--danger)':'var(--success)'};">${fmt(s.balance||0)} ج</td>
     <td style="font-size:12px; color:var(--text-muted);">${escHtml(s.notes) || '-'}</td>
     <td>
+      ${(s.balance||0)>0?`<button class="btn btn-success btn-sm" onclick="openSupplierPaymentModal('${escJsAttr(s.id)}')" style="font-size:11px; padding:3px 8px; margin-left:4px;">💵 دفعة</button>`:''}
       <button class="btn btn-sm" onclick="openSupplierModal('${escJsAttr(s.id)}')" style="font-size:11px; padding:3px 8px; margin-left:4px;">✏️</button>
       <button class="btn btn-danger btn-sm" onclick="deleteSupplier('${escJsAttr(s.id)}')" style="font-size:11px; padding:3px 8px;">🗑️</button>
     </td>
@@ -224,6 +238,9 @@ function openPODetails(id) {
       <div><div style="font-size:11px;color:var(--text-muted);">تاريخ الإنشاء</div><div style="font-size:12px;">${new Date(po.createdAt).toLocaleDateString('ar-EG')}</div></div>
       ${po.expectedDate?`<div><div style="font-size:11px;color:var(--text-muted);">موعد الاستلام</div><div style="font-size:12px;">${po.expectedDate}</div></div>`:''}
       ${po.receivedAt?`<div><div style="font-size:11px;color:var(--text-muted);">تاريخ الاستلام</div><div style="font-size:12px;color:var(--success);">${new Date(po.receivedAt).toLocaleDateString('ar-EG')}</div></div>`:''}
+      ${po.status==='received'?`<div><div style="font-size:11px;color:var(--text-muted);">موعد الاستحقاق</div><div style="font-size:12px;">${po.dueDate?new Date(po.dueDate).toLocaleDateString('ar-EG'):'-'}</div></div>
+      <div><div style="font-size:11px;color:var(--text-muted);">حالة السداد</div><span style="background:${po.payStatus==='paid'?'#d1fae5':po.payStatus==='partial_paid'?'#fef9c3':'#fee2e2'};color:${po.payStatus==='paid'?'#065f46':po.payStatus==='partial_paid'?'#92400e':'#991b1b'};padding:2px 10px;border-radius:10px;font-size:12px;">${po.payStatus==='paid'?'✅ مسددة':po.payStatus==='partial_paid'?'🔶 مسددة جزئياً':'❌ غير مسددة'}</span></div>
+      <div><div style="font-size:11px;color:var(--text-muted);">المتبقي</div><div style="font-size:12px;font-weight:700;color:${(po.total-(po.paidAmount||0))>0?'var(--danger)':'var(--success)'};">${fmt(po.total-(po.paidAmount||0))} ج</div></div>`:''}
     </div>
     <table style="width:100%; border-collapse:collapse; margin-bottom:12px;">
       <thead><tr style="background:var(--bg);">
@@ -263,6 +280,7 @@ function receivePO() {
   const po = getPurchases().find(p => p.id === _poViewId);
   if (!po) return;
   if (!confirm(`استلام بضاعة أمر الشراء #${po.id.slice(-6)}؟\nسيتم تحديث مخزون فرع: ${getBranchName(po.branchId)}\nوتحديث تكلفة الأصناف بما في ذلك تكلفة الشحن الموزعة.`)) return;
+  const supplier = getSuppliers().find(s => s.id === po.supplierId);
 
   // Distribute shipping cost proportionally
   const subtotal = po.subtotal || po.items.reduce((s,i)=>s+i.qty*i.cost, 0);
@@ -287,10 +305,19 @@ function receivePO() {
   });
   setInv(inv, po.branchId);
 
-  // Update PO status
+  // Update PO status + AP tracking (due date, payment status — see recordSupplierPayment())
   const list = getPurchases();
   const idx = list.findIndex(p => p.id === po.id);
-  if (idx >= 0) { list[idx].status = 'received'; list[idx].receivedAt = Date.now(); list[idx].receivedBy = currentUser; }
+  if (idx >= 0) {
+    const receivedAt = Date.now();
+    const termsDays = supplier?.paymentTerms ?? 30;
+    list[idx].status = 'received';
+    list[idx].receivedAt = receivedAt;
+    list[idx].receivedBy = currentUser;
+    list[idx].dueDate = receivedAt + termsDays * 86400000;
+    list[idx].paidAmount = 0;
+    list[idx].payStatus = 'unpaid';
+  }
   setPurchases(list);
 
   // Update supplier balance
@@ -303,6 +330,71 @@ function receivePO() {
   closeModal('poDetailsModal');
   renderPurchasesPage();
   alert(`✅ تم الاستلام بنجاح!\nتم تحديث مخزون ${getBranchName(po.branchId)} وتكاليف الأصناف.`);
+}
+
+// ── Supplier Payments (AP) ──────────────────────────────────────
+function openSupplierPaymentModal(supplierId) {
+  const sup = getSuppliers().find(s => s.id === supplierId);
+  if (!sup) return;
+  document.getElementById('spSupplierId').value = supplierId;
+  document.getElementById('spSupplierName').textContent = sup.name;
+  document.getElementById('spCurrentBalance').textContent = fmt(sup.balance || 0) + ' ج';
+  document.getElementById('spAmount').value = '';
+  document.getElementById('spDate').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('spNotes').value = '';
+  document.getElementById('supplierPaymentModal').classList.remove('hidden');
+}
+function closeSupplierPaymentModal() { document.getElementById('supplierPaymentModal').classList.add('hidden'); }
+
+// Records a payment against a supplier's balance and auto-allocates it FIFO
+// (oldest due date first) across that supplier's outstanding received POs,
+// so AP Aging can report per-invoice status instead of one running total.
+function saveSupplierPayment() {
+  const supplierId = document.getElementById('spSupplierId').value;
+  const amount = parseFloat(document.getElementById('spAmount').value);
+  const date = document.getElementById('spDate').value;
+  if (!amount || amount <= 0) { alert('أدخل مبلغ صحيح'); return; }
+  if (!date) { alert('أدخل التاريخ'); return; }
+  const sup = getSuppliers().find(s => s.id === supplierId);
+  if (!sup) return;
+
+  let remaining = amount;
+  const allocations = [];
+  const poList = getPurchases();
+  const outstanding = poList
+    .filter(p => p.supplierId === supplierId && p.status === 'received' && (p.payStatus || 'unpaid') !== 'paid')
+    .sort((a, b) => (a.dueDate || a.receivedAt || 0) - (b.dueDate || b.receivedAt || 0));
+
+  outstanding.forEach(po => {
+    if (remaining <= 0) return;
+    const owed = po.total - (po.paidAmount || 0);
+    if (owed <= 0) return;
+    const applied = Math.min(owed, remaining);
+    po.paidAmount = (po.paidAmount || 0) + applied;
+    po.payStatus = po.paidAmount >= po.total ? 'paid' : 'partial_paid';
+    remaining -= applied;
+    allocations.push({ poId: po.id, amount: applied });
+  });
+  setPurchases(poList);
+
+  const supList = getSuppliers();
+  const supIdx = supList.findIndex(s => s.id === supplierId);
+  if (supIdx >= 0) supList[supIdx].balance = Math.max(0, (supList[supIdx].balance || 0) - amount);
+  setSuppliers(supList);
+
+  const payments = getSupplierPayments();
+  payments.push({
+    id: 'pay_' + Date.now(), supplierId, supplierName: sup.name,
+    amount, date, allocations,
+    notes: document.getElementById('spNotes').value.trim(),
+    by: currentUser, createdAt: Date.now(),
+  });
+  setSupplierPayments(payments);
+
+  addAuditLog('supplier.payment', `دفعة لمورد ${sup.name} — ${fmt(amount)} ج`, null);
+  closeSupplierPaymentModal();
+  renderPurchasesPage();
+  showToast('✅ تم تسجيل الدفعة');
 }
 
 function deletePO(id) {

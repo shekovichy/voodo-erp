@@ -150,6 +150,15 @@ function initFirebase() {
         visRefresh('page-purchases', renderPurchasesPage);
       }, err => { _purchaseCache = DB.g('pos_purchases', []); });
 
+    // Supplier payments listener (AP) — renderSuppliersPage lives in
+    // 75-purchases.js (a lazy chunk); visRefresh only calls it once
+    // page-suppliers is visible, which can't happen before the chunk loads.
+    _db.collection('pos_data').doc('supplier_payments')
+      .onSnapshot(snap => {
+        _supplierPaymentsCache = snap.exists ? (snap.data().list || []) : DB.g('pos_supplier_payments', []);
+        visRefresh('page-suppliers', renderSuppliersPage);
+      }, err => { _supplierPaymentsCache = DB.g('pos_supplier_payments', []); });
+
     // Helpdesk tickets listener — renderHelpdeskPage lives in 110-helpdesk.js (a
     // lazy chunk); visRefresh only calls it once page-helpdesk is visible, which
     // can't happen before the chunk has loaded (see showPage()).

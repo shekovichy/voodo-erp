@@ -3250,6 +3250,7 @@ let _hrCache            = [];                        // salesperson targets & co
 let _expensesCache      = [];                        // expenses per branch + company
 let _auditCache         = [];                        // audit log entries (last 500)
 let _helpdeskCache      = [];                        // support tickets
+let _supplierPaymentsCache = [];                     // payments recorded against supplier balances (AP)
 
 // Helper: current branch display name
 function getBranchName(b) { return ((_settingsCache.branches) || BRANCH_DEFAULTS)[b] || b; }
@@ -6253,6 +6254,15 @@ function initFirebase() {
         _purchaseCache = snap.exists ? (snap.data().list || []) : DB.g('pos_purchases', []);
         visRefresh('page-purchases', renderPurchasesPage);
       }, err => { _purchaseCache = DB.g('pos_purchases', []); });
+
+    // Supplier payments listener (AP) — renderSuppliersPage lives in
+    // 75-purchases.js (a lazy chunk); visRefresh only calls it once
+    // page-suppliers is visible, which can't happen before the chunk loads.
+    _db.collection('pos_data').doc('supplier_payments')
+      .onSnapshot(snap => {
+        _supplierPaymentsCache = snap.exists ? (snap.data().list || []) : DB.g('pos_supplier_payments', []);
+        visRefresh('page-suppliers', renderSuppliersPage);
+      }, err => { _supplierPaymentsCache = DB.g('pos_supplier_payments', []); });
 
     // Helpdesk tickets listener — renderHelpdeskPage lives in 110-helpdesk.js (a
     // lazy chunk); visRefresh only calls it once page-helpdesk is visible, which
@@ -9737,7 +9747,10 @@ function switchHRTab(tab) {
       <div class="form-group"><label>رقم التليفون</label><input class="form-control" id="supPhone" placeholder="01xxxxxxxxx" /></div>
       <div class="form-group"><label>الرصيد الافتتاحي (ج)</label><input class="form-control" type="number" id="supBalance" value="0" /></div>
     </div>
-    <div class="form-group"><label>العنوان</label><input class="form-control" id="supAddress" placeholder="المحافظة / المنطقة" /></div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+      <div class="form-group"><label>العنوان</label><input class="form-control" id="supAddress" placeholder="المحافظة / المنطقة" /></div>
+      <div class="form-group"><label>مدة الائتمان (يوم)</label><input class="form-control" type="number" id="supPaymentTerms" value="30" min="0" title="عدد الأيام من تاريخ استلام البضاعة لحد ما تستحق الدفعة" /></div>
+    </div>
     <div class="form-group"><label>ملاحظات</label><textarea class="form-control" id="supNotes" rows="2" placeholder="أي ملاحظات عن المورد..."></textarea></div>
     <div class="modal-footer">
       <button class="btn btn-gray" onclick="closeModal('supplierModal')">إلغاء</button>
@@ -9808,6 +9821,26 @@ function switchHRTab(tab) {
     </div>
     <div id="poDetailsFooter" class="modal-footer">
       <button class="btn btn-gray" onclick="closeModal('poDetailsModal')">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== SUPPLIER PAYMENT MODAL ===================== -->
+<div id="supplierPaymentModal" class="modal-overlay hidden">
+  <div class="modal" style="width:420px;">
+    <h2>💵 تسجيل دفعة لمورد</h2>
+    <input type="hidden" id="spSupplierId" />
+    <div style="background:var(--bg); border-radius:8px; padding:12px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
+      <div style="font-weight:700;" id="spSupplierName"></div>
+      <div style="font-size:12px; color:var(--text-muted);">الرصيد الحالي: <strong id="spCurrentBalance" style="color:var(--danger);"></strong></div>
+    </div>
+    <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">الدفعة هتتوزع تلقائيًا على أقدم فواتير الشراء المستحقة لهذا المورد.</p>
+    <div class="form-group"><label>المبلغ (ج) *</label><input class="form-control" type="number" id="spAmount" min="0" step="0.01" /></div>
+    <div class="form-group"><label>التاريخ *</label><input class="form-control" type="date" id="spDate" /></div>
+    <div class="form-group"><label>ملاحظات</label><input class="form-control" id="spNotes" placeholder="اختياري" /></div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeSupplierPaymentModal()">إلغاء</button>
+      <button class="btn btn-primary" onclick="saveSupplierPayment()">💾 تسجيل الدفعة</button>
     </div>
   </div>
 </div>

@@ -98,17 +98,22 @@ function renderCashFlow() {
   const sales = getSales().filter(s=>!s.isReturn&&s.date?.slice(0,7)===month);
   const rets  = getSales().filter(s=> s.isReturn&&s.date?.slice(0,7)===month);
   const exps  = getExpenses().filter(e=>e.date?.slice(0,7)===month);
-  const pos   = (typeof getPurchaseOrders==='function'?getPurchaseOrders():[]).filter(po=>po.createdAt&&new Date(po.createdAt).toISOString().slice(0,7)===month&&po.status==='received');
+  // _purchaseCache (not getPurchases()) — 93-accounting.js and 75-purchases.js
+  // are both lazy chunks; getPurchases() would throw if this page is opened
+  // before the purchases chunk has loaded. The raw cache lives in 00-core.js
+  // and is kept current by the Firestore listener in 65-firebase.js regardless
+  // of which chunks have loaded, so it's always safe to read directly.
+  const pos   = _purchaseCache.filter(po=>po.receivedAt&&new Date(po.receivedAt).toISOString().slice(0,7)===month&&po.status==='received');
 
   const byM = {};
-  sales.forEach(s=>{ const m=s.paymentMethod||'cash'; byM[m]=(byM[m]||0)+s.total; });
+  sales.forEach(s=>{ const m=s.payMethod||'cash'; byM[m]=(byM[m]||0)+s.total; });
   const cashIn  = (byM['cash']||0)+(byM['نقدي']||0);
   const cardIn  = (byM['card']||0)+(byM['فيزا']||0)+(byM['كريدت']||0);
   const otherIn = Object.entries(byM).filter(([k])=>!['cash','نقدي','card','فيزا','كريدت'].includes(k)).reduce((s,[,v])=>s+v,0);
   const totalIn = cashIn+cardIn+otherIn;
   const retOut  = rets.reduce((s,x)=>s+Math.abs(x.total||0),0);
   const expOut  = exps.reduce((s,e)=>s+(e.amount||0),0);
-  const purOut  = pos.reduce((s,po)=>s+(po.grandTotal||0),0);
+  const purOut  = pos.reduce((s,po)=>s+(po.total||0),0);
   const totalOut= retOut+expOut+purOut;
   const net     = totalIn-totalOut;
 
