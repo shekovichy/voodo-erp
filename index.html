@@ -1438,8 +1438,17 @@ body.warehouse-mode #cartFab {
       <!-- ══ CUSTOMIZED REPORTS ══ -->
       <div id="page-customized" class="hidden">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
-          <h2 style="margin:0;font-size:18px;font-weight:800;">📊 Customized Reports</h2>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <h2 style="margin:0;font-size:18px;font-weight:800;">📊 تقارير مخصصة</h2>
+          <div style="display:flex;gap:4px;background:var(--bg-secondary);padding:4px;border-radius:10px;">
+            <button class="btn btn-sm" id="custModeBtn_category" onclick="switchCustomMode('category')" style="background:white;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.1);">📁 تقرير الفئات</button>
+            <button class="btn btn-sm" id="custModeBtn_pivot" onclick="switchCustomMode('pivot')">📊 محلل حر</button>
+            <button class="btn btn-sm" id="custModeBtn_compare" onclick="switchCustomMode('compare')">⚖️ مقارنة فترات</button>
+          </div>
+        </div>
+
+        <!-- ── فئات (existing, always-loaded) ── -->
+        <div id="custPane_category">
+          <div style="display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
             <select id="custRptPeriod" class="form-control" style="width:150px;" onchange="onCustPeriodChange()">
               <option value="today">اليوم</option>
               <option value="week">هذا الأسبوع</option>
@@ -1453,8 +1462,74 @@ body.warehouse-mode #cartFab {
             </span>
             <button class="btn btn-primary btn-sm" onclick="renderCustomizedPage()">🔄 تحديث</button>
           </div>
+          <div id="custRptContent"></div>
         </div>
-        <div id="custRptContent"></div>
+
+        <!-- ── محلل حر (Pivot) — lazy, chunk-pivot.js ── -->
+        <div id="custPane_pivot" class="hidden">
+          <div class="card" style="margin-bottom:16px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;align-items:end;">
+              <div class="form-group"><label>الصف</label><select class="form-control" id="pvRowDim"><option value="">— اختر —</option></select></div>
+              <div class="form-group"><label>العمود (اختياري)</label><select class="form-control" id="pvColDim"><option value="">بدون</option></select></div>
+              <div class="form-group"><label>المقياس</label><select class="form-control" id="pvMetric"></select></div>
+              <div class="form-group"><label>الفترة</label>
+                <select class="form-control" id="pvPeriod" onchange="document.getElementById('pvCustomDates').classList.toggle('hidden', this.value!=='custom')">
+                  <option value="today">اليوم</option>
+                  <option value="week">هذا الأسبوع</option>
+                  <option value="month" selected>هذا الشهر</option>
+                  <option value="year">هذه السنة</option>
+                  <option value="custom">مخصص</option>
+                </select>
+              </div>
+              <div class="form-group"><label>الفرع</label><select class="form-control" id="pvBranch"><option value="">كل الفروع</option></select></div>
+            </div>
+            <div id="pvCustomDates" class="hidden" style="display:flex;gap:8px;margin-top:10px;">
+              <input type="date" class="form-control" id="pvFrom" />
+              <input type="date" class="form-control" id="pvTo" />
+            </div>
+            <button class="btn btn-primary" style="margin-top:12px;" onclick="runPivotAnalysis()">▶️ تحليل</button>
+          </div>
+          <div class="card"><div class="table-wrap" id="pivotResultWrap"></div></div>
+        </div>
+
+        <!-- ── مقارنة فترات حرة — lazy, chunk-pivot.js ── -->
+        <div id="custPane_compare" class="hidden">
+          <div class="card" style="margin-bottom:16px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+              <div>
+                <div style="font-weight:700;margin-bottom:8px;color:var(--primary);">🔵 الفترة الأولى</div>
+                <select class="form-control" id="cmpPeriodA" onchange="document.getElementById('cmpCustomA').classList.toggle('hidden', this.value!=='custom')">
+                  <option value="today">اليوم</option>
+                  <option value="week">هذا الأسبوع</option>
+                  <option value="month" selected>هذا الشهر</option>
+                  <option value="year">هذه السنة</option>
+                  <option value="custom">مخصص</option>
+                </select>
+                <span id="cmpCustomA" class="hidden" style="display:flex;gap:6px;margin-top:6px;">
+                  <input type="date" class="form-control" id="cmpFromA" />
+                  <input type="date" class="form-control" id="cmpToA" />
+                </span>
+              </div>
+              <div>
+                <div style="font-weight:700;margin-bottom:8px;color:#d97706;">🟠 الفترة الثانية</div>
+                <select class="form-control" id="cmpPeriodB" onchange="document.getElementById('cmpCustomB').classList.toggle('hidden', this.value!=='custom')">
+                  <option value="today">اليوم</option>
+                  <option value="week">هذا الأسبوع</option>
+                  <option value="month">هذا الشهر</option>
+                  <option value="year">هذه السنة</option>
+                  <option value="custom" selected>مخصص</option>
+                </select>
+                <span id="cmpCustomB" style="display:flex;gap:6px;margin-top:6px;">
+                  <input type="date" class="form-control" id="cmpFromB" />
+                  <input type="date" class="form-control" id="cmpToB" />
+                </span>
+              </div>
+            </div>
+            <div class="form-group" style="margin-top:12px;"><label>الفرع</label><select class="form-control" id="cmpBranch" style="max-width:220px;"><option value="">كل الفروع</option></select></div>
+            <button class="btn btn-primary" style="margin-top:12px;" onclick="runPeriodComparison()">⚖️ قارن</button>
+          </div>
+          <div id="cmpResultWrap"></div>
+        </div>
       </div>
 
       <!-- ══ WAREHOUSE PAGE ══ -->
@@ -3087,6 +3162,26 @@ body.warehouse-mode #cartFab {
   </div>
 </div>
 
+<!-- ════════════════ ANALYSIS DRILL-DOWN MODAL ════════════════ -->
+<div id="analysisDrillModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:640px;width:96%;">
+    <div class="modal-header">
+      <h3 style="margin:0;font-size:16px;" id="drillTitle"></h3>
+      <p style="margin:4px 0 0;font-size:12px;color:var(--text-muted);"><span id="drillCount">0</span> عملية</p>
+    </div>
+    <div class="modal-body" style="padding:16px 20px;max-height:60vh;overflow-y:auto;">
+      <div class="table-wrap">
+        <table><thead><tr><th>التاريخ</th><th>الفرع</th><th>المنتج</th><th>الكمية</th><th>الإيراد</th><th>البائع</th></tr></thead>
+        <tbody id="drillBody"></tbody></table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeDrillDown()">إغلاق</button>
+      <button class="btn btn-outline" onclick="exportDrillExcel()">📥 تصدير Excel</button>
+    </div>
+  </div>
+</div>
+
 <!-- ════════════════ FINGERPRINT IMPORT MODAL ════════════════ -->
 <div id="fingerprintModal" class="modal-overlay hidden">
   <div class="modal-box" style="max-width:500px;width:94%;">
@@ -3130,6 +3225,7 @@ const _CHUNK_FILES = {
   manufacturing: 'chunk-manufacturing.js',
   purchases:     'chunk-purchases.js',
   helpdesk:      'chunk-helpdesk.js',
+  pivot:         'chunk-pivot.js',
 };
 const _loadedChunks = new Set();
 function _loadChunk(page, cb) {
@@ -5388,6 +5484,29 @@ function renderCustomizedPage() {
     to   = range ? range.to   : '';
   }
   renderCategoryReport(from, to);
+}
+
+// Pivot analyzer + period comparison live in 115-pivot-reports.js (a lazy
+// chunk, see _CHUNK_FILES in 00-core.js) since they're heavier, less-used
+// tools than the always-loaded category report above. This function is the
+// entry point that stays in the core bundle so the mode-switch buttons work
+// immediately; it loads the chunk on first use before calling into it.
+function switchCustomMode(mode) {
+  if ((mode === 'pivot' || mode === 'compare') && !_loadedChunks.has('pivot')) {
+    _loadChunk('pivot', () => switchCustomMode(mode));
+    return;
+  }
+  ['category', 'pivot', 'compare'].forEach(m => {
+    document.getElementById('custPane_' + m)?.classList.toggle('hidden', m !== mode);
+    const btn = document.getElementById('custModeBtn_' + m);
+    if (btn) {
+      btn.style.background = m === mode ? 'white' : '';
+      btn.style.fontWeight  = m === mode ? '700' : '400';
+      btn.style.boxShadow   = m === mode ? '0 1px 4px rgba(0,0,0,.1)' : '';
+    }
+  });
+  if (mode === 'pivot')   renderPivotUI();
+  if (mode === 'compare') renderCompareUI();
 }
 
 

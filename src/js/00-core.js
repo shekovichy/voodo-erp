@@ -18,6 +18,7 @@ const _CHUNK_FILES = {
   manufacturing: 'chunk-manufacturing.js',
   purchases:     'chunk-purchases.js',
   helpdesk:      'chunk-helpdesk.js',
+  pivot:         'chunk-pivot.js',
 };
 const _loadedChunks = new Set();
 function _loadChunk(page, cb) {

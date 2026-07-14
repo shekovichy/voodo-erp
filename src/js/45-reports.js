@@ -300,3 +300,26 @@ function renderCustomizedPage() {
   renderCategoryReport(from, to);
 }
 
+// Pivot analyzer + period comparison live in 115-pivot-reports.js (a lazy
+// chunk, see _CHUNK_FILES in 00-core.js) since they're heavier, less-used
+// tools than the always-loaded category report above. This function is the
+// entry point that stays in the core bundle so the mode-switch buttons work
+// immediately; it loads the chunk on first use before calling into it.
+function switchCustomMode(mode) {
+  if ((mode === 'pivot' || mode === 'compare') && !_loadedChunks.has('pivot')) {
+    _loadChunk('pivot', () => switchCustomMode(mode));
+    return;
+  }
+  ['category', 'pivot', 'compare'].forEach(m => {
+    document.getElementById('custPane_' + m)?.classList.toggle('hidden', m !== mode);
+    const btn = document.getElementById('custModeBtn_' + m);
+    if (btn) {
+      btn.style.background = m === mode ? 'white' : '';
+      btn.style.fontWeight  = m === mode ? '700' : '400';
+      btn.style.boxShadow   = m === mode ? '0 1px 4px rgba(0,0,0,.1)' : '';
+    }
+  });
+  if (mode === 'pivot')   renderPivotUI();
+  if (mode === 'compare') renderCompareUI();
+}
+
