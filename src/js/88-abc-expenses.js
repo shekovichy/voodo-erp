@@ -162,7 +162,9 @@ function setAudit(list) {
   try { _db && _db.collection('pos_data').doc('audit').set({ list, updatedAt: Date.now() }); } catch(e) {}
 }
 
-function addAuditLog(action, details, branchId) {
+// changes: optional array of { label, before, after } — one entry per field
+// that actually changed. Powers the "🔍 التفاصيل" diff view in the audit page.
+function addAuditLog(action, details, branchId, changes) {
   const list = [...getAudit()];
   list.unshift({
     id: 'a_' + Date.now(),
@@ -170,10 +172,42 @@ function addAuditLog(action, details, branchId) {
     details,
     user: currentUser || 'system',
     branchId: branchId || currentBranch,
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    changes: (changes && changes.length) ? changes : null
   });
   // Keep last 500 entries
   setAudit(list.slice(0, 500));
+}
+
+// Builds a before/after diff array from two display-ready objects (values
+// should already be formatted strings/numbers, not raw records) — only
+// includes fields that actually changed. fieldLabels maps object keys to
+// their Arabic display label, e.g. { qty: 'الكمية' }.
+function buildAuditDiff(oldObj, newObj, fieldLabels) {
+  const changes = [];
+  for (const key in fieldLabels) {
+    const before = oldObj ? oldObj[key] : undefined;
+    const after = newObj[key];
+    if (before !== after) {
+      changes.push({
+        label: fieldLabels[key],
+        before: (before === undefined || before === null || before === '') ? '—' : before,
+        after:  (after  === undefined || after  === null || after  === '') ? '—' : after,
+      });
+    }
+  }
+  return changes;
+}
+
+function showAuditDiff(id) {
+  const entry = getAudit().find(a => a.id === id);
+  if (!entry || !entry.changes) return;
+  document.getElementById('auditDiffBody').innerHTML = entry.changes.map(c => `<tr>
+    <td style="font-weight:600;font-size:12px;">${escHtml(c.label)}</td>
+    <td style="font-size:12px;color:var(--danger);text-decoration:line-through;">${escHtml(String(c.before))}</td>
+    <td style="font-size:12px;color:var(--success);font-weight:600;">${escHtml(String(c.after))}</td>
+  </tr>`).join('');
+  document.getElementById('auditDiffModal').classList.remove('hidden');
 }
 
 function renderAuditPage() {
@@ -224,7 +258,9 @@ function renderAuditPage() {
     <td><span style="background:#f0f4ff;color:#4338ca;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">${escHtml(a.user)||'system'}</span></td>
     <td style="font-size:12px;">${a.branchId?escHtml(getBranchName(a.branchId)):'-'}</td>
     <td style="font-size:12px;">${escHtml(actionLabels[a.action]||a.action)}</td>
-    <td style="font-size:12px; color:var(--text-muted);">${escHtml(a.details)||''}</td>
+    <td style="font-size:12px; color:var(--text-muted);">${escHtml(a.details)||''}
+      ${a.changes ? `<button onclick="showAuditDiff('${a.id}')" style="background:none;border:none;cursor:pointer;color:var(--primary);font-size:11px;text-decoration:underline;padding:0 0 0 6px;">🔍 التفاصيل</button>` : ''}
+    </td>
   </tr>`).join('');
 }
 

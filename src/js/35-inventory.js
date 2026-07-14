@@ -98,10 +98,16 @@ function saveProduct() {
     const oldProd = inv[idx];
     if (idx >= 0) inv[idx] = prod; else inv.push(prod);
     // Audit: price change?
+    const fieldLabels = { name:'الاسم', cost:'التكلفة', priceBefore:'السعر قبل الخصم', priceAfter:'السعر', qty:'الكمية', category:'الفئة', family:'العائلة' };
+    const changes = oldProd ? buildAuditDiff(
+      { name: oldProd.name, cost: fmt(oldProd.cost), priceBefore: fmt(oldProd.priceBefore), priceAfter: fmt(oldProd.priceAfter), qty: oldProd.qty, category: oldProd.category, family: oldProd.family },
+      { name: prod.name, cost: fmt(prod.cost), priceBefore: fmt(prod.priceBefore), priceAfter: fmt(prod.priceAfter), qty: prod.qty, category: prod.category, family: prod.family },
+      fieldLabels
+    ) : null;
     if (oldProd && oldProd.priceAfter !== prod.priceAfter) {
-      addAuditLog('price.change', `${prod.name}: سعر ${fmt(oldProd.priceAfter)} ← ${fmt(prod.priceAfter)} ج`, null);
+      addAuditLog('price.change', `${prod.name}: سعر ${fmt(oldProd.priceAfter)} ← ${fmt(prod.priceAfter)} ج`, null, changes);
     } else {
-      addAuditLog('inv.edit', `تعديل: ${prod.name} (${prod.code}) — كمية: ${prod.qty}`, null);
+      addAuditLog('inv.edit', `تعديل: ${prod.name} (${prod.code}) — كمية: ${prod.qty}`, null, changes);
     }
   } else {
     if (inv.find(x => x.code === code)) { alert('هذا الكود موجود مسبقاً'); return; }

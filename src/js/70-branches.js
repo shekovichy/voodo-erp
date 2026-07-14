@@ -39,11 +39,15 @@ function populateBranchNameInputs() {
 }
 
 function saveBranchNames() {
+  const oldBranches = getBranches();
   const branches = {};
   BRANCH_IDS.forEach(b => {
     const el = document.getElementById(`branchName_${b}`);
     branches[b] = (el?.value.trim()) || BRANCH_DEFAULTS[b];
   });
+  const changes = BRANCH_IDS
+    .filter(b => (oldBranches[b] || BRANCH_DEFAULTS[b]) !== branches[b])
+    .map(b => ({ label: `اسم فرع (${BRANCH_DEFAULTS[b]})`, before: oldBranches[b] || BRANCH_DEFAULTS[b], after: branches[b] }));
   _settingsCache.branches = branches;
   if (_fbReady) {
     _db.collection('pos_data').doc('settings').set(_settingsCache)
@@ -51,7 +55,8 @@ function saveBranchNames() {
   }
   DB.s('pos_branches', branches);
   populateBranchSelect();
-  loadBranchNamesUI();
+  populateBranchNameInputs();
+  if (changes.length) addAuditLog('settings.change', 'تعديل أسماء الفروع', currentBranch, changes);
   showMsg('sBranchMsg', 'تم حفظ أسماء الفروع ✓', 'success');
 }
 

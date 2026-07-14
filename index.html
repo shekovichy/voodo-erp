@@ -2958,6 +2958,22 @@ body.warehouse-mode #cartFab {
   </div>
 </div>
 
+<!-- ════════════════ AUDIT DIFF MODAL ════════════════ -->
+<div id="auditDiffModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:480px;width:94%;">
+    <div class="modal-header"><h3 style="margin:0;font-size:17px;">🔍 تفاصيل التغيير</h3></div>
+    <div class="modal-body" style="padding:20px;">
+      <div class="table-wrap">
+        <table><thead><tr><th>الحقل</th><th>القيمة القديمة</th><th>القيمة الجديدة</th></tr></thead>
+        <tbody id="auditDiffBody"></tbody></table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="document.getElementById('auditDiffModal').classList.add('hidden')">إغلاق</button>
+    </div>
+  </div>
+</div>
+
 <!-- ════════════════ FINGERPRINT IMPORT MODAL ════════════════ -->
 <div id="fingerprintModal" class="modal-overlay hidden">
   <div class="modal-box" style="max-width:500px;width:94%;">
@@ -4763,10 +4779,16 @@ function saveProduct() {
     const oldProd = inv[idx];
     if (idx >= 0) inv[idx] = prod; else inv.push(prod);
     // Audit: price change?
+    const fieldLabels = { name:'الاسم', cost:'التكلفة', priceBefore:'السعر قبل الخصم', priceAfter:'السعر', qty:'الكمية', category:'الفئة', family:'العائلة' };
+    const changes = oldProd ? buildAuditDiff(
+      { name: oldProd.name, cost: fmt(oldProd.cost), priceBefore: fmt(oldProd.priceBefore), priceAfter: fmt(oldProd.priceAfter), qty: oldProd.qty, category: oldProd.category, family: oldProd.family },
+      { name: prod.name, cost: fmt(prod.cost), priceBefore: fmt(prod.priceBefore), priceAfter: fmt(prod.priceAfter), qty: prod.qty, category: prod.category, family: prod.family },
+      fieldLabels
+    ) : null;
     if (oldProd && oldProd.priceAfter !== prod.priceAfter) {
-      addAuditLog('price.change', `${prod.name}: سعر ${fmt(oldProd.priceAfter)} ← ${fmt(prod.priceAfter)} ج`, null);
+      addAuditLog('price.change', `${prod.name}: سعر ${fmt(oldProd.priceAfter)} ← ${fmt(prod.priceAfter)} ج`, null, changes);
     } else {
-      addAuditLog('inv.edit', `تعديل: ${prod.name} (${prod.code}) — كمية: ${prod.qty}`, null);
+      addAuditLog('inv.edit', `تعديل: ${prod.name} (${prod.code}) — كمية: ${prod.qty}`, null, changes);
     }
   } else {
     if (inv.find(x => x.code === code)) { alert('هذا الكود موجود مسبقاً'); return; }
@@ -5698,11 +5720,19 @@ async function saveUserAccount() {
     role:     type === 'branch' ? role : null,
   };
 
+  const roleLabel = a => a.type === 'admin' ? 'أدمن' : (a.role === 'manager' ? 'مدير فرع' : 'كاشير');
+  const changes = existing ? buildAuditDiff(
+    { username: existing.username, role: roleLabel(existing), branch: existing.branchId ? getBranchName(existing.branchId) : '-' },
+    { username: record.username, role: roleLabel(record), branch: record.branchId ? getBranchName(record.branchId) : '-' },
+    { username: 'اسم المستخدم', role: 'النوع/الصلاحية', branch: 'الفرع' }
+  ) : null;
+  if (changes && existing.password !== record.password) changes.push({ label: 'كلمة المرور', before: '••••', after: '(تم التغيير)' });
+
   setAccounts(id ? accounts.map(a => a.id === id ? record : a) : [...accounts, record]);
   renderUserAccountsSettings();
   closeUserAccountModal();
   showMsg('sSettingsMsg', '✅ تم حفظ المستخدم');
-  addAuditLog('user.save', `تم حفظ مستخدم: ${username} (${type === 'admin' ? 'أدمن' : (role === 'manager' ? 'مدير فرع' : 'كاشير')})`, currentBranch);
+  addAuditLog('user.save', `تم حفظ مستخدم: ${username} (${roleLabel(record)})`, currentBranch, changes);
 }
 
 function deleteUserAccount(id) {
@@ -5734,11 +5764,19 @@ function changePass(role) {
 }
 
 function saveSettings() {
+  const oldThreshold = getThreshold();
+  const oldVip = _settingsCache.vipThreshold || 1000;
   const v = parseInt(document.getElementById('sLowThreshold').value) || 5;
   setThreshold(v);
   const vip = parseInt(document.getElementById('sVipThreshold')?.value) || 1000;
   _settingsCache.vipThreshold = vip;
   saveSettingsCache();
+  const changes = buildAuditDiff(
+    { threshold: oldThreshold, vip: oldVip },
+    { threshold: v, vip },
+    { threshold: 'حد تنبيه المخزون المنخفض', vip: 'حد VIP' }
+  );
+  if (changes.length) addAuditLog('settings.change', 'تعديل إعدادات المخزون', currentBranch, changes);
   showMsg('sSettingsMsg','تم حفظ الإعدادات');
 }
 
@@ -6485,11 +6523,15 @@ function populateBranchNameInputs() {
 }
 
 function saveBranchNames() {
+  const oldBranches = getBranches();
   const branches = {};
   BRANCH_IDS.forEach(b => {
     const el = document.getElementById(`branchName_${b}`);
     branches[b] = (el?.value.trim()) || BRANCH_DEFAULTS[b];
   });
+  const changes = BRANCH_IDS
+    .filter(b => (oldBranches[b] || BRANCH_DEFAULTS[b]) !== branches[b])
+    .map(b => ({ label: `اسم فرع (${BRANCH_DEFAULTS[b]})`, before: oldBranches[b] || BRANCH_DEFAULTS[b], after: branches[b] }));
   _settingsCache.branches = branches;
   if (_fbReady) {
     _db.collection('pos_data').doc('settings').set(_settingsCache)
@@ -6497,7 +6539,8 @@ function saveBranchNames() {
   }
   DB.s('pos_branches', branches);
   populateBranchSelect();
-  loadBranchNamesUI();
+  populateBranchNameInputs();
+  if (changes.length) addAuditLog('settings.change', 'تعديل أسماء الفروع', currentBranch, changes);
   showMsg('sBranchMsg', 'تم حفظ أسماء الفروع ✓', 'success');
 }
 
@@ -7628,7 +7671,9 @@ function setAudit(list) {
   try { _db && _db.collection('pos_data').doc('audit').set({ list, updatedAt: Date.now() }); } catch(e) {}
 }
 
-function addAuditLog(action, details, branchId) {
+// changes: optional array of { label, before, after } — one entry per field
+// that actually changed. Powers the "🔍 التفاصيل" diff view in the audit page.
+function addAuditLog(action, details, branchId, changes) {
   const list = [...getAudit()];
   list.unshift({
     id: 'a_' + Date.now(),
@@ -7636,10 +7681,42 @@ function addAuditLog(action, details, branchId) {
     details,
     user: currentUser || 'system',
     branchId: branchId || currentBranch,
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    changes: (changes && changes.length) ? changes : null
   });
   // Keep last 500 entries
   setAudit(list.slice(0, 500));
+}
+
+// Builds a before/after diff array from two display-ready objects (values
+// should already be formatted strings/numbers, not raw records) — only
+// includes fields that actually changed. fieldLabels maps object keys to
+// their Arabic display label, e.g. { qty: 'الكمية' }.
+function buildAuditDiff(oldObj, newObj, fieldLabels) {
+  const changes = [];
+  for (const key in fieldLabels) {
+    const before = oldObj ? oldObj[key] : undefined;
+    const after = newObj[key];
+    if (before !== after) {
+      changes.push({
+        label: fieldLabels[key],
+        before: (before === undefined || before === null || before === '') ? '—' : before,
+        after:  (after  === undefined || after  === null || after  === '') ? '—' : after,
+      });
+    }
+  }
+  return changes;
+}
+
+function showAuditDiff(id) {
+  const entry = getAudit().find(a => a.id === id);
+  if (!entry || !entry.changes) return;
+  document.getElementById('auditDiffBody').innerHTML = entry.changes.map(c => `<tr>
+    <td style="font-weight:600;font-size:12px;">${escHtml(c.label)}</td>
+    <td style="font-size:12px;color:var(--danger);text-decoration:line-through;">${escHtml(String(c.before))}</td>
+    <td style="font-size:12px;color:var(--success);font-weight:600;">${escHtml(String(c.after))}</td>
+  </tr>`).join('');
+  document.getElementById('auditDiffModal').classList.remove('hidden');
 }
 
 function renderAuditPage() {
@@ -7690,7 +7767,9 @@ function renderAuditPage() {
     <td><span style="background:#f0f4ff;color:#4338ca;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">${escHtml(a.user)||'system'}</span></td>
     <td style="font-size:12px;">${a.branchId?escHtml(getBranchName(a.branchId)):'-'}</td>
     <td style="font-size:12px;">${escHtml(actionLabels[a.action]||a.action)}</td>
-    <td style="font-size:12px; color:var(--text-muted);">${escHtml(a.details)||''}</td>
+    <td style="font-size:12px; color:var(--text-muted);">${escHtml(a.details)||''}
+      ${a.changes ? `<button onclick="showAuditDiff('${a.id}')" style="background:none;border:none;cursor:pointer;color:var(--primary);font-size:11px;text-decoration:underline;padding:0 0 0 6px;">🔍 التفاصيل</button>` : ''}
+    </td>
   </tr>`).join('');
 }
 

@@ -117,11 +117,19 @@ async function saveUserAccount() {
     role:     type === 'branch' ? role : null,
   };
 
+  const roleLabel = a => a.type === 'admin' ? 'أدمن' : (a.role === 'manager' ? 'مدير فرع' : 'كاشير');
+  const changes = existing ? buildAuditDiff(
+    { username: existing.username, role: roleLabel(existing), branch: existing.branchId ? getBranchName(existing.branchId) : '-' },
+    { username: record.username, role: roleLabel(record), branch: record.branchId ? getBranchName(record.branchId) : '-' },
+    { username: 'اسم المستخدم', role: 'النوع/الصلاحية', branch: 'الفرع' }
+  ) : null;
+  if (changes && existing.password !== record.password) changes.push({ label: 'كلمة المرور', before: '••••', after: '(تم التغيير)' });
+
   setAccounts(id ? accounts.map(a => a.id === id ? record : a) : [...accounts, record]);
   renderUserAccountsSettings();
   closeUserAccountModal();
   showMsg('sSettingsMsg', '✅ تم حفظ المستخدم');
-  addAuditLog('user.save', `تم حفظ مستخدم: ${username} (${type === 'admin' ? 'أدمن' : (role === 'manager' ? 'مدير فرع' : 'كاشير')})`, currentBranch);
+  addAuditLog('user.save', `تم حفظ مستخدم: ${username} (${roleLabel(record)})`, currentBranch, changes);
 }
 
 function deleteUserAccount(id) {
@@ -153,11 +161,19 @@ function changePass(role) {
 }
 
 function saveSettings() {
+  const oldThreshold = getThreshold();
+  const oldVip = _settingsCache.vipThreshold || 1000;
   const v = parseInt(document.getElementById('sLowThreshold').value) || 5;
   setThreshold(v);
   const vip = parseInt(document.getElementById('sVipThreshold')?.value) || 1000;
   _settingsCache.vipThreshold = vip;
   saveSettingsCache();
+  const changes = buildAuditDiff(
+    { threshold: oldThreshold, vip: oldVip },
+    { threshold: v, vip },
+    { threshold: 'حد تنبيه المخزون المنخفض', vip: 'حد VIP' }
+  );
+  if (changes.length) addAuditLog('settings.change', 'تعديل إعدادات المخزون', currentBranch, changes);
   showMsg('sSettingsMsg','تم حفظ الإعدادات');
 }
 
