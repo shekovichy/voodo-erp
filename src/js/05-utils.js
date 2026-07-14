@@ -70,11 +70,54 @@ function getDateRange(period, fromId, toId) {
 // ══════════════════════════════════════════════
 // LOGIN / LOGOUT
 // ══════════════════════════════════════════════
+// Shared post-auth setup for any admin-type login (hardcoded 'admin' or a
+// new admin-type account created via "إدارة المستخدمين").
+function _enterAdminSession(auditLabel) {
+  currentUser = 'admin';
+  isBranchManager = false;
+  document.getElementById('loginPage').classList.add('hidden');
+  document.getElementById('managerView').classList.remove('hidden');
+  document.getElementById('todayDate').textContent =
+    new Date().toLocaleDateString('ar-EG', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  document.getElementById('sLowThreshold').value = getThreshold();
+  initFirebase();   // ← يشغّل Firebase عند دخول الأدمن
+  initBranchUI();
+  document.getElementById('topbarLogout').style.display = 'inline-flex';
+  showPage('home');
+  setTimeout(() => addAuditLog('auth.login', auditLabel, currentBranch), 500);
+}
+
+// Shared post-auth setup for any branch login (legacy per-branch slot or a
+// new branch-type account), covering both warehouse-only and normal branches.
+function _enterBranchSession(branchId, role, username) {
+  currentUser = 'cashier';
+  isBranchManager = role === 'manager';
+  currentBranch = branchId;
+  DB.s('currentBranch', branchId);
+  document.getElementById('loginPage').classList.add('hidden');
+  if (branchId === 'wh') {
+    // Warehouse-only mode: restricted to warehouse & transfers pages
+    window._whMode = true;
+    document.body.classList.add('warehouse-mode');
+    document.getElementById('managerView').classList.remove('hidden');
+    document.getElementById('topbarLogout').style.display = 'inline-flex';
+    initFirebase();
+    showPage('warehouse');
+    setTimeout(() => addAuditLog('auth.login', `تسجيل دخول مخزن: ${username}`, branchId), 500);
+  } else {
+    document.getElementById('managerView').classList.remove('hidden');
+    initFirebase();
+    initBranchUI();
+    showPage('home');
+    renderHomeIcons();
+    setTimeout(() => addAuditLog('auth.login', `تسجيل دخول كاشير: ${username} — ${getBranchName(branchId)}`, branchId), 500);
+  }
+}
+
 async function doLogin() {
   const user = document.getElementById('loginUser').value.trim().toLowerCase();
   const pass = document.getElementById('loginPass').value;
   const users = getUsers();
-  const branchUsers = getBranchUsers();
   document.getElementById('loginError').classList.add('hidden');
   if (!pass) { document.getElementById('loginError').textContent = 'أدخل كلمة المرور'; document.getElementById('loginError').classList.remove('hidden'); return; }
 
@@ -86,19 +129,11 @@ async function doLogin() {
 
   if (user === 'admin' && await checkPass(pass, users.admin)) {
     await upgradePassIfNeeded(pass, users.admin, 'admin');
-    currentUser = 'admin';
-    isBranchManager = false;
-    document.getElementById('loginPage').classList.add('hidden');
-    document.getElementById('managerView').classList.remove('hidden');
-    document.getElementById('todayDate').textContent =
-      new Date().toLocaleDateString('ar-EG', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
-    document.getElementById('sLowThreshold').value = getThreshold();
-    initFirebase();   // ← يشغّل Firebase عند دخول الأدمن
-    initBranchUI();
-    document.getElementById('topbarLogout').style.display = 'inline-flex';
-    showPage('home');
-    setTimeout(() => addAuditLog('auth.login', 'تسجيل دخول: admin', currentBranch), 500);
-  } else if (user === 'cashier' && pass === users.cashier) {
+    _enterAdminSession('تسجيل دخول: admin');
+    return;
+  }
+
+  if (user === 'cashier' && pass === users.cashier) {
     // Legacy cashier (all branches)
     currentUser = 'cashier';
     isBranchManager = false;
@@ -110,44 +145,36 @@ async function doLogin() {
     updateClock();
     setInterval(updateClock, 30000);
     setTimeout(function(){ checkForApprovedCarts(); }, 1000);
-  } else {
-    // Branch-specific cashier login
-    const branchUsers = getBranchUsers();
-    let matchedBranch = null;
-    for (const b of BRANCH_IDS) {
-      if (branchUsers[b] &&
-          user === (branchUsers[b].username || '').toLowerCase() &&
-          await checkPass(pass, branchUsers[b].password)) {
-        matchedBranch = b; break;
-      }
-    }
-    if (matchedBranch) {
-      currentUser = 'cashier';
-      isBranchManager = branchUsers[matchedBranch].role === 'manager';
-      currentBranch = matchedBranch;
-      DB.s('currentBranch', matchedBranch);
-      document.getElementById('loginPage').classList.add('hidden');
-      if (matchedBranch === 'wh') {
-        // Warehouse-only mode: restricted to warehouse & transfers pages
-        window._whMode = true;
-        document.body.classList.add('warehouse-mode');
-        document.getElementById('managerView').classList.remove('hidden');
-        document.getElementById('topbarLogout').style.display = 'inline-flex';
-        initFirebase();
-        showPage('warehouse');
-        setTimeout(() => addAuditLog('auth.login', `تسجيل دخول مخزن: ${user}`, matchedBranch), 500);
+    return;
+  }
+
+  // New admin-managed accounts (extra admins + branch cashiers/managers) —
+  // synced via Firestore, so this works on any device, unlike the legacy
+  // per-branch slot below which is local-only.
+  for (const acc of getAccounts()) {
+    if ((acc.username || '').toLowerCase() === user && await checkPass(pass, acc.password)) {
+      if (acc.type === 'admin') {
+        _enterAdminSession(`تسجيل دخول: ${user}`);
       } else {
-        document.getElementById('managerView').classList.remove('hidden');
-        initFirebase();
-        initBranchUI();
-        showPage('home');
-        renderHomeIcons();
-        setTimeout(() => addAuditLog('auth.login', `تسجيل دخول كاشير: ${user} — ${getBranchName(matchedBranch)}`, matchedBranch), 500);
+        _enterBranchSession(acc.branchId, acc.role, user);
       }
-    } else {
-      document.getElementById('loginError').classList.remove('hidden');
+      return;
     }
   }
+
+  // Legacy per-branch single-slot login (kept as a fallback for devices that
+  // already have real credentials cached locally from before "إدارة المستخدمين" existed)
+  const branchUsers = getBranchUsers();
+  for (const b of BRANCH_IDS) {
+    if (branchUsers[b] &&
+        user === (branchUsers[b].username || '').toLowerCase() &&
+        await checkPass(pass, branchUsers[b].password)) {
+      _enterBranchSession(b, branchUsers[b].role, user);
+      return;
+    }
+  }
+
+  document.getElementById('loginError').classList.remove('hidden');
 }
 
 

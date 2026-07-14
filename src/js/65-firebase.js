@@ -189,10 +189,28 @@ function initFirebase() {
         visRefresh('page-promos', renderPromosPage);
       }, err => { _promoCache = DB.g('pos_promos', []); });
 
-    // NOTE: passwords are intentionally NOT synced through Firestore — pos_data/auth
-    // used to hold password hashes and was readable by any anonymously-authenticated
-    // client (Firestore rules only require auth != null). Each device now keeps its
-    // own admin/cashier credentials in localStorage only. See CLAUDE.md security notes.
+    // NOTE: the original hardcoded admin/legacy-cashier passwords (getUsers()) are
+    // intentionally NOT synced through Firestore — pos_data/auth used to hold password
+    // hashes and was readable by any anonymously-authenticated client. Each device keeps
+    // those two specific credentials in localStorage only. See CLAUDE.md security notes.
+    // Admin-managed accounts created via "إدارة المستخدمين" (below) DO sync — they live
+    // at pos_data/accounts, not the blocked pos_data/auth doc, and only ever store a
+    // password HASH, never plaintext — same protection tier as inventory/sales.
+
+    // Accounts listener (admin-managed users: extra admins + branch cashiers/managers)
+    _db.collection('pos_data').doc('accounts')
+      .onSnapshot(snap => {
+        if (snap.exists) {
+          _accountsCache = snap.data().list || [];
+          DB.s('pos_accounts', _accountsCache); // keep local fallback fresh
+        } else {
+          _accountsCache = DB.g('pos_accounts', []);
+          if (_accountsCache.length) {
+            _db.collection('pos_data').doc('accounts').set({ list: _accountsCache, updatedAt: Date.now() });
+          }
+        }
+        visRefresh('page-settings', renderUserAccountsSettings);
+      }, err => { _accountsCache = DB.g('pos_accounts', []); });
 
     // Customers listener
     _db.collection('pos_data').doc('customers')

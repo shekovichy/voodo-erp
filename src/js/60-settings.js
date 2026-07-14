@@ -1,51 +1,137 @@
 // ══════════════════════════════════════════════
 // SETTINGS
 // ══════════════════════════════════════════════
-function renderBranchUsersSettings() {
-  const bu = getBranchUsers();
-  const container = document.getElementById('branchUsersContainer');
+// ── USER ACCOUNTS (admin-managed) ──────────────────────────────
+// One-time import of any real credentials already sitting in the old
+// per-branch-slot storage on THIS device, so whichever device the admin
+// used to set up real branch logins before doesn't lose them — they get
+// published to Firestore (pos_data/accounts) the first time this renders.
+function _migrateLegacyBranchUsersOnce() {
+  if (DB.g('pos_accounts_migrated_v1', false)) return;
+  DB.s('pos_accounts_migrated_v1', true);
+  const legacy = getBranchUsers();
+  const accounts = getAccounts();
+  const additions = [];
+  BRANCH_IDS.forEach(b => {
+    const lu = legacy[b];
+    if (lu && lu.username && lu.password &&
+        !accounts.find(a => a.username.toLowerCase() === (lu.username || '').toLowerCase())) {
+      additions.push({
+        id: 'u_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7) + '_' + b,
+        username: lu.username, password: lu.password,
+        type: 'branch', branchId: b, role: lu.role || 'cashier',
+      });
+    }
+  });
+  if (additions.length) setAccounts([...accounts, ...additions]);
+}
+
+function renderUserAccountsSettings() {
+  _migrateLegacyBranchUsersOnce();
+  const container = document.getElementById('userAccountsContainer');
   if (!container) return;
-  container.innerHTML = BRANCH_IDS.map(b => {
-    const name = getBranchName(b);
-    const uname = bu[b]?.username || '';
-    const upass  = bu[b]?.password || '';
-    const role   = bu[b]?.role || 'cashier';
-    return `<div style="border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:10px; background:var(--bg);">
-      <div style="font-weight:700; font-size:13px; margin-bottom:8px; color:var(--primary);">🏬 ${escHtml(name)}</div>
-      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
-        <div><label style="font-size:11px; color:var(--text-muted);">اسم المستخدم</label>
-          <input class="form-control" id="bu-user-${b}" value="${escHtml(uname)}" placeholder="username" style="margin-top:4px;" /></div>
-        <div><label style="font-size:11px; color:var(--text-muted);">كلمة المرور</label>
-          <input class="form-control" id="bu-pass-${b}" value="" placeholder="password" style="margin-top:4px;" /></div>
-        <div><label style="font-size:11px; color:var(--text-muted);">الصلاحية</label>
-          <select class="form-control" id="bu-role-${b}" style="margin-top:4px;">
-            <option value="cashier" ${role==='cashier'?'selected':''}>كاشير</option>
-            <option value="manager" ${role==='manager'?'selected':''}>مدير فرع</option>
-          </select></div>
+  const accounts = getAccounts();
+  if (!accounts.length) {
+    container.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:8px 0;">لا يوجد مستخدمين بعد — اضغط "إضافة مستخدم"</div>';
+    return;
+  }
+  container.innerHTML = accounts.map(acc => {
+    const typeLabel   = acc.type === 'admin' ? '👑 أدمن' : (acc.role === 'manager' ? '🧑‍💼 مدير فرع' : '🧑‍💻 كاشير');
+    const branchLabel = acc.type === 'branch' ? ` — ${escHtml(getBranchName(acc.branchId))}` : '';
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--border);border-radius:8px;padding:8px 12px;background:var(--bg);">
+      <div style="font-size:13px;"><strong>${escHtml(acc.username)}</strong>
+        <span style="color:var(--text-muted);"> — ${typeLabel}${branchLabel}</span></div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;" onclick="openUserAccountModal('${acc.id}')">✏️</button>
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;color:var(--danger);" onclick="deleteUserAccount('${acc.id}')">🗑️</button>
       </div>
     </div>`;
   }).join('');
 }
 
-async function saveBranchUsers() {
-  const bu = getBranchUsers();
-  for (const b of BRANCH_IDS) {
-    const uname = document.getElementById(`bu-user-${b}`)?.value.trim();
-    const upass  = document.getElementById(`bu-pass-${b}`)?.value.trim();
-    const role   = document.getElementById(`bu-role-${b}`)?.value || 'cashier';
-    if (uname) {
-      if (upass && upass.length >= 4) {
-        const hashed = await hashPass(upass);
-        bu[b] = { username: uname, password: hashed, role };
-      } else if (upass === '') {
-        // Keep existing password hash unchanged
-        bu[b] = { username: uname, password: bu[b]?.password || '', role };
-      }
+function toggleUserAccountFields() {
+  const isAdmin = document.getElementById('uaType').value === 'admin';
+  document.getElementById('uaBranchFields').style.display = isAdmin ? 'none' : 'flex';
+}
+
+function openUserAccountModal(id) {
+  const branchSel = document.getElementById('uaBranch');
+  branchSel.innerHTML = BRANCH_IDS.map(b => `<option value="${b}">${escHtml(getBranchName(b))}</option>`).join('');
+  document.getElementById('uaEditId').value = id || '';
+  document.getElementById('uaMsg').innerHTML = '';
+  if (id) {
+    const acc = getAccounts().find(a => a.id === id);
+    if (!acc) return;
+    document.getElementById('uaModalTitle').textContent = '✏️ تعديل مستخدم';
+    document.getElementById('uaUsername').value = acc.username;
+    document.getElementById('uaPassword').value = '';
+    document.getElementById('uaPassword').placeholder = 'اتركها فارغة للإبقاء على نفس كلمة المرور';
+    document.getElementById('uaType').value = acc.type;
+    if (acc.type === 'branch') {
+      branchSel.value = acc.branchId;
+      document.getElementById('uaRole').value = acc.role || 'cashier';
     }
+  } else {
+    document.getElementById('uaModalTitle').textContent = '➕ إضافة مستخدم';
+    document.getElementById('uaUsername').value = '';
+    document.getElementById('uaPassword').value = '';
+    document.getElementById('uaPassword').placeholder = 'password';
+    document.getElementById('uaType').value = 'branch';
+    document.getElementById('uaRole').value = 'cashier';
   }
-  setBranchUsersLocal(bu);
-  // Passwords stay local only — never synced to Firestore (see CLAUDE.md security notes)
-  showMsg('sBranchUsersMsg', '✅ تم حفظ بيانات دخول الفروع');
+  toggleUserAccountFields();
+  document.getElementById('userAccountModal').classList.remove('hidden');
+}
+
+function closeUserAccountModal() {
+  document.getElementById('userAccountModal').classList.add('hidden');
+}
+
+async function saveUserAccount() {
+  const id       = document.getElementById('uaEditId').value;
+  const username = document.getElementById('uaUsername').value.trim().toLowerCase();
+  const passRaw  = document.getElementById('uaPassword').value;
+  const type     = document.getElementById('uaType').value;
+  const branchId = document.getElementById('uaBranch').value;
+  const role     = document.getElementById('uaRole').value;
+  const msg      = document.getElementById('uaMsg');
+
+  if (!username) { msg.innerHTML = '<div style="color:var(--danger);font-size:12px;">اكتب اسم مستخدم</div>'; return; }
+  if (['admin', 'cashier'].includes(username)) { msg.innerHTML = '<div style="color:var(--danger);font-size:12px;">اسم المستخدم ده محجوز</div>'; return; }
+
+  const accounts = getAccounts();
+  if (accounts.find(a => a.username.toLowerCase() === username && a.id !== id)) {
+    msg.innerHTML = '<div style="color:var(--danger);font-size:12px;">اسم المستخدم ده مستخدم بالفعل</div>'; return;
+  }
+
+  const existing = id ? accounts.find(a => a.id === id) : null;
+  if (!existing && (!passRaw || passRaw.length < 4)) {
+    msg.innerHTML = '<div style="color:var(--danger);font-size:12px;">كلمة المرور لازم تكون 4 أحرف على الأقل</div>'; return;
+  }
+  const password = passRaw && passRaw.length >= 4 ? await hashPass(passRaw) : (existing ? existing.password : '');
+
+  const record = {
+    id: id || ('u_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7)),
+    username, password, type,
+    branchId: type === 'branch' ? branchId : null,
+    role:     type === 'branch' ? role : null,
+  };
+
+  setAccounts(id ? accounts.map(a => a.id === id ? record : a) : [...accounts, record]);
+  renderUserAccountsSettings();
+  closeUserAccountModal();
+  showMsg('sSettingsMsg', '✅ تم حفظ المستخدم');
+  addAuditLog('user.save', `تم حفظ مستخدم: ${username} (${type === 'admin' ? 'أدمن' : (role === 'manager' ? 'مدير فرع' : 'كاشير')})`, currentBranch);
+}
+
+function deleteUserAccount(id) {
+  const accounts = getAccounts();
+  const acc = accounts.find(a => a.id === id);
+  if (!acc) return;
+  if (!confirm(`حذف المستخدم "${acc.username}"؟`)) return;
+  setAccounts(accounts.filter(a => a.id !== id));
+  renderUserAccountsSettings();
+  addAuditLog('user.delete', `تم حذف مستخدم: ${acc.username}`, currentBranch);
 }
 
 function changePass(role) {

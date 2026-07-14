@@ -100,6 +100,24 @@ function setBranchUsers(v) {
   setBranchUsersLocal(v); // passwords NEVER go to Firestore
 }
 
+// Admin-managed user accounts — replaces the old one-slot-per-branch model
+// so the admin can create any number of admin/cashier/manager logins from
+// "إدارة المستخدمين" in Settings. Each entry:
+// { id, username, password (hash), type:'admin'|'branch', branchId, role }
+// Synced through Firestore (pos_data/accounts) — same auth-required
+// protection tier as inventory/sales, NOT the old pos_data/auth doc that
+// leaked publicly (see CLAUDE.md). Only the password HASH is ever stored.
+let _accountsCache = DB.g('pos_accounts', []);
+const getAccounts = () => _accountsCache;
+function setAccountsLocal(v) { _accountsCache = v; DB.s('pos_accounts', v); }
+function setAccounts(v) {
+  setAccountsLocal(v);
+  if (!_fbReady) return;
+  _db.collection('pos_data').doc('accounts')
+     .set({ list: v, updatedAt: Date.now() })
+     .catch(e => console.error('Firestore setAccounts:', e));
+}
+
 // SETTINGS
 const getThreshold    = () => _settingsCache.threshold || 5;
 const getSalespeople  = () => _settingsCache.salespeople && _settingsCache.salespeople.length ? _settingsCache.salespeople : ['محمد','الاء'];

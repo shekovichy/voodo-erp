@@ -2499,12 +2499,11 @@ body.warehouse-mode #cartFab {
             <button class="btn btn-primary" onclick="changePass('admin')">حفظ</button>
             <div id="sAdminMsg" class="mt-16"></div>
           </div>
-          <div class="card">
-            <div class="card-title">🏬 كلمات مرور الفروع (كاشير)</div>
-            <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">يوزر وباسورد مستقل لكل فرع — الكاشير يدخل تلقائي على فرعه</p>
-            <div id="branchUsersContainer"></div>
-            <button class="btn btn-primary" onclick="saveBranchUsers()">💾 حفظ بيانات الفروع</button>
-            <div id="sBranchUsersMsg" class="mt-16"></div>
+          <div class="card" style="grid-column:1/-1;">
+            <div class="card-title">👥 إدارة المستخدمين</div>
+            <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">أنشئ حساب أدمن إضافي أو حساب فرع (كاشير أو مدير فرع) — يتزامن تلقائيًا مع كل الأجهزة</p>
+            <div id="userAccountsContainer" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
+            <button class="btn btn-primary" onclick="openUserAccountModal()">➕ إضافة مستخدم</button>
           </div>
           <div class="card">
             <div class="card-title">🏬 أسماء الفروع</div>
@@ -2916,6 +2915,49 @@ body.warehouse-mode #cartFab {
   </div>
 </div>
 
+<!-- ════════════════ USER ACCOUNT MODAL ════════════════ -->
+<div id="userAccountModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:420px;width:94%;">
+    <div class="modal-header"><h3 style="margin:0;font-size:17px;" id="uaModalTitle">➕ إضافة مستخدم</h3></div>
+    <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+      <input type="hidden" id="uaEditId" value="" />
+      <div>
+        <label style="font-size:12px;color:var(--text-muted);">اسم المستخدم</label>
+        <input class="form-control" id="uaUsername" placeholder="username" style="margin-top:4px;" />
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--text-muted);">كلمة المرور</label>
+        <input class="form-control" id="uaPassword" type="password" placeholder="password" style="margin-top:4px;" />
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--text-muted);">نوع المستخدم</label>
+        <select class="form-control" id="uaType" style="margin-top:4px;" onchange="toggleUserAccountFields()">
+          <option value="branch">مستخدم فرع</option>
+          <option value="admin">أدمن</option>
+        </select>
+      </div>
+      <div id="uaBranchFields" style="display:flex;flex-direction:column;gap:14px;">
+        <div>
+          <label style="font-size:12px;color:var(--text-muted);">الفرع</label>
+          <select class="form-control" id="uaBranch" style="margin-top:4px;"></select>
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--text-muted);">الصلاحية</label>
+          <select class="form-control" id="uaRole" style="margin-top:4px;">
+            <option value="cashier">كاشير</option>
+            <option value="manager">مدير فرع</option>
+          </select>
+        </div>
+      </div>
+      <div id="uaMsg"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeUserAccountModal()">إلغاء</button>
+      <button class="btn btn-primary" onclick="saveUserAccount()">💾 حفظ</button>
+    </div>
+  </div>
+</div>
+
 <!-- ════════════════ FINGERPRINT IMPORT MODAL ════════════════ -->
 <div id="fingerprintModal" class="modal-overlay hidden">
   <div class="modal-box" style="max-width:500px;width:94%;">
@@ -3039,6 +3081,24 @@ const DEFAULT_BRANCH_USERS = {
 const getBranchUsers = () => DB.g('pos_branch_users', DEFAULT_BRANCH_USERS);
 function setBranchUsers(v) {
   setBranchUsersLocal(v); // passwords NEVER go to Firestore
+}
+
+// Admin-managed user accounts — replaces the old one-slot-per-branch model
+// so the admin can create any number of admin/cashier/manager logins from
+// "إدارة المستخدمين" in Settings. Each entry:
+// { id, username, password (hash), type:'admin'|'branch', branchId, role }
+// Synced through Firestore (pos_data/accounts) — same auth-required
+// protection tier as inventory/sales, NOT the old pos_data/auth doc that
+// leaked publicly (see CLAUDE.md). Only the password HASH is ever stored.
+let _accountsCache = DB.g('pos_accounts', []);
+const getAccounts = () => _accountsCache;
+function setAccountsLocal(v) { _accountsCache = v; DB.s('pos_accounts', v); }
+function setAccounts(v) {
+  setAccountsLocal(v);
+  if (!_fbReady) return;
+  _db.collection('pos_data').doc('accounts')
+     .set({ list: v, updatedAt: Date.now() })
+     .catch(e => console.error('Firestore setAccounts:', e));
 }
 
 // SETTINGS
@@ -3351,11 +3411,54 @@ function getDateRange(period, fromId, toId) {
 // ══════════════════════════════════════════════
 // LOGIN / LOGOUT
 // ══════════════════════════════════════════════
+// Shared post-auth setup for any admin-type login (hardcoded 'admin' or a
+// new admin-type account created via "إدارة المستخدمين").
+function _enterAdminSession(auditLabel) {
+  currentUser = 'admin';
+  isBranchManager = false;
+  document.getElementById('loginPage').classList.add('hidden');
+  document.getElementById('managerView').classList.remove('hidden');
+  document.getElementById('todayDate').textContent =
+    new Date().toLocaleDateString('ar-EG', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  document.getElementById('sLowThreshold').value = getThreshold();
+  initFirebase();   // ← يشغّل Firebase عند دخول الأدمن
+  initBranchUI();
+  document.getElementById('topbarLogout').style.display = 'inline-flex';
+  showPage('home');
+  setTimeout(() => addAuditLog('auth.login', auditLabel, currentBranch), 500);
+}
+
+// Shared post-auth setup for any branch login (legacy per-branch slot or a
+// new branch-type account), covering both warehouse-only and normal branches.
+function _enterBranchSession(branchId, role, username) {
+  currentUser = 'cashier';
+  isBranchManager = role === 'manager';
+  currentBranch = branchId;
+  DB.s('currentBranch', branchId);
+  document.getElementById('loginPage').classList.add('hidden');
+  if (branchId === 'wh') {
+    // Warehouse-only mode: restricted to warehouse & transfers pages
+    window._whMode = true;
+    document.body.classList.add('warehouse-mode');
+    document.getElementById('managerView').classList.remove('hidden');
+    document.getElementById('topbarLogout').style.display = 'inline-flex';
+    initFirebase();
+    showPage('warehouse');
+    setTimeout(() => addAuditLog('auth.login', `تسجيل دخول مخزن: ${username}`, branchId), 500);
+  } else {
+    document.getElementById('managerView').classList.remove('hidden');
+    initFirebase();
+    initBranchUI();
+    showPage('home');
+    renderHomeIcons();
+    setTimeout(() => addAuditLog('auth.login', `تسجيل دخول كاشير: ${username} — ${getBranchName(branchId)}`, branchId), 500);
+  }
+}
+
 async function doLogin() {
   const user = document.getElementById('loginUser').value.trim().toLowerCase();
   const pass = document.getElementById('loginPass').value;
   const users = getUsers();
-  const branchUsers = getBranchUsers();
   document.getElementById('loginError').classList.add('hidden');
   if (!pass) { document.getElementById('loginError').textContent = 'أدخل كلمة المرور'; document.getElementById('loginError').classList.remove('hidden'); return; }
 
@@ -3367,19 +3470,11 @@ async function doLogin() {
 
   if (user === 'admin' && await checkPass(pass, users.admin)) {
     await upgradePassIfNeeded(pass, users.admin, 'admin');
-    currentUser = 'admin';
-    isBranchManager = false;
-    document.getElementById('loginPage').classList.add('hidden');
-    document.getElementById('managerView').classList.remove('hidden');
-    document.getElementById('todayDate').textContent =
-      new Date().toLocaleDateString('ar-EG', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
-    document.getElementById('sLowThreshold').value = getThreshold();
-    initFirebase();   // ← يشغّل Firebase عند دخول الأدمن
-    initBranchUI();
-    document.getElementById('topbarLogout').style.display = 'inline-flex';
-    showPage('home');
-    setTimeout(() => addAuditLog('auth.login', 'تسجيل دخول: admin', currentBranch), 500);
-  } else if (user === 'cashier' && pass === users.cashier) {
+    _enterAdminSession('تسجيل دخول: admin');
+    return;
+  }
+
+  if (user === 'cashier' && pass === users.cashier) {
     // Legacy cashier (all branches)
     currentUser = 'cashier';
     isBranchManager = false;
@@ -3391,44 +3486,36 @@ async function doLogin() {
     updateClock();
     setInterval(updateClock, 30000);
     setTimeout(function(){ checkForApprovedCarts(); }, 1000);
-  } else {
-    // Branch-specific cashier login
-    const branchUsers = getBranchUsers();
-    let matchedBranch = null;
-    for (const b of BRANCH_IDS) {
-      if (branchUsers[b] &&
-          user === (branchUsers[b].username || '').toLowerCase() &&
-          await checkPass(pass, branchUsers[b].password)) {
-        matchedBranch = b; break;
-      }
-    }
-    if (matchedBranch) {
-      currentUser = 'cashier';
-      isBranchManager = branchUsers[matchedBranch].role === 'manager';
-      currentBranch = matchedBranch;
-      DB.s('currentBranch', matchedBranch);
-      document.getElementById('loginPage').classList.add('hidden');
-      if (matchedBranch === 'wh') {
-        // Warehouse-only mode: restricted to warehouse & transfers pages
-        window._whMode = true;
-        document.body.classList.add('warehouse-mode');
-        document.getElementById('managerView').classList.remove('hidden');
-        document.getElementById('topbarLogout').style.display = 'inline-flex';
-        initFirebase();
-        showPage('warehouse');
-        setTimeout(() => addAuditLog('auth.login', `تسجيل دخول مخزن: ${user}`, matchedBranch), 500);
+    return;
+  }
+
+  // New admin-managed accounts (extra admins + branch cashiers/managers) —
+  // synced via Firestore, so this works on any device, unlike the legacy
+  // per-branch slot below which is local-only.
+  for (const acc of getAccounts()) {
+    if ((acc.username || '').toLowerCase() === user && await checkPass(pass, acc.password)) {
+      if (acc.type === 'admin') {
+        _enterAdminSession(`تسجيل دخول: ${user}`);
       } else {
-        document.getElementById('managerView').classList.remove('hidden');
-        initFirebase();
-        initBranchUI();
-        showPage('home');
-        renderHomeIcons();
-        setTimeout(() => addAuditLog('auth.login', `تسجيل دخول كاشير: ${user} — ${getBranchName(matchedBranch)}`, matchedBranch), 500);
+        _enterBranchSession(acc.branchId, acc.role, user);
       }
-    } else {
-      document.getElementById('loginError').classList.remove('hidden');
+      return;
     }
   }
+
+  // Legacy per-branch single-slot login (kept as a fallback for devices that
+  // already have real credentials cached locally from before "إدارة المستخدمين" existed)
+  const branchUsers = getBranchUsers();
+  for (const b of BRANCH_IDS) {
+    if (branchUsers[b] &&
+        user === (branchUsers[b].username || '').toLowerCase() &&
+        await checkPass(pass, branchUsers[b].password)) {
+      _enterBranchSession(b, branchUsers[b].role, user);
+      return;
+    }
+  }
+
+  document.getElementById('loginError').classList.remove('hidden');
 }
 
 
@@ -4303,7 +4390,7 @@ function _showPageImpl(page) {
   if (page === 'sales')      { initSalesFilter(); renderSales(); }
   if (page === 'reports')    { buildSalesReport(); setTimeout(()=>showVLTab('catreport'),100); }
   if (page === 'suspended')  renderSuspendedPage();
-  if (page === 'settings')   { renderSellersSettings(); renderLastBackupInfo(); initGoogleDriveUI(); document.getElementById('sVipThreshold').value = _settingsCache.vipThreshold || 1000; populateBranchNameInputs(); renderBranchUsersSettings(); }
+  if (page === 'settings')   { renderSellersSettings(); renderLastBackupInfo(); initGoogleDriveUI(); document.getElementById('sVipThreshold').value = _settingsCache.vipThreshold || 1000; populateBranchNameInputs(); renderUserAccountsSettings(); }
   if (page === 'customers')  renderCustomers();
   if (page === 'promos')     renderPromosPage();
   if (page === 'transfers')  renderTransfersPage();
@@ -5495,51 +5582,137 @@ function printReport(sectionId) {
 // ══════════════════════════════════════════════
 // SETTINGS
 // ══════════════════════════════════════════════
-function renderBranchUsersSettings() {
-  const bu = getBranchUsers();
-  const container = document.getElementById('branchUsersContainer');
+// ── USER ACCOUNTS (admin-managed) ──────────────────────────────
+// One-time import of any real credentials already sitting in the old
+// per-branch-slot storage on THIS device, so whichever device the admin
+// used to set up real branch logins before doesn't lose them — they get
+// published to Firestore (pos_data/accounts) the first time this renders.
+function _migrateLegacyBranchUsersOnce() {
+  if (DB.g('pos_accounts_migrated_v1', false)) return;
+  DB.s('pos_accounts_migrated_v1', true);
+  const legacy = getBranchUsers();
+  const accounts = getAccounts();
+  const additions = [];
+  BRANCH_IDS.forEach(b => {
+    const lu = legacy[b];
+    if (lu && lu.username && lu.password &&
+        !accounts.find(a => a.username.toLowerCase() === (lu.username || '').toLowerCase())) {
+      additions.push({
+        id: 'u_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7) + '_' + b,
+        username: lu.username, password: lu.password,
+        type: 'branch', branchId: b, role: lu.role || 'cashier',
+      });
+    }
+  });
+  if (additions.length) setAccounts([...accounts, ...additions]);
+}
+
+function renderUserAccountsSettings() {
+  _migrateLegacyBranchUsersOnce();
+  const container = document.getElementById('userAccountsContainer');
   if (!container) return;
-  container.innerHTML = BRANCH_IDS.map(b => {
-    const name = getBranchName(b);
-    const uname = bu[b]?.username || '';
-    const upass  = bu[b]?.password || '';
-    const role   = bu[b]?.role || 'cashier';
-    return `<div style="border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:10px; background:var(--bg);">
-      <div style="font-weight:700; font-size:13px; margin-bottom:8px; color:var(--primary);">🏬 ${escHtml(name)}</div>
-      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
-        <div><label style="font-size:11px; color:var(--text-muted);">اسم المستخدم</label>
-          <input class="form-control" id="bu-user-${b}" value="${escHtml(uname)}" placeholder="username" style="margin-top:4px;" /></div>
-        <div><label style="font-size:11px; color:var(--text-muted);">كلمة المرور</label>
-          <input class="form-control" id="bu-pass-${b}" value="" placeholder="password" style="margin-top:4px;" /></div>
-        <div><label style="font-size:11px; color:var(--text-muted);">الصلاحية</label>
-          <select class="form-control" id="bu-role-${b}" style="margin-top:4px;">
-            <option value="cashier" ${role==='cashier'?'selected':''}>كاشير</option>
-            <option value="manager" ${role==='manager'?'selected':''}>مدير فرع</option>
-          </select></div>
+  const accounts = getAccounts();
+  if (!accounts.length) {
+    container.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:8px 0;">لا يوجد مستخدمين بعد — اضغط "إضافة مستخدم"</div>';
+    return;
+  }
+  container.innerHTML = accounts.map(acc => {
+    const typeLabel   = acc.type === 'admin' ? '👑 أدمن' : (acc.role === 'manager' ? '🧑‍💼 مدير فرع' : '🧑‍💻 كاشير');
+    const branchLabel = acc.type === 'branch' ? ` — ${escHtml(getBranchName(acc.branchId))}` : '';
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--border);border-radius:8px;padding:8px 12px;background:var(--bg);">
+      <div style="font-size:13px;"><strong>${escHtml(acc.username)}</strong>
+        <span style="color:var(--text-muted);"> — ${typeLabel}${branchLabel}</span></div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;" onclick="openUserAccountModal('${acc.id}')">✏️</button>
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;color:var(--danger);" onclick="deleteUserAccount('${acc.id}')">🗑️</button>
       </div>
     </div>`;
   }).join('');
 }
 
-async function saveBranchUsers() {
-  const bu = getBranchUsers();
-  for (const b of BRANCH_IDS) {
-    const uname = document.getElementById(`bu-user-${b}`)?.value.trim();
-    const upass  = document.getElementById(`bu-pass-${b}`)?.value.trim();
-    const role   = document.getElementById(`bu-role-${b}`)?.value || 'cashier';
-    if (uname) {
-      if (upass && upass.length >= 4) {
-        const hashed = await hashPass(upass);
-        bu[b] = { username: uname, password: hashed, role };
-      } else if (upass === '') {
-        // Keep existing password hash unchanged
-        bu[b] = { username: uname, password: bu[b]?.password || '', role };
-      }
+function toggleUserAccountFields() {
+  const isAdmin = document.getElementById('uaType').value === 'admin';
+  document.getElementById('uaBranchFields').style.display = isAdmin ? 'none' : 'flex';
+}
+
+function openUserAccountModal(id) {
+  const branchSel = document.getElementById('uaBranch');
+  branchSel.innerHTML = BRANCH_IDS.map(b => `<option value="${b}">${escHtml(getBranchName(b))}</option>`).join('');
+  document.getElementById('uaEditId').value = id || '';
+  document.getElementById('uaMsg').innerHTML = '';
+  if (id) {
+    const acc = getAccounts().find(a => a.id === id);
+    if (!acc) return;
+    document.getElementById('uaModalTitle').textContent = '✏️ تعديل مستخدم';
+    document.getElementById('uaUsername').value = acc.username;
+    document.getElementById('uaPassword').value = '';
+    document.getElementById('uaPassword').placeholder = 'اتركها فارغة للإبقاء على نفس كلمة المرور';
+    document.getElementById('uaType').value = acc.type;
+    if (acc.type === 'branch') {
+      branchSel.value = acc.branchId;
+      document.getElementById('uaRole').value = acc.role || 'cashier';
     }
+  } else {
+    document.getElementById('uaModalTitle').textContent = '➕ إضافة مستخدم';
+    document.getElementById('uaUsername').value = '';
+    document.getElementById('uaPassword').value = '';
+    document.getElementById('uaPassword').placeholder = 'password';
+    document.getElementById('uaType').value = 'branch';
+    document.getElementById('uaRole').value = 'cashier';
   }
-  setBranchUsersLocal(bu);
-  // Passwords stay local only — never synced to Firestore (see CLAUDE.md security notes)
-  showMsg('sBranchUsersMsg', '✅ تم حفظ بيانات دخول الفروع');
+  toggleUserAccountFields();
+  document.getElementById('userAccountModal').classList.remove('hidden');
+}
+
+function closeUserAccountModal() {
+  document.getElementById('userAccountModal').classList.add('hidden');
+}
+
+async function saveUserAccount() {
+  const id       = document.getElementById('uaEditId').value;
+  const username = document.getElementById('uaUsername').value.trim().toLowerCase();
+  const passRaw  = document.getElementById('uaPassword').value;
+  const type     = document.getElementById('uaType').value;
+  const branchId = document.getElementById('uaBranch').value;
+  const role     = document.getElementById('uaRole').value;
+  const msg      = document.getElementById('uaMsg');
+
+  if (!username) { msg.innerHTML = '<div style="color:var(--danger);font-size:12px;">اكتب اسم مستخدم</div>'; return; }
+  if (['admin', 'cashier'].includes(username)) { msg.innerHTML = '<div style="color:var(--danger);font-size:12px;">اسم المستخدم ده محجوز</div>'; return; }
+
+  const accounts = getAccounts();
+  if (accounts.find(a => a.username.toLowerCase() === username && a.id !== id)) {
+    msg.innerHTML = '<div style="color:var(--danger);font-size:12px;">اسم المستخدم ده مستخدم بالفعل</div>'; return;
+  }
+
+  const existing = id ? accounts.find(a => a.id === id) : null;
+  if (!existing && (!passRaw || passRaw.length < 4)) {
+    msg.innerHTML = '<div style="color:var(--danger);font-size:12px;">كلمة المرور لازم تكون 4 أحرف على الأقل</div>'; return;
+  }
+  const password = passRaw && passRaw.length >= 4 ? await hashPass(passRaw) : (existing ? existing.password : '');
+
+  const record = {
+    id: id || ('u_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7)),
+    username, password, type,
+    branchId: type === 'branch' ? branchId : null,
+    role:     type === 'branch' ? role : null,
+  };
+
+  setAccounts(id ? accounts.map(a => a.id === id ? record : a) : [...accounts, record]);
+  renderUserAccountsSettings();
+  closeUserAccountModal();
+  showMsg('sSettingsMsg', '✅ تم حفظ المستخدم');
+  addAuditLog('user.save', `تم حفظ مستخدم: ${username} (${type === 'admin' ? 'أدمن' : (role === 'manager' ? 'مدير فرع' : 'كاشير')})`, currentBranch);
+}
+
+function deleteUserAccount(id) {
+  const accounts = getAccounts();
+  const acc = accounts.find(a => a.id === id);
+  if (!acc) return;
+  if (!confirm(`حذف المستخدم "${acc.username}"؟`)) return;
+  setAccounts(accounts.filter(a => a.id !== id));
+  renderUserAccountsSettings();
+  addAuditLog('user.delete', `تم حذف مستخدم: ${acc.username}`, currentBranch);
 }
 
 function changePass(role) {
@@ -5822,10 +5995,28 @@ function initFirebase() {
         visRefresh('page-promos', renderPromosPage);
       }, err => { _promoCache = DB.g('pos_promos', []); });
 
-    // NOTE: passwords are intentionally NOT synced through Firestore — pos_data/auth
-    // used to hold password hashes and was readable by any anonymously-authenticated
-    // client (Firestore rules only require auth != null). Each device now keeps its
-    // own admin/cashier credentials in localStorage only. See CLAUDE.md security notes.
+    // NOTE: the original hardcoded admin/legacy-cashier passwords (getUsers()) are
+    // intentionally NOT synced through Firestore — pos_data/auth used to hold password
+    // hashes and was readable by any anonymously-authenticated client. Each device keeps
+    // those two specific credentials in localStorage only. See CLAUDE.md security notes.
+    // Admin-managed accounts created via "إدارة المستخدمين" (below) DO sync — they live
+    // at pos_data/accounts, not the blocked pos_data/auth doc, and only ever store a
+    // password HASH, never plaintext — same protection tier as inventory/sales.
+
+    // Accounts listener (admin-managed users: extra admins + branch cashiers/managers)
+    _db.collection('pos_data').doc('accounts')
+      .onSnapshot(snap => {
+        if (snap.exists) {
+          _accountsCache = snap.data().list || [];
+          DB.s('pos_accounts', _accountsCache); // keep local fallback fresh
+        } else {
+          _accountsCache = DB.g('pos_accounts', []);
+          if (_accountsCache.length) {
+            _db.collection('pos_data').doc('accounts').set({ list: _accountsCache, updatedAt: Date.now() });
+          }
+        }
+        visRefresh('page-settings', renderUserAccountsSettings);
+      }, err => { _accountsCache = DB.g('pos_accounts', []); });
 
     // Customers listener
     _db.collection('pos_data').doc('customers')
