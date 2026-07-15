@@ -30,12 +30,19 @@ function populateBranchSelect() {
   sel.innerHTML = BRANCH_IDS.map(b => `<option value="${b}" ${b===currentBranch?'selected':''}>${branches[b]||BRANCH_DEFAULTS[b]}</option>`).join('');
 }
 
+// Builds one input row per non-warehouse branch (warehouse keeps its fixed
+// name, matching prior behavior — this UI never had a 'wh' row). Rebuilding
+// the whole container (rather than assuming fixed branchName_b1..b4 inputs)
+// is what lets a newly-added branch show up here without any HTML changes.
 function populateBranchNameInputs() {
+  const container = document.getElementById('branchNamesContainer');
+  if (!container) return;
   const branches = getBranches();
-  BRANCH_IDS.forEach(b => {
-    const el = document.getElementById(`branchName_${b}`);
-    if (el) el.value = branches[b] || BRANCH_DEFAULTS[b];
-  });
+  container.innerHTML = BRANCH_IDS.filter(b => b !== 'wh').map(b => {
+    const label = BRANCH_DEFAULTS[b] || b;
+    const value = branches[b] || BRANCH_DEFAULTS[b] || b;
+    return `<div class="form-group"><label>${escHtml(label)}</label><input class="form-control" id="branchName_${b}" value="${escHtml(value)}" placeholder="${escHtml(label)}" /></div>`;
+  }).join('');
 }
 
 function saveBranchNames() {
@@ -43,11 +50,11 @@ function saveBranchNames() {
   const branches = {};
   BRANCH_IDS.forEach(b => {
     const el = document.getElementById(`branchName_${b}`);
-    branches[b] = (el?.value.trim()) || BRANCH_DEFAULTS[b];
+    branches[b] = (el?.value.trim()) || BRANCH_DEFAULTS[b] || b;
   });
   const changes = BRANCH_IDS
-    .filter(b => (oldBranches[b] || BRANCH_DEFAULTS[b]) !== branches[b])
-    .map(b => ({ label: `اسم فرع (${BRANCH_DEFAULTS[b]})`, before: oldBranches[b] || BRANCH_DEFAULTS[b], after: branches[b] }));
+    .filter(b => (oldBranches[b] || BRANCH_DEFAULTS[b] || b) !== branches[b])
+    .map(b => ({ label: `اسم فرع (${BRANCH_DEFAULTS[b] || b})`, before: oldBranches[b] || BRANCH_DEFAULTS[b] || b, after: branches[b] }));
   _settingsCache.branches = branches;
   if (_fbReady) {
     _db.collection('pos_data').doc('settings').set(_settingsCache)
@@ -58,6 +65,38 @@ function saveBranchNames() {
   populateBranchNameInputs();
   if (changes.length) addAuditLog('settings.change', 'تعديل أسماء الفروع', currentBranch, changes);
   showMsg('sBranchMsg', 'تم حفظ أسماء الفروع ✓', 'success');
+}
+
+// Appends a new branch id (b5, b6, ...) beyond the base wh/b1-b4 set.
+// BRANCH_IDS is computed once at page load (see 00-core.js) — every
+// Firestore listener, cached filter <select>, and branch-name input is set
+// up once at startup too, so there's no reliable way to make a new branch
+// show up everywhere without a reload. Reloading immediately after saving
+// is simpler and safer than trying to hot-patch every one of those places.
+function addNewBranch() {
+  const name = prompt('اسم الفرع الجديد:');
+  if (!name || !name.trim()) return;
+  const trimmedName = name.trim();
+
+  const existingNums = BRANCH_IDS.filter(b => /^b\d+$/.test(b)).map(b => parseInt(b.slice(1), 10));
+  const newId = 'b' + ((existingNums.length ? Math.max(...existingNums) : 0) + 1);
+
+  const extra = DB.g('extraBranchIds', []);
+  extra.push(newId);
+  DB.s('extraBranchIds', extra);
+
+  const branches = getBranches();
+  branches[newId] = trimmedName;
+  _settingsCache.branches = branches;
+  if (_fbReady) {
+    _db.collection('pos_data').doc('settings').set(_settingsCache)
+       .catch(e => console.error('addNewBranch:', e));
+  }
+  DB.s('pos_branches', branches);
+
+  addAuditLog('branch.add', `إضافة فرع جديد: ${trimmedName} (${newId})`, null);
+  alert(`✅ تم إضافة فرع "${trimmedName}"!\nسيتم تحديث الصفحة الآن عشان الفرع الجديد يظهر في كل مكان.`);
+  location.reload();
 }
 
 // ── TRANSFERS ──────────────────────────────────

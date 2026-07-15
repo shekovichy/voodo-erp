@@ -2674,11 +2674,11 @@ body.warehouse-mode #cartFab {
           <div class="card">
             <div class="card-title">🏬 أسماء الفروع</div>
             <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">يمكنك تغيير اسم أي فرع — يظهر في كل الصفحات</p>
-            <div class="form-group"><label>الفرع الأول</label><input class="form-control" id="branchName_b1" placeholder="الفرع الأول" /></div>
-            <div class="form-group"><label>الفرع الثاني</label><input class="form-control" id="branchName_b2" placeholder="الفرع الثاني" /></div>
-            <div class="form-group"><label>الفرع الثالث</label><input class="form-control" id="branchName_b3" placeholder="الفرع الثالث" /></div>
-            <div class="form-group"><label>الفرع الرابع</label><input class="form-control" id="branchName_b4" placeholder="الفرع الرابع" /></div>
-            <button class="btn btn-primary" onclick="saveBranchNames()">💾 حفظ أسماء الفروع</button>
+            <div id="branchNamesContainer"></div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn btn-primary" onclick="saveBranchNames()">💾 حفظ أسماء الفروع</button>
+              <button class="btn btn-outline" onclick="addNewBranch()">➕ إضافة فرع جديد</button>
+            </div>
             <div id="sBranchMsg" class="mt-16"></div>
           </div>
           <div class="card">
@@ -3294,12 +3294,23 @@ function _loadChunk(page, cb) {
   document.body.appendChild(s);
 }
 // ══ CLOUD DATA CACHES — synced with Firestore in real-time ══════════════
-const BRANCH_IDS      = ['wh','b1','b2','b3','b4'];
+// Base branches always exist; admin-added branches (see addNewBranch() in
+// 70-branches.js) get auto-numbered ids (b5, b6, ...) appended here. This
+// list is computed once at page load from localStorage — adding a branch
+// requires a reload to take effect everywhere (Firestore listeners, cached
+// filter dropdowns, etc. are all set up once at startup, see CLAUDE.md-style
+// note in addNewBranch()), so there's no need for this to be reactive mid-session.
+const BASE_BRANCH_IDS = ['wh','b1','b2','b3','b4'];
+const BRANCH_IDS      = [...BASE_BRANCH_IDS, ...DB.g('extraBranchIds', [])];
 const BRANCH_DEFAULTS = { wh:'🏭 المخزن الرئيسي', b1:'الفرع الأول', b2:'الفرع الثاني', b3:'الفرع الثالث', b4:'الفرع الرابع' };
 let currentBranch       = DB.g('currentBranch', 'b1');
 let _invCacheByBranch   = {};                        // { b1:[], b2:[], b3:[], b4:[] }
 let _salesCache         = [];                        // filled by Firebase listeners — each sale has .branchId
-let _settingsCache      = { threshold: DB.g('threshold', 5), salespeople: DB.g('salespeople', ['محمد','الاء']) };
+// pos_branches was previously write-only — saveBranchNames()/addNewBranch()
+// persisted it but nothing ever read it back at load time, so renamed/added
+// branch names silently reset to BRANCH_DEFAULTS on every fresh page load
+// until Firestore's settings listener happened to fire and repopulate it.
+let _settingsCache      = { threshold: DB.g('threshold', 5), salespeople: DB.g('salespeople', ['محمد','الاء']), branches: DB.g('pos_branches', null) || undefined };
 let _transfersCache     = [];                        // inter-branch transfers
 let _suppliersCache     = [];                        // suppliers list
 let _purchaseCache      = [];                        // purchase orders
@@ -3629,6 +3640,19 @@ function _showDemoBanner() {
 // UTILS
 // ══════════════════════════════════════════════
 const fmt = (n) => (parseFloat(n) || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+// Calls fn() only if the given page element exists and is currently visible.
+// Used by both the Firestore listeners in 65-firebase.js (so live data
+// updates only re-render the page actually on screen) and switchBranch() in
+// 70-branches.js. Was previously a local const inside initFirebase() — a
+// pure, closure-free helper that any other top-level function calling it
+// (like switchBranch()) could never actually reach, so switchBranch() threw
+// a ReferenceError every time an admin used the branch switcher and it never
+// refreshed the currently-visible page. Hoisted here so it's one real global.
+const visRefresh = (pageId, fn) => {
+  const el = document.getElementById(pageId);
+  if (el && !el.classList.contains('hidden')) fn();
+};
 
 // Escape free-text values before interpolating into innerHTML — any field a
 // user can type (names, notes, reasons...) must go through this, since
@@ -4919,14 +4943,17 @@ function buildDashboard() {
 
   // ── Branch comparison horizontal bar chart ──
   const branches = getBranches();
-  const branchLabels = BRANCH_IDS.map(b => branches[b]||BRANCH_DEFAULTS[b]);
+  const branchLabels = BRANCH_IDS.map(b => branches[b]||BRANCH_DEFAULTS[b]||b);
   const branchRevs   = BRANCH_IDS.map(b => allSales.filter(s=>s.date.startsWith(thisMonth)&&s.branchId===b).reduce((s,x)=>s+x.total,0));
+  // Cycles if there are more branches than base colors (admin-added branches beyond the original 5)
+  const branchPalette = ['#1a5faf','#F47920','#d97706','#7c3aed','#059669','#dc2626','#0891b2','#be185d'];
+  const branchColors  = BRANCH_IDS.map((b,i) => branchPalette[i % branchPalette.length]);
   if (chartBranches) chartBranches.destroy();
   chartBranches = new Chart(document.getElementById('chartBranches'), {
     type:'bar',
     data:{
       labels: branchLabels,
-      datasets:[{ data:branchRevs, backgroundColor:['#1a5faf','#F47920','#d97706','#7c3aed'], borderRadius:6, label:'الإيرادات' }]
+      datasets:[{ data:branchRevs, backgroundColor:branchColors, borderRadius:6, label:'الإيرادات' }]
     },
     options:{
       indexAxis:'y',
@@ -6229,11 +6256,6 @@ function initFirebase() {
     // Anonymous auth — required for Firestore Security Rules
     firebase.auth().signInAnonymously().catch(e => console.warn('Firebase Auth:', e.message));
 
-    const visRefresh = (pageId, fn) => {
-      const el = document.getElementById(pageId);
-      if (el && !el.classList.contains('hidden')) fn();
-    };
-
     _db.collection('pos_data').doc('suspended')
       .onSnapshot(snap => {
         _suspendCache = snap.exists ? (snap.data().bills || []) : [];
@@ -6862,12 +6884,19 @@ function populateBranchSelect() {
   sel.innerHTML = BRANCH_IDS.map(b => `<option value="${b}" ${b===currentBranch?'selected':''}>${branches[b]||BRANCH_DEFAULTS[b]}</option>`).join('');
 }
 
+// Builds one input row per non-warehouse branch (warehouse keeps its fixed
+// name, matching prior behavior — this UI never had a 'wh' row). Rebuilding
+// the whole container (rather than assuming fixed branchName_b1..b4 inputs)
+// is what lets a newly-added branch show up here without any HTML changes.
 function populateBranchNameInputs() {
+  const container = document.getElementById('branchNamesContainer');
+  if (!container) return;
   const branches = getBranches();
-  BRANCH_IDS.forEach(b => {
-    const el = document.getElementById(`branchName_${b}`);
-    if (el) el.value = branches[b] || BRANCH_DEFAULTS[b];
-  });
+  container.innerHTML = BRANCH_IDS.filter(b => b !== 'wh').map(b => {
+    const label = BRANCH_DEFAULTS[b] || b;
+    const value = branches[b] || BRANCH_DEFAULTS[b] || b;
+    return `<div class="form-group"><label>${escHtml(label)}</label><input class="form-control" id="branchName_${b}" value="${escHtml(value)}" placeholder="${escHtml(label)}" /></div>`;
+  }).join('');
 }
 
 function saveBranchNames() {
@@ -6875,11 +6904,11 @@ function saveBranchNames() {
   const branches = {};
   BRANCH_IDS.forEach(b => {
     const el = document.getElementById(`branchName_${b}`);
-    branches[b] = (el?.value.trim()) || BRANCH_DEFAULTS[b];
+    branches[b] = (el?.value.trim()) || BRANCH_DEFAULTS[b] || b;
   });
   const changes = BRANCH_IDS
-    .filter(b => (oldBranches[b] || BRANCH_DEFAULTS[b]) !== branches[b])
-    .map(b => ({ label: `اسم فرع (${BRANCH_DEFAULTS[b]})`, before: oldBranches[b] || BRANCH_DEFAULTS[b], after: branches[b] }));
+    .filter(b => (oldBranches[b] || BRANCH_DEFAULTS[b] || b) !== branches[b])
+    .map(b => ({ label: `اسم فرع (${BRANCH_DEFAULTS[b] || b})`, before: oldBranches[b] || BRANCH_DEFAULTS[b] || b, after: branches[b] }));
   _settingsCache.branches = branches;
   if (_fbReady) {
     _db.collection('pos_data').doc('settings').set(_settingsCache)
@@ -6890,6 +6919,38 @@ function saveBranchNames() {
   populateBranchNameInputs();
   if (changes.length) addAuditLog('settings.change', 'تعديل أسماء الفروع', currentBranch, changes);
   showMsg('sBranchMsg', 'تم حفظ أسماء الفروع ✓', 'success');
+}
+
+// Appends a new branch id (b5, b6, ...) beyond the base wh/b1-b4 set.
+// BRANCH_IDS is computed once at page load (see 00-core.js) — every
+// Firestore listener, cached filter <select>, and branch-name input is set
+// up once at startup too, so there's no reliable way to make a new branch
+// show up everywhere without a reload. Reloading immediately after saving
+// is simpler and safer than trying to hot-patch every one of those places.
+function addNewBranch() {
+  const name = prompt('اسم الفرع الجديد:');
+  if (!name || !name.trim()) return;
+  const trimmedName = name.trim();
+
+  const existingNums = BRANCH_IDS.filter(b => /^b\d+$/.test(b)).map(b => parseInt(b.slice(1), 10));
+  const newId = 'b' + ((existingNums.length ? Math.max(...existingNums) : 0) + 1);
+
+  const extra = DB.g('extraBranchIds', []);
+  extra.push(newId);
+  DB.s('extraBranchIds', extra);
+
+  const branches = getBranches();
+  branches[newId] = trimmedName;
+  _settingsCache.branches = branches;
+  if (_fbReady) {
+    _db.collection('pos_data').doc('settings').set(_settingsCache)
+       .catch(e => console.error('addNewBranch:', e));
+  }
+  DB.s('pos_branches', branches);
+
+  addAuditLog('branch.add', `إضافة فرع جديد: ${trimmedName} (${newId})`, null);
+  alert(`✅ تم إضافة فرع "${trimmedName}"!\nسيتم تحديث الصفحة الآن عشان الفرع الجديد يظهر في كل مكان.`);
+  location.reload();
 }
 
 // ── TRANSFERS ──────────────────────────────────
@@ -8865,8 +8926,10 @@ function renderCategoryReport(fromDate, toDate) {
   // Also collect products across branches for better category lookup
   var productMap = {};
   allProducts.forEach(function(p){ if(p.code) productMap[p.code] = p; });
-  // fallback: also try other branches
-  ['b1','b2','b3','b4'].forEach(function(b){
+  // fallback: also try other sellable branches (excludes warehouse, and now
+  // uses BRANCH_IDS instead of a hardcoded b1-b4 literal so admin-added
+  // branches are included in the lookup too)
+  BRANCH_IDS.filter(function(b){ return b !== 'wh'; }).forEach(function(b){
     var brInv = _invCacheByBranch[b] || [];
     brInv.forEach(function(p){ if(p.code && !productMap[p.code]) productMap[p.code] = p; });
   });

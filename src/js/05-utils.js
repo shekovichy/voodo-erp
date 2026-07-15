@@ -3,6 +3,19 @@
 // ══════════════════════════════════════════════
 const fmt = (n) => (parseFloat(n) || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
+// Calls fn() only if the given page element exists and is currently visible.
+// Used by both the Firestore listeners in 65-firebase.js (so live data
+// updates only re-render the page actually on screen) and switchBranch() in
+// 70-branches.js. Was previously a local const inside initFirebase() — a
+// pure, closure-free helper that any other top-level function calling it
+// (like switchBranch()) could never actually reach, so switchBranch() threw
+// a ReferenceError every time an admin used the branch switcher and it never
+// refreshed the currently-visible page. Hoisted here so it's one real global.
+const visRefresh = (pageId, fn) => {
+  const el = document.getElementById(pageId);
+  if (el && !el.classList.contains('hidden')) fn();
+};
+
 // Escape free-text values before interpolating into innerHTML — any field a
 // user can type (names, notes, reasons...) must go through this, since
 // Firestore currently accepts writes from any anonymous client (see

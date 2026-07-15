@@ -186,14 +186,17 @@ function buildDashboard() {
 
   // ── Branch comparison horizontal bar chart ──
   const branches = getBranches();
-  const branchLabels = BRANCH_IDS.map(b => branches[b]||BRANCH_DEFAULTS[b]);
+  const branchLabels = BRANCH_IDS.map(b => branches[b]||BRANCH_DEFAULTS[b]||b);
   const branchRevs   = BRANCH_IDS.map(b => allSales.filter(s=>s.date.startsWith(thisMonth)&&s.branchId===b).reduce((s,x)=>s+x.total,0));
+  // Cycles if there are more branches than base colors (admin-added branches beyond the original 5)
+  const branchPalette = ['#1a5faf','#F47920','#d97706','#7c3aed','#059669','#dc2626','#0891b2','#be185d'];
+  const branchColors  = BRANCH_IDS.map((b,i) => branchPalette[i % branchPalette.length]);
   if (chartBranches) chartBranches.destroy();
   chartBranches = new Chart(document.getElementById('chartBranches'), {
     type:'bar',
     data:{
       labels: branchLabels,
-      datasets:[{ data:branchRevs, backgroundColor:['#1a5faf','#F47920','#d97706','#7c3aed'], borderRadius:6, label:'الإيرادات' }]
+      datasets:[{ data:branchRevs, backgroundColor:branchColors, borderRadius:6, label:'الإيرادات' }]
     },
     options:{
       indexAxis:'y',

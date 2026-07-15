@@ -31,12 +31,23 @@ function _loadChunk(page, cb) {
   document.body.appendChild(s);
 }
 // ══ CLOUD DATA CACHES — synced with Firestore in real-time ══════════════
-const BRANCH_IDS      = ['wh','b1','b2','b3','b4'];
+// Base branches always exist; admin-added branches (see addNewBranch() in
+// 70-branches.js) get auto-numbered ids (b5, b6, ...) appended here. This
+// list is computed once at page load from localStorage — adding a branch
+// requires a reload to take effect everywhere (Firestore listeners, cached
+// filter dropdowns, etc. are all set up once at startup, see CLAUDE.md-style
+// note in addNewBranch()), so there's no need for this to be reactive mid-session.
+const BASE_BRANCH_IDS = ['wh','b1','b2','b3','b4'];
+const BRANCH_IDS      = [...BASE_BRANCH_IDS, ...DB.g('extraBranchIds', [])];
 const BRANCH_DEFAULTS = { wh:'🏭 المخزن الرئيسي', b1:'الفرع الأول', b2:'الفرع الثاني', b3:'الفرع الثالث', b4:'الفرع الرابع' };
 let currentBranch       = DB.g('currentBranch', 'b1');
 let _invCacheByBranch   = {};                        // { b1:[], b2:[], b3:[], b4:[] }
 let _salesCache         = [];                        // filled by Firebase listeners — each sale has .branchId
-let _settingsCache      = { threshold: DB.g('threshold', 5), salespeople: DB.g('salespeople', ['محمد','الاء']) };
+// pos_branches was previously write-only — saveBranchNames()/addNewBranch()
+// persisted it but nothing ever read it back at load time, so renamed/added
+// branch names silently reset to BRANCH_DEFAULTS on every fresh page load
+// until Firestore's settings listener happened to fire and repopulate it.
+let _settingsCache      = { threshold: DB.g('threshold', 5), salespeople: DB.g('salespeople', ['محمد','الاء']), branches: DB.g('pos_branches', null) || undefined };
 let _transfersCache     = [];                        // inter-branch transfers
 let _suppliersCache     = [];                        // suppliers list
 let _purchaseCache      = [];                        // purchase orders

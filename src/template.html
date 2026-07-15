@@ -1979,11 +1979,11 @@
           <div class="card">
             <div class="card-title">🏬 أسماء الفروع</div>
             <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">يمكنك تغيير اسم أي فرع — يظهر في كل الصفحات</p>
-            <div class="form-group"><label>الفرع الأول</label><input class="form-control" id="branchName_b1" placeholder="الفرع الأول" /></div>
-            <div class="form-group"><label>الفرع الثاني</label><input class="form-control" id="branchName_b2" placeholder="الفرع الثاني" /></div>
-            <div class="form-group"><label>الفرع الثالث</label><input class="form-control" id="branchName_b3" placeholder="الفرع الثالث" /></div>
-            <div class="form-group"><label>الفرع الرابع</label><input class="form-control" id="branchName_b4" placeholder="الفرع الرابع" /></div>
-            <button class="btn btn-primary" onclick="saveBranchNames()">💾 حفظ أسماء الفروع</button>
+            <div id="branchNamesContainer"></div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn btn-primary" onclick="saveBranchNames()">💾 حفظ أسماء الفروع</button>
+              <button class="btn btn-outline" onclick="addNewBranch()">➕ إضافة فرع جديد</button>
+            </div>
             <div id="sBranchMsg" class="mt-16"></div>
           </div>
           <div class="card">

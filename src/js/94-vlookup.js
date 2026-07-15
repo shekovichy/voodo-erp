@@ -26,8 +26,10 @@ function renderCategoryReport(fromDate, toDate) {
   // Also collect products across branches for better category lookup
   var productMap = {};
   allProducts.forEach(function(p){ if(p.code) productMap[p.code] = p; });
-  // fallback: also try other branches
-  ['b1','b2','b3','b4'].forEach(function(b){
+  // fallback: also try other sellable branches (excludes warehouse, and now
+  // uses BRANCH_IDS instead of a hardcoded b1-b4 literal so admin-added
+  // branches are included in the lookup too)
+  BRANCH_IDS.filter(function(b){ return b !== 'wh'; }).forEach(function(b){
     var brInv = _invCacheByBranch[b] || [];
     brInv.forEach(function(p){ if(p.code && !productMap[p.code]) productMap[p.code] = p; });
   });

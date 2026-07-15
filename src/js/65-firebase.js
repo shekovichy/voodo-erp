@@ -64,11 +64,6 @@ function initFirebase() {
     // Anonymous auth — required for Firestore Security Rules
     firebase.auth().signInAnonymously().catch(e => console.warn('Firebase Auth:', e.message));
 
-    const visRefresh = (pageId, fn) => {
-      const el = document.getElementById(pageId);
-      if (el && !el.classList.contains('hidden')) fn();
-    };
-
     _db.collection('pos_data').doc('suspended')
       .onSnapshot(snap => {
         _suspendCache = snap.exists ? (snap.data().bills || []) : [];
