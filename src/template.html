@@ -792,7 +792,13 @@
               <input type="date" class="form-control" id="pvFrom" />
               <input type="date" class="form-control" id="pvTo" />
             </div>
-            <button class="btn btn-primary" style="margin-top:12px;" onclick="runPivotAnalysis()">▶️ تحليل</button>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;">
+              <button class="btn btn-primary" onclick="runPivotAnalysis()">▶️ تحليل</button>
+              <span style="width:1px;height:24px;background:var(--border);margin:0 4px;"></span>
+              <select class="form-control" id="pvFavorites" style="width:auto;max-width:220px;" onchange="loadPivotFavorite()"></select>
+              <button class="btn btn-outline btn-sm" onclick="savePivotFavorite()" title="احفظ الإعداد الحالي كمفضّلة">⭐ حفظ</button>
+              <button class="btn btn-outline btn-sm" onclick="deletePivotFavorite()" title="احذف التقرير المختار من المفضّلة">🗑️</button>
+            </div>
           </div>
           <div class="card"><div class="table-wrap" id="pivotResultWrap"></div></div>
         </div>

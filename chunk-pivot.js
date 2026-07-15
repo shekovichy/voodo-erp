@@ -99,6 +99,7 @@ function renderPivotUI() {
   if (branchSel && branchSel.options.length <= 1) {
     BRANCH_IDS.forEach(b => { branchSel.innerHTML += `<option value="${b}">${escHtml(getBranchName(b))}</option>`; });
   }
+  renderPivotFavorites();
 }
 
 let _lastPivot = null;
@@ -145,6 +146,74 @@ function drillPivotCell(ri, ci) {
   const row = _lastPivot.table[ri];
   const colLabel = _lastPivot.hasCol ? ' — ' + _lastPivot.colList[ci] : '';
   openDrillDown(row.cells[ci].lines, `${row.key}${colLabel}`);
+}
+
+// ── SAVED / FAVORITE PIVOT REPORTS ──────────────────────────────
+const getPivotFavorites = () => _pivotFavoritesCache;
+function setPivotFavorites(list) {
+  _pivotFavoritesCache = list;
+  DB.s('pos_pivot_favorites', list);
+  try { _db && _db.collection('pos_data').doc('pivot_favorites').set({ list, updatedAt: Date.now() }); } catch(e) {}
+}
+
+function renderPivotFavorites() {
+  const sel = document.getElementById('pvFavorites');
+  if (!sel) return;
+  const current = sel.value;
+  const favs = getPivotFavorites();
+  sel.innerHTML = '<option value="">⭐ اختر تقرير محفوظ...</option>' +
+    favs.map(f => `<option value="${f.id}">${escHtml(f.name)}</option>`).join('');
+  if (favs.find(f => f.id === current)) sel.value = current;
+}
+
+function savePivotFavorite() {
+  const rowDim = document.getElementById('pvRowDim').value;
+  const metricKey = document.getElementById('pvMetric').value;
+  if (!rowDim || !metricKey) { showToast('⚠️ اعمل تحليل الأول قبل الحفظ'); return; }
+  const name = prompt('اسم التقرير المفضّل:');
+  if (!name || !name.trim()) return;
+  const fav = {
+    id: 'pvf_' + Date.now(),
+    name: name.trim(),
+    rowDim, colDim: document.getElementById('pvColDim').value,
+    metric: metricKey,
+    period: document.getElementById('pvPeriod').value,
+    from: document.getElementById('pvFrom').value,
+    to: document.getElementById('pvTo').value,
+    branchId: document.getElementById('pvBranch').value,
+    createdBy: currentUser, createdAt: Date.now(),
+  };
+  setPivotFavorites([...getPivotFavorites(), fav]);
+  renderPivotFavorites();
+  document.getElementById('pvFavorites').value = fav.id;
+  showToast('⭐ تم حفظ التقرير في المفضّلة');
+}
+
+function loadPivotFavorite() {
+  const id = document.getElementById('pvFavorites').value;
+  if (!id) return;
+  const fav = getPivotFavorites().find(f => f.id === id);
+  if (!fav) return;
+  document.getElementById('pvRowDim').value = fav.rowDim || '';
+  document.getElementById('pvColDim').value = fav.colDim || '';
+  document.getElementById('pvMetric').value = fav.metric || '';
+  document.getElementById('pvPeriod').value = fav.period || 'month';
+  document.getElementById('pvCustomDates').classList.toggle('hidden', fav.period !== 'custom');
+  document.getElementById('pvFrom').value = fav.from || '';
+  document.getElementById('pvTo').value = fav.to || '';
+  document.getElementById('pvBranch').value = fav.branchId || '';
+  runPivotAnalysis();
+}
+
+function deletePivotFavorite() {
+  const id = document.getElementById('pvFavorites').value;
+  if (!id) { showToast('⚠️ اختر تقرير محفوظ للحذف'); return; }
+  const fav = getPivotFavorites().find(f => f.id === id);
+  if (!fav) return;
+  if (!confirm(`حذف "${fav.name}" من المفضّلة؟`)) return;
+  setPivotFavorites(getPivotFavorites().filter(f => f.id !== id));
+  renderPivotFavorites();
+  showToast('🗑️ تم الحذف');
 }
 
 // ── FREE PERIOD COMPARISON ──────────────────────────────────────

@@ -44,6 +44,7 @@ let _expensesCache      = [];                        // expenses per branch + co
 let _auditCache         = [];                        // audit log entries (last 500)
 let _helpdeskCache      = [];                        // support tickets
 let _supplierPaymentsCache = [];                     // payments recorded against supplier balances (AP)
+let _pivotFavoritesCache = [];                       // saved pivot-analyzer report configs
 
 // Helper: current branch display name
 function getBranchName(b) { return ((_settingsCache.branches) || BRANCH_DEFAULTS)[b] || b; }

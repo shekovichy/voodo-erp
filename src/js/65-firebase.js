@@ -168,6 +168,15 @@ function initFirebase() {
         visRefresh('page-helpdesk', renderHelpdeskPage);
       }, err => { _helpdeskCache = DB.g('pos_helpdesk', []); });
 
+    // Pivot-analyzer favorites listener — renderPivotFavorites lives in
+    // 115-pivot-reports.js (a lazy chunk); visRefresh only calls it once
+    // page-customized is visible, which can't happen before the chunk has loaded.
+    _db.collection('pos_data').doc('pivot_favorites')
+      .onSnapshot(snap => {
+        _pivotFavoritesCache = snap.exists ? (snap.data().list || []) : DB.g('pos_pivot_favorites', []);
+        visRefresh('page-customized', renderPivotFavorites);
+      }, err => { _pivotFavoritesCache = DB.g('pos_pivot_favorites', []); });
+
     // HR listener
     _db.collection('pos_data').doc('hr')
       .onSnapshot(snap => {
