@@ -138,6 +138,7 @@ const HOME_FOLDERS = {
     { page:'audit',    label:'سجل التغييرات', grad:'#94a3b8,#334155', svg:'<rect x="10" y="6" width="28" height="36" rx="3" stroke="white" stroke-width="2.5"/><path d="M16 16h16M16 22h16M16 28h8" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M30 32l2 2 4-4" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' },
     { page:'settings', label:'الإعدادات',     grad:'#a1a1aa,#3f3f46', svg:'<circle cx="24" cy="24" r="5" stroke="white" stroke-width="2.5"/><path d="M24 8v4M24 36v4M8 24h4M36 24h4M13.4 13.4l2.8 2.8M31.8 31.8l2.8 2.8M13.4 34.6l2.8-2.8M31.8 16.2l2.8-2.8" stroke="white" stroke-width="2.5" stroke-linecap="round"/>' },
     { page:'helpdesk', label:'الدعم الفني',   grad:'#fb923c,#c2410c', svg:'<path d="M8 34V16a6 6 0 016-6h20a6 6 0 016 6v10a6 6 0 01-6 6H20l-8 8v-6z" stroke="white" stroke-width="2.5" stroke-linejoin="round"/><circle cx="18" cy="21" r="2" fill="white"/><circle cx="24" cy="21" r="2" fill="white"/><circle cx="30" cy="21" r="2" fill="white"/>' },
+    { page:'migration', label:'استيراد بيانات', grad:'#0ea5a5,#0b7a7a', svg:'<path d="M24 6v24M24 30l-9-9M24 30l9-9" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="8" y="36" width="32" height="6" rx="2" fill="white"/>' },
   ]},
 };
 

@@ -217,6 +217,7 @@ function buildVlMappingUI() {
   document.getElementById('vlPriceAfterCol').innerHTML  = optsWithSkip;
   document.getElementById('vlCategoryCol').innerHTML    = optsWithSkip;
   document.getElementById('vlFamilyCol').innerHTML      = optsWithSkip;
+  if (document.getElementById('vlQtyCol')) document.getElementById('vlQtyCol').innerHTML = optsWithSkip;
 
   // Auto-detect common column names
   var autoMatch = {
@@ -225,7 +226,8 @@ function buildVlMappingUI() {
     vlPriceBeforeCol: ['price before','pricebefore','السعر قبل','قبل','old price','before'],
     vlPriceAfterCol:  ['price after','priceafter','السعر بعد','بعد','price','السعر','after'],
     vlCategoryCol:    ['category','الفئة','فئة','كاتيجورى','كاتيجوري','cat'],
-    vlFamilyCol:      ['family','المجموعة','مجموعة','فاميلى','فاميلي','fam']
+    vlFamilyCol:      ['family','المجموعة','مجموعة','فاميلى','فاميلي','fam'],
+    vlQtyCol:         ['qty','quantity','الكمية','كمية','رصيد','stock','رصيد افتتاحي']
   };
   Object.keys(autoMatch).forEach(function(selId) {
     var sel = document.getElementById(selId);
@@ -249,7 +251,8 @@ function previewVlookup() {
     priceBefore: document.getElementById('vlPriceBeforeCol').value,
     priceAfter:  document.getElementById('vlPriceAfterCol').value,
     category:    document.getElementById('vlCategoryCol').value,
-    family:      document.getElementById('vlFamilyCol').value
+    family:      document.getElementById('vlFamilyCol').value,
+    qty:         document.getElementById('vlQtyCol') ? document.getElementById('vlQtyCol').value : ''
   };
 
   var hasAnyMapping = Object.values(mapping).some(function(v){ return v !== ''; });
@@ -285,6 +288,10 @@ function previewVlookup() {
       var v = String(row[mapping.family]).trim();
       if (v !== (prod ? (prod.family||'') : null)) { changes.family = v; hasChange = true; }
     }
+    if (mapping.qty && row[mapping.qty] !== '') {
+      var v = parseFloat(row[mapping.qty]);
+      if (!isNaN(v) && v !== (prod ? prod.qty : null)) { changes.qty = v; hasChange = true; }
+    }
 
     results.push({ keyVal:keyVal, prod:prod||null, changes:changes, hasChange:hasChange, found:!!prod });
   });
@@ -302,7 +309,7 @@ function previewVlookup() {
     '<span style="background:#fee2e2;color:#b91c1c;padding:3px 10px;border-radius:12px;font-size:13px;margin:0 4px;">❌ غير موجود: '+notFound.length+'</span>' +
     '<span style="background:#f3f4f6;color:#374151;padding:3px 10px;border-radius:12px;font-size:13px;margin:0 4px;">➖ لا تغيير: '+noChange.length+'</span>';
 
-  var fieldLabel = {cost:'التكلفة', priceBefore:'السعر قبل', priceAfter:'السعر بعد', category:'الفئة', family:'المجموعة'};
+  var fieldLabel = {cost:'التكلفة', priceBefore:'السعر قبل', priceAfter:'السعر بعد', category:'الفئة', family:'المجموعة', qty:'الكمية'};
   var tbody = '';
   matched.forEach(function(r) {
     var changesHtml = Object.entries(r.changes).map(function(e){

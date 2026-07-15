@@ -2611,6 +2611,50 @@ body.warehouse-mode #cartFab {
         </div>
       </div>
 
+      <!-- ══ DATA MIGRATION ══ -->
+      <div id="page-migration" class="hidden">
+        <div class="flex items-center justify-between mb-16" style="flex-wrap:wrap; gap:8px;">
+          <div><h2 style="margin:0; font-size:20px;">📥 استيراد بيانات قديمة</h2><p style="font-size:12px; color:var(--text-muted); margin:4px 0 0;">لترحيل بيانات من سيستم سابق — بتضيف بس، مش بتمسح أي حاجة موجودة</p></div>
+          <div style="display:flex;gap:4px;background:var(--bg-secondary);padding:4px;border-radius:10px;">
+            <button id="migTabBtn_sales" class="btn btn-sm" style="background:white;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.1);" onclick="switchMigTab('sales')">💰 مبيعات قديمة</button>
+            <button id="migTabBtn_expenses" class="btn btn-sm" onclick="switchMigTab('expenses')">💸 مصروفات قديمة</button>
+          </div>
+        </div>
+
+        <div id="migTab_sales">
+          <div class="card" style="margin-bottom:16px;">
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">بترفع ملف Excel/CSV فيه المبيعات القديمة مجمّعة (يوم أو شهر × فرع × صنف) — كل صف بيمثل كمية صنف معينة اتباعت في فرع معين في تاريخ معين. النظام بيجمّعهم تلقائيًا في "فواتير مركّبة" لكل فرع/تاريخ، وبتظهر في كل التقارير والداشبورد والمحاسبة زي أي فاتورة حقيقية.</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+              <button class="btn btn-outline" onclick="downloadSalesImportTemplate()">📄 تحميل نموذج Excel</button>
+              <input type="file" id="migSalesFile" accept=".xlsx,.xls,.csv" onchange="handleSalesImportFile(this)" style="display:none;" />
+              <button class="btn btn-primary" onclick="document.getElementById('migSalesFile').click()">📤 رفع الملف</button>
+              <button class="btn btn-success" id="migSalesConfirmBtn" onclick="confirmSalesImport()" disabled>✅ تأكيد الاستيراد</button>
+            </div>
+          </div>
+          <div class="card"><div id="migSalesPreview"></div></div>
+        </div>
+
+        <div id="migTab_expenses" class="hidden">
+          <div class="card" style="margin-bottom:16px;">
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">بترفع ملف Excel/CSV فيه المصروفات القديمة — كل صف مصروف واحد بتاريخه وفئته ومبلغه. اكتب "شركة" في عمود النوع للمصروفات الإدارية، أو اسم الفرع بالظبط للمصروفات الخاصة بفرع معيّن.</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+              <button class="btn btn-outline" onclick="downloadExpensesImportTemplate()">📄 تحميل نموذج Excel</button>
+              <input type="file" id="migExpensesFile" accept=".xlsx,.xls,.csv" onchange="handleExpensesImportFile(this)" style="display:none;" />
+              <button class="btn btn-primary" onclick="document.getElementById('migExpensesFile').click()">📤 رفع الملف</button>
+              <button class="btn btn-success" id="migExpensesConfirmBtn" onclick="confirmExpensesImport()" disabled>✅ تأكيد الاستيراد</button>
+            </div>
+          </div>
+          <div class="card"><div id="migExpensesPreview"></div></div>
+        </div>
+
+        <div class="card" style="margin-top:16px;background:var(--bg-secondary);">
+          <div style="font-size:13px;font-weight:700;margin-bottom:6px;">📦 رصيد المخزون الافتتاحي وأرصدة الموردين</div>
+          <div style="font-size:12.5px;color:var(--text-muted);">
+            الكمية الافتتاحية للمخزون بتتضاف من نفس أداة "🔗 استيراد من Excel" الموجودة في المخزون — اختار الفرع الأول، ثم اربط عمود "الكمية" في الملف بالكميات الافتتاحية. أرصدة الموردين الافتتاحية بتتحط مباشرة في حقل "الرصيد الافتتاحي" لما تضيف كل مورد.
+          </div>
+        </div>
+      </div>
+
       <!-- ── SETTINGS ── -->
       <div id="page-settings" class="hidden">
         <div class="grid-2">
@@ -3238,6 +3282,7 @@ const _CHUNK_FILES = {
   purchases:     'chunk-purchases.js',
   helpdesk:      'chunk-helpdesk.js',
   pivot:         'chunk-pivot.js',
+  migration:     'chunk-migration.js',
 };
 const _loadedChunks = new Set();
 function _loadChunk(page, cb) {
@@ -4249,6 +4294,7 @@ const HOME_FOLDERS = {
     { page:'audit',    label:'سجل التغييرات', grad:'#94a3b8,#334155', svg:'<rect x="10" y="6" width="28" height="36" rx="3" stroke="white" stroke-width="2.5"/><path d="M16 16h16M16 22h16M16 28h8" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M30 32l2 2 4-4" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' },
     { page:'settings', label:'الإعدادات',     grad:'#a1a1aa,#3f3f46', svg:'<circle cx="24" cy="24" r="5" stroke="white" stroke-width="2.5"/><path d="M24 8v4M24 36v4M8 24h4M36 24h4M13.4 13.4l2.8 2.8M31.8 31.8l2.8 2.8M13.4 34.6l2.8-2.8M31.8 16.2l2.8-2.8" stroke="white" stroke-width="2.5" stroke-linecap="round"/>' },
     { page:'helpdesk', label:'الدعم الفني',   grad:'#fb923c,#c2410c', svg:'<path d="M8 34V16a6 6 0 016-6h20a6 6 0 016 6v10a6 6 0 01-6 6H20l-8 8v-6z" stroke="white" stroke-width="2.5" stroke-linejoin="round"/><circle cx="18" cy="21" r="2" fill="white"/><circle cx="24" cy="21" r="2" fill="white"/><circle cx="30" cy="21" r="2" fill="white"/>' },
+    { page:'migration', label:'استيراد بيانات', grad:'#0ea5a5,#0b7a7a', svg:'<path d="M24 6v24M24 30l-9-9M24 30l9-9" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="8" y="36" width="32" height="6" rx="2" fill="white"/>' },
   ]},
 };
 
@@ -4642,14 +4688,14 @@ function showPage(page) {
 
 function _showPageImpl(page) {
   if (window._whMode && !['warehouse','transfers'].includes(page)) return;
-  ['home','dashboard','inventory','sales','suspended','reports','customized','warehouse','settings','customers','promos','transfers','purchases','hr','expenses','audit','accounting','manufacturing','helpdesk'].forEach(p => {
+  ['home','dashboard','inventory','sales','suspended','reports','customized','warehouse','settings','customers','promos','transfers','purchases','hr','expenses','audit','accounting','manufacturing','helpdesk','migration'].forEach(p => {
     document.getElementById('page-'+p)?.classList.add('hidden');
   });
   document.getElementById('page-'+page).classList.remove('hidden');
   var content = document.querySelector('.main-content');
   if (content) content.classList.toggle('home-mode', page === 'home');
   if (page === 'home') { updateHomeClock(); updateSuspendedBadge(); }
-  const titles ={ dashboard:'الرئيسية', inventory:'إدارة المخزون', sales:'سجل المبيعات', suspended:'فواتير معلقة', reports:'التقارير', customized:'تقارير مخصصة', home:'الرئيسية', warehouse:'المخزن الرئيسي', settings:'الإعدادات', customers:'العملاء', purchases:'المشتريات', hr:'الموارد البشرية', expenses:'المصاريف', audit:'سجل التغييرات', accounting:'المحاسبة الرسمية', helpdesk:'الدعم الفني' };
+  const titles ={ dashboard:'الرئيسية', inventory:'إدارة المخزون', sales:'سجل المبيعات', suspended:'فواتير معلقة', reports:'التقارير', customized:'تقارير مخصصة', home:'الرئيسية', warehouse:'المخزن الرئيسي', settings:'الإعدادات', customers:'العملاء', purchases:'المشتريات', hr:'الموارد البشرية', expenses:'المصاريف', audit:'سجل التغييرات', accounting:'المحاسبة الرسمية', helpdesk:'الدعم الفني', migration:'استيراد بيانات قديمة' };
   document.getElementById('pageTitle').textContent = titles[page] || '';
   if (page === 'dashboard')  buildDashboard();
   if (page === 'inventory')  renderInventory();
@@ -4681,6 +4727,7 @@ function _showPageImpl(page) {
   if (page === 'expenses')   renderExpensesPage();
   if (page === 'audit')      renderAuditPage();
   if (page === 'helpdesk')   renderHelpdeskPage();
+  if (page === 'migration')  switchMigTab('sales');
 }
 
 
@@ -9009,6 +9056,7 @@ function buildVlMappingUI() {
   document.getElementById('vlPriceAfterCol').innerHTML  = optsWithSkip;
   document.getElementById('vlCategoryCol').innerHTML    = optsWithSkip;
   document.getElementById('vlFamilyCol').innerHTML      = optsWithSkip;
+  if (document.getElementById('vlQtyCol')) document.getElementById('vlQtyCol').innerHTML = optsWithSkip;
 
   // Auto-detect common column names
   var autoMatch = {
@@ -9017,7 +9065,8 @@ function buildVlMappingUI() {
     vlPriceBeforeCol: ['price before','pricebefore','السعر قبل','قبل','old price','before'],
     vlPriceAfterCol:  ['price after','priceafter','السعر بعد','بعد','price','السعر','after'],
     vlCategoryCol:    ['category','الفئة','فئة','كاتيجورى','كاتيجوري','cat'],
-    vlFamilyCol:      ['family','المجموعة','مجموعة','فاميلى','فاميلي','fam']
+    vlFamilyCol:      ['family','المجموعة','مجموعة','فاميلى','فاميلي','fam'],
+    vlQtyCol:         ['qty','quantity','الكمية','كمية','رصيد','stock','رصيد افتتاحي']
   };
   Object.keys(autoMatch).forEach(function(selId) {
     var sel = document.getElementById(selId);
@@ -9041,7 +9090,8 @@ function previewVlookup() {
     priceBefore: document.getElementById('vlPriceBeforeCol').value,
     priceAfter:  document.getElementById('vlPriceAfterCol').value,
     category:    document.getElementById('vlCategoryCol').value,
-    family:      document.getElementById('vlFamilyCol').value
+    family:      document.getElementById('vlFamilyCol').value,
+    qty:         document.getElementById('vlQtyCol') ? document.getElementById('vlQtyCol').value : ''
   };
 
   var hasAnyMapping = Object.values(mapping).some(function(v){ return v !== ''; });
@@ -9077,6 +9127,10 @@ function previewVlookup() {
       var v = String(row[mapping.family]).trim();
       if (v !== (prod ? (prod.family||'') : null)) { changes.family = v; hasChange = true; }
     }
+    if (mapping.qty && row[mapping.qty] !== '') {
+      var v = parseFloat(row[mapping.qty]);
+      if (!isNaN(v) && v !== (prod ? prod.qty : null)) { changes.qty = v; hasChange = true; }
+    }
 
     results.push({ keyVal:keyVal, prod:prod||null, changes:changes, hasChange:hasChange, found:!!prod });
   });
@@ -9094,7 +9148,7 @@ function previewVlookup() {
     '<span style="background:#fee2e2;color:#b91c1c;padding:3px 10px;border-radius:12px;font-size:13px;margin:0 4px;">❌ غير موجود: '+notFound.length+'</span>' +
     '<span style="background:#f3f4f6;color:#374151;padding:3px 10px;border-radius:12px;font-size:13px;margin:0 4px;">➖ لا تغيير: '+noChange.length+'</span>';
 
-  var fieldLabel = {cost:'التكلفة', priceBefore:'السعر قبل', priceAfter:'السعر بعد', category:'الفئة', family:'المجموعة'};
+  var fieldLabel = {cost:'التكلفة', priceBefore:'السعر قبل', priceAfter:'السعر بعد', category:'الفئة', family:'المجموعة', qty:'الكمية'};
   var tbody = '';
   matched.forEach(function(r) {
     var changesHtml = Object.entries(r.changes).map(function(e){
@@ -10225,9 +10279,13 @@ function switchHRTab(tab) {
             <label>🏷️ الفئة (Category)</label>
             <select class="form-control" id="vlCategoryCol"></select>
           </div>
-          <div class="form-group" style="margin:0;grid-column:1/-1;">
+          <div class="form-group" style="margin:0;">
             <label>📦 المجموعة (Family)</label>
             <select class="form-control" id="vlFamilyCol"></select>
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label>🔢 الكمية (رصيد افتتاحي)</label>
+            <select class="form-control" id="vlQtyCol"></select>
           </div>
         </div>
       </div>
