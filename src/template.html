@@ -1982,7 +1982,7 @@
             <div id="branchNamesContainer"></div>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
               <button class="btn btn-primary" onclick="saveBranchNames()">💾 حفظ أسماء الفروع</button>
-              <button class="btn btn-outline" onclick="addNewBranch()">➕ إضافة فرع جديد</button>
+              <button class="btn btn-outline" onclick="openAddBranchModal()">➕ إضافة فرع جديد</button>
             </div>
             <div id="sBranchMsg" class="mt-16"></div>
           </div>
@@ -2728,6 +2728,18 @@
     <div class="modal-footer">
       <button class="btn btn-gray" onclick="closeSupplierPaymentModal()">إلغاء</button>
       <button class="btn btn-primary" onclick="saveSupplierPayment()">💾 تسجيل الدفعة</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== ADD BRANCH MODAL ===================== -->
+<div id="addBranchModal" class="modal-overlay hidden">
+  <div class="modal" style="width:400px;">
+    <h2>➕ إضافة فرع جديد</h2>
+    <div class="form-group"><label>اسم الفرع</label><input class="form-control" id="newBranchName" placeholder="مثال: فرع مدينة نصر" /></div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeAddBranchModal()">إلغاء</button>
+      <button class="btn btn-primary" onclick="confirmAddBranch()">💾 إضافة</button>
     </div>
   </div>
 </div>

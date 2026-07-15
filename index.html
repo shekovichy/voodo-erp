@@ -2677,7 +2677,7 @@ body.warehouse-mode #cartFab {
             <div id="branchNamesContainer"></div>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
               <button class="btn btn-primary" onclick="saveBranchNames()">💾 حفظ أسماء الفروع</button>
-              <button class="btn btn-outline" onclick="addNewBranch()">➕ إضافة فرع جديد</button>
+              <button class="btn btn-outline" onclick="openAddBranchModal()">➕ إضافة فرع جديد</button>
             </div>
             <div id="sBranchMsg" class="mt-16"></div>
           </div>
@@ -6927,9 +6927,23 @@ function saveBranchNames() {
 // up once at startup too, so there's no reliable way to make a new branch
 // show up everywhere without a reload. Reloading immediately after saving
 // is simpler and safer than trying to hot-patch every one of those places.
-function addNewBranch() {
-  const name = prompt('اسم الفرع الجديد:');
-  if (!name || !name.trim()) return;
+//
+// Uses a real in-app modal instead of window.prompt()/alert() — those are
+// silently no-ops in a PWA running in standalone/installed mode on several
+// mobile browsers, which is exactly how this app is meant to be used (it
+// has an "install app" button). A prompt() call there just returns null
+// immediately with zero visible feedback, which is what this looked like
+// before the fix.
+function openAddBranchModal() {
+  document.getElementById('newBranchName').value = '';
+  document.getElementById('addBranchModal').classList.remove('hidden');
+}
+function closeAddBranchModal() {
+  document.getElementById('addBranchModal').classList.add('hidden');
+}
+function confirmAddBranch() {
+  const name = document.getElementById('newBranchName').value;
+  if (!name || !name.trim()) { showMsg('sBranchMsg', 'اكتب اسم الفرع الأول', 'danger'); return; }
   const trimmedName = name.trim();
 
   const existingNums = BRANCH_IDS.filter(b => /^b\d+$/.test(b)).map(b => parseInt(b.slice(1), 10));
@@ -6949,8 +6963,9 @@ function addNewBranch() {
   DB.s('pos_branches', branches);
 
   addAuditLog('branch.add', `إضافة فرع جديد: ${trimmedName} (${newId})`, null);
-  alert(`✅ تم إضافة فرع "${trimmedName}"!\nسيتم تحديث الصفحة الآن عشان الفرع الجديد يظهر في كل مكان.`);
-  location.reload();
+  closeAddBranchModal();
+  showMsg('sBranchMsg', `✅ تم إضافة فرع "${trimmedName}"! جاري تحديث الصفحة...`, 'success');
+  setTimeout(() => location.reload(), 1200);
 }
 
 // ── TRANSFERS ──────────────────────────────────
@@ -9980,6 +9995,18 @@ function switchHRTab(tab) {
     <div class="modal-footer">
       <button class="btn btn-gray" onclick="closeSupplierPaymentModal()">إلغاء</button>
       <button class="btn btn-primary" onclick="saveSupplierPayment()">💾 تسجيل الدفعة</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== ADD BRANCH MODAL ===================== -->
+<div id="addBranchModal" class="modal-overlay hidden">
+  <div class="modal" style="width:400px;">
+    <h2>➕ إضافة فرع جديد</h2>
+    <div class="form-group"><label>اسم الفرع</label><input class="form-control" id="newBranchName" placeholder="مثال: فرع مدينة نصر" /></div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeAddBranchModal()">إلغاء</button>
+      <button class="btn btn-primary" onclick="confirmAddBranch()">💾 إضافة</button>
     </div>
   </div>
 </div>

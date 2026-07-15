@@ -73,9 +73,23 @@ function saveBranchNames() {
 // up once at startup too, so there's no reliable way to make a new branch
 // show up everywhere without a reload. Reloading immediately after saving
 // is simpler and safer than trying to hot-patch every one of those places.
-function addNewBranch() {
-  const name = prompt('اسم الفرع الجديد:');
-  if (!name || !name.trim()) return;
+//
+// Uses a real in-app modal instead of window.prompt()/alert() — those are
+// silently no-ops in a PWA running in standalone/installed mode on several
+// mobile browsers, which is exactly how this app is meant to be used (it
+// has an "install app" button). A prompt() call there just returns null
+// immediately with zero visible feedback, which is what this looked like
+// before the fix.
+function openAddBranchModal() {
+  document.getElementById('newBranchName').value = '';
+  document.getElementById('addBranchModal').classList.remove('hidden');
+}
+function closeAddBranchModal() {
+  document.getElementById('addBranchModal').classList.add('hidden');
+}
+function confirmAddBranch() {
+  const name = document.getElementById('newBranchName').value;
+  if (!name || !name.trim()) { showMsg('sBranchMsg', 'اكتب اسم الفرع الأول', 'danger'); return; }
   const trimmedName = name.trim();
 
   const existingNums = BRANCH_IDS.filter(b => /^b\d+$/.test(b)).map(b => parseInt(b.slice(1), 10));
@@ -95,8 +109,9 @@ function addNewBranch() {
   DB.s('pos_branches', branches);
 
   addAuditLog('branch.add', `إضافة فرع جديد: ${trimmedName} (${newId})`, null);
-  alert(`✅ تم إضافة فرع "${trimmedName}"!\nسيتم تحديث الصفحة الآن عشان الفرع الجديد يظهر في كل مكان.`);
-  location.reload();
+  closeAddBranchModal();
+  showMsg('sBranchMsg', `✅ تم إضافة فرع "${trimmedName}"! جاري تحديث الصفحة...`, 'success');
+  setTimeout(() => location.reload(), 1200);
 }
 
 // ── TRANSFERS ──────────────────────────────────
