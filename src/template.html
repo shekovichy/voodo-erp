@@ -1928,15 +1928,35 @@
 
         <div id="migTab_sales">
           <div class="card" style="margin-bottom:16px;">
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">بترفع ملف Excel/CSV فيه المبيعات القديمة مجمّعة (يوم أو شهر × فرع × صنف) — كل صف بيمثل كمية صنف معينة اتباعت في فرع معين في تاريخ معين. النظام بيجمّعهم تلقائيًا في "فواتير مركّبة" لكل فرع/تاريخ، وبتظهر في كل التقارير والداشبورد والمحاسبة زي أي فاتورة حقيقية.</p>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-              <button class="btn btn-outline" onclick="downloadSalesImportTemplate()">📄 تحميل نموذج Excel</button>
-              <input type="file" id="migSalesFile" accept=".xlsx,.xls,.csv" onchange="handleSalesImportFile(this)" style="display:none;" />
-              <button class="btn btn-primary" onclick="document.getElementById('migSalesFile').click()">📤 رفع الملف</button>
-              <button class="btn btn-success" id="migSalesConfirmBtn" onclick="confirmSalesImport()" disabled>✅ تأكيد الاستيراد</button>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">استيراد على طريقة VLOOKUP: اختار الفرع الأول، وارفع أي ملف Excel/CSV بأي أسماء أعمدة عندك — النظام يوريك dropdown لكل عمود تربطه بالحقل المطلوب. البيانات القديمة عادةً متفرقة على أكتر من ملف (مبيعات، مرتجعات، تكلفة)؟ ارفعهم واحد ورا التاني على نفس الفرع، كل ملف بربط أعمدة خاص بيه — كلهم بيتضافوا فوق بعض من غير ما يمسحوا حاجة.</p>
+            <div class="form-group" style="max-width:260px;">
+              <label>1️⃣ الفرع</label>
+              <select class="form-control" id="migVlBranch" onchange="migVlBranchChanged()"><option value="">— اختر الفرع —</option></select>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
+              <input type="file" id="migVlFile" accept=".xlsx,.xls,.csv" onchange="handleMigVlFile(this)" style="display:none;" />
+              <button class="btn btn-primary" id="migVlUploadBtn" onclick="document.getElementById('migVlFile').click()" disabled>📤 رفع ملف</button>
+              <span id="migVlFileInfo" style="font-size:12px;color:var(--text-muted);"></span>
             </div>
           </div>
-          <div class="card"><div id="migSalesPreview"></div></div>
+
+          <div class="card hidden" id="migVlMapCard" style="margin-bottom:16px;">
+            <div style="font-weight:700;margin-bottom:10px;">2️⃣ اربط أعمدة ملفك</div>
+            <div class="grid-2" style="gap:10px;">
+              <div class="form-group"><label>التاريخ *</label><select class="form-control" id="migVlDateCol"></select></div>
+              <div class="form-group"><label>كود الصنف *</label><select class="form-control" id="migVlCodeCol"></select></div>
+              <div class="form-group"><label>اسم الصنف (اختياري)</label><select class="form-control" id="migVlNameCol"></select></div>
+              <div class="form-group"><label>الكمية *</label><select class="form-control" id="migVlQtyCol"></select></div>
+              <div class="form-group"><label>المبلغ المدفوع لكل السطر *</label><select class="form-control" id="migVlPaidCol"></select></div>
+              <div class="form-group"><label>التكلفة لكل السطر (اختياري)</label><select class="form-control" id="migVlCostCol"></select></div>
+              <div class="form-group"><label>مرتجع؟ (اختياري)</label><select class="form-control" id="migVlReturnCol"></select></div>
+            </div>
+            <p style="font-size:11.5px;color:var(--text-muted);margin:8px 0 0;">"المبلغ المدفوع" و"التكلفة" هنا إجمالي السطر كله (مش لسعر الوحدة) — يعني لو بعت 5 قطع بـ 500 جنيه، تحط 500. لو عمود "مرتجع" مربوط وفيه أي قيمة في الصف (غير فاضي أو 0)، الصف ده هيتسجل كمرتجع بالسالب.</p>
+            <button class="btn btn-primary" style="margin-top:10px;" onclick="previewMigVlImport()">👁️ معاينة</button>
+          </div>
+
+          <div class="card"><div id="migVlPreview"></div></div>
+          <button class="btn btn-success hidden" id="migVlConfirmBtn" onclick="confirmMigVlImport()" style="margin-top:12px;">✅ تأكيد الاستيراد</button>
         </div>
 
         <div id="migTab_expenses" class="hidden">
