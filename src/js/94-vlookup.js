@@ -157,7 +157,7 @@ function saveBulkCategories() {
   });
   if (changed > 0) { setInv(inv); renderInventory(); }
   document.getElementById('bulkCatModal').classList.add('hidden');
-  alert(changed > 0 ? ('تم تحديث ' + changed + ' منتج') : 'لا يوجد تغييرات');
+  showToast(changed > 0 ? ('تم تحديث ' + changed + ' منتج') : 'لا يوجد تغييرات');
 }
 
 function filterUnclassified() {
@@ -196,11 +196,11 @@ function handleVlFile(input) {
       var wb   = XLSX.read(e.target.result, {type:'binary'});
       var ws   = wb.Sheets[wb.SheetNames[0]];
       var rows = XLSX.utils.sheet_to_json(ws, {defval:''});
-      if (!rows.length) { alert('الملف فارغ أو غير مقروء'); return; }
+      if (!rows.length) { showToast('الملف فارغ أو غير مقروء'); return; }
       _vlData    = rows;
       _vlHeaders = Object.keys(rows[0]);
       buildVlMappingUI();
-    } catch(ex) { alert('خطأ في قراءة الملف: ' + ex.message); }
+    } catch(ex) { showToast('خطأ في قراءة الملف: ' + ex.message); }
   };
   reader.readAsBinaryString(file);
 }
@@ -246,7 +246,7 @@ function buildVlMappingUI() {
 
 function previewVlookup() {
   var keyCol = document.getElementById('vlKeyCol').value;
-  if (!keyCol) { alert('اختر عمود الكود أولاً'); return; }
+  if (!keyCol) { showToast('اختر عمود الكود أولاً'); return; }
 
   var mapping = {
     cost:        document.getElementById('vlCostCol').value,
@@ -258,7 +258,7 @@ function previewVlookup() {
   };
 
   var hasAnyMapping = Object.values(mapping).some(function(v){ return v !== ''; });
-  if (!hasAnyMapping) { alert('اختر على الأقل حقل واحد للاستيراد'); return; }
+  if (!hasAnyMapping) { showToast('اختر على الأقل حقل واحد للاستيراد'); return; }
 
   var inv = getInv();
   var results = [];
@@ -340,7 +340,7 @@ function previewVlookup() {
 }
 
 function applyVlookup(matched) {
-  if (!matched || !matched.length) { alert('لا توجد تغييرات للتطبيق'); return; }
+  if (!matched || !matched.length) { showToast('لا توجد تغييرات للتطبيق'); return; }
   var inv = getInv();
   matched.forEach(function(r) {
     var prod = inv.find(function(p){ return p.code === r.keyVal || p.code.toLowerCase() === r.keyVal.toLowerCase(); });
@@ -350,6 +350,6 @@ function applyVlookup(matched) {
   setInv(inv);
   renderInventory();
   document.getElementById('vlookupModal').classList.add('hidden');
-  alert('تم تحديث ' + matched.length + ' منتج بنجاح');
+  showToast('تم تحديث ' + matched.length + ' منتج بنجاح');
 }
 

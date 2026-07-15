@@ -22,40 +22,44 @@ function setApprovals(v) {
 function editItemPrice(code) {
   var item = cart.find(function(i){ return i.code === code; });
   if (!item) return;
-  var newPrice = parseFloat(prompt('السعر الجديد لـ "' + item.name + '" (السعر الحالي: ' + item.price + ')', item.price));
-  if (isNaN(newPrice) || newPrice <= 0) return;
-  if (newPrice === item.price) return;
-  if (!item.priceModified) item.originalPrice = item.price;
-  item.price = newPrice;
-  item.priceModified = true;
-  renderCart();
+  showPromptModal('السعر الجديد لـ "' + item.name + '" (السعر الحالي: ' + item.price + ')', item.price, function(val) {
+    var newPrice = parseFloat(val);
+    if (isNaN(newPrice) || newPrice <= 0) return;
+    if (newPrice === item.price) return;
+    if (!item.priceModified) item.originalPrice = item.price;
+    item.price = newPrice;
+    item.priceModified = true;
+    renderCart();
+  });
 }
 
 // ── Cashier: send for approval ──────────────────────────
 function sendForApproval() {
-  if (!cart.length) { alert('الفاتورة فارغة'); return; }
+  if (!cart.length) { showToast('الفاتورة فارغة'); return; }
   var hasModified = cart.some(function(i){ return i.priceModified; });
   if (!hasModified) { openPayment(); return; }
-  var note = prompt('ملاحظة للمدير (اختياري):', '') || '';
-  var { total } = cartTotals();
-  var request = {
-    id: Date.now(),
-    date: new Date().toISOString(),
-    cashier: currentUser || 'كاشير',
-    branchId: currentBranch,
-    branchName: (getBranches()[currentBranch] || BRANCH_DEFAULTS[currentBranch]),
-    items: cart.map(function(i){ return Object.assign({}, i); }),
-    total: total,
-    note: note,
-    status: 'pending',
-    adminNote: ''
-  };
-  var list = getApprovals();
-  list.unshift(request);
-  setApprovals(list);
-  clearCart();
-  updateApprovalBadge();
-  alert('✅ تم إرسال الفاتورة للمدير\nسيتم إشعارك عند الموافقة');
+  showPromptModal('ملاحظة للمدير (اختياري):', '', function(val) {
+    var note = val || '';
+    var { total } = cartTotals();
+    var request = {
+      id: Date.now(),
+      date: new Date().toISOString(),
+      cashier: currentUser || 'كاشير',
+      branchId: currentBranch,
+      branchName: (getBranches()[currentBranch] || BRANCH_DEFAULTS[currentBranch]),
+      items: cart.map(function(i){ return Object.assign({}, i); }),
+      total: total,
+      note: note,
+      status: 'pending',
+      adminNote: ''
+    };
+    var list = getApprovals();
+    list.unshift(request);
+    setApprovals(list);
+    clearCart();
+    updateApprovalBadge();
+    showToast('✅ تم إرسال الفاتورة للمدير\nسيتم إشعارك عند الموافقة');
+  });
 }
 
 // ── Admin: open approvals panel ─────────────────────────
@@ -107,7 +111,7 @@ function approveRequest(id) {
   setApprovals(list);
   updateApprovalBadge();
   renderApprovalsList();
-  alert('✅ تمت الموافقة — سيتم إشعار الكاشير');
+  showToast('✅ تمت الموافقة — سيتم إشعار الكاشير');
 }
 
 function rejectRequest(id) {

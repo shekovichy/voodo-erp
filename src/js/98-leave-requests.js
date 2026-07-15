@@ -33,8 +33,8 @@ function saveLeaveRequest() {
   const empName = document.getElementById('leaveReqEmpName').value;
   const date    = document.getElementById('leaveReqDate').value;
   const type    = document.getElementById('leaveReqType').value;
-  if (!empName) { alert('اختر الموظف'); return; }
-  if (!date)    { alert('أدخل التاريخ'); return; }
+  if (!empName) { showToast('اختر الموظف'); return; }
+  if (!date)    { showToast('أدخل التاريخ'); return; }
   const rec = {
     id: 'leaveq_' + Date.now(),
     branchId: currentBranch,
@@ -52,17 +52,18 @@ function saveLeaveRequest() {
   showToast('✅ تم إرسال الطلب — بانتظار موافقة الإدارة');
 }
 function approveLeaveRequest(id) {
-  if (!confirm('تأكيد الموافقة على هذا الطلب؟')) return;
-  const list = getLeaveRequests(); const req = list.find(r=>r.id===id); if (!req) return;
-  req.status = 'approved'; req.reviewedBy = currentUser; req.reviewedAt = Date.now();
-  setLeaveRequests(list);
-  if (req.type === 'leave') {
-    saveAttendanceRecord(req.empName, req.date, 'absent', '', '', 'إجازة معتمدة');
-  } else {
-    const notes = (req.fromTime && req.toTime) ? 'إذن انصراف '+req.fromTime+' - '+req.toTime : 'إذن انصراف معتمد';
-    saveAttendanceRecord(req.empName, req.date, 'late', req.fromTime||'', req.toTime||'', notes);
-  }
-  updateLeaveReqBadge(); renderHRPage(); showToast('✅ تمت الموافقة وتسجيل الحضور');
+  showConfirmModal('تأكيد الموافقة على هذا الطلب؟', function() {
+    const list = getLeaveRequests(); const req = list.find(r=>r.id===id); if (!req) return;
+    req.status = 'approved'; req.reviewedBy = currentUser; req.reviewedAt = Date.now();
+    setLeaveRequests(list);
+    if (req.type === 'leave') {
+      saveAttendanceRecord(req.empName, req.date, 'absent', '', '', 'إجازة معتمدة');
+    } else {
+      const notes = (req.fromTime && req.toTime) ? 'إذن انصراف '+req.fromTime+' - '+req.toTime : 'إذن انصراف معتمد';
+      saveAttendanceRecord(req.empName, req.date, 'late', req.fromTime||'', req.toTime||'', notes);
+    }
+    updateLeaveReqBadge(); renderHRPage(); showToast('✅ تمت الموافقة وتسجيل الحضور');
+  });
 }
 function rejectLeaveRequest(id) {
   const list = getLeaveRequests(); const req = list.find(r=>r.id===id); if (!req) return;

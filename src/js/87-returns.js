@@ -5,7 +5,7 @@ let _returnOriginalSale = null;
 
 function openReturnFromModal() {
   if (!lastSaleForPrint) return;
-  if (lastSaleForPrint.isReturn) { alert('لا يمكن إرجاع فاتورة مرتجعة'); return; }
+  if (lastSaleForPrint.isReturn) { showToast('لا يمكن إرجاع فاتورة مرتجعة'); return; }
   _returnOriginalSale = lastSaleForPrint;
   document.getElementById('returnReason').value = '';
   document.getElementById('returnSummary').style.display = 'none';
@@ -48,9 +48,12 @@ function processReturn() {
     const qty = parseInt(document.getElementById('ret-qty-'+idx)?.value)||0;
     if (qty > 0) { returnItems.push({...item, qty:-qty}); returnTotal += qty * item.price; }
   });
-  if (!returnItems.length) { alert('اختر على الأقل صنف واحد للإرجاع'); return; }
-  if (!confirm(`تأكيد إرجاع ${returnItems.length} صنف — المبلغ المسترد: ${fmt(returnTotal)} ج؟`)) return;
-
+  if (!returnItems.length) { showToast('اختر على الأقل صنف واحد للإرجاع'); return; }
+  showConfirmModal(`تأكيد إرجاع ${returnItems.length} صنف — المبلغ المسترد: ${fmt(returnTotal)} ج؟`, function() {
+  _processReturnConfirmed(sale, reason, returnItems, returnTotal);
+  });
+}
+function _processReturnConfirmed(sale, reason, returnItems, returnTotal) {
   // Restock
   const inv = getInv();
   returnItems.forEach(ri => { const p = inv.find(x=>x.code===ri.code); if (p) p.qty += Math.abs(ri.qty); });
@@ -77,7 +80,7 @@ function processReturn() {
 
   document.getElementById('returnModal').classList.add('hidden');
   document.getElementById('saleDetailModal').classList.add('hidden');
-  alert(`✅ تم معالجة المرتجع — المبلغ المسترد: ${fmt(returnTotal)} ج\n📦 تم إعادة الكميات للمخزون`);
+  showToast(`✅ تم معالجة المرتجع — المبلغ المسترد: ${fmt(returnTotal)} ج\n📦 تم إعادة الكميات للمخزون`);
   if (!document.getElementById('page-sales').classList.contains('hidden')) renderSales();
   if (!document.getElementById('page-inventory').classList.contains('hidden')) renderInventory();
 }

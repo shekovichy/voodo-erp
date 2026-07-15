@@ -158,7 +158,7 @@ function openAttendanceEdit(empName, date) {
 function saveAttendanceEdit() {
   const emp    = document.getElementById('attEmpSelect').value;
   const date   = document.getElementById('attDate').value;
-  if (!emp||!date) { alert('اختر الموظف والتاريخ'); return; }
+  if (!emp||!date) { showToast('اختر الموظف والتاريخ'); return; }
   saveAttendanceRecord(emp, date,
     document.getElementById('attStatus').value,
     document.getElementById('attCheckIn').value,

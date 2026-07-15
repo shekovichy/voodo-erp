@@ -27,7 +27,7 @@ function _loadChunk(page, cb) {
   const s = document.createElement('script');
   s.src = _CHUNK_FILES[page];
   s.onload  = () => { _loadedChunks.add(page); cb(); };
-  s.onerror = () => { console.error('Failed to load module for page:', page); alert('تعذّر تحميل الصفحة — تأكد من الاتصال بالإنترنت وحاول تاني'); };
+  s.onerror = () => { console.error('Failed to load module for page:', page); showToast('تعذّر تحميل الصفحة — تأكد من الاتصال بالإنترنت وحاول تاني'); };
   document.body.appendChild(s);
 }
 // ══ CLOUD DATA CACHES — synced with Firestore in real-time ══════════════

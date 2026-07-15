@@ -35,7 +35,7 @@ function closeHelpdeskTicketModal() { document.getElementById('helpdeskTicketMod
 function submitHelpdeskTicket() {
   const subject     = document.getElementById('hdSubject').value.trim();
   const description = document.getElementById('hdDescription').value.trim();
-  if (!subject || !description) { alert('اكتب عنوان ووصف المشكلة'); return; }
+  if (!subject || !description) { showToast('اكتب عنوان ووصف المشكلة'); return; }
   const branchId = currentUser === 'admin' ? document.getElementById('hdBranch').value : currentBranch;
   const ticket = {
     id: 'hd_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),

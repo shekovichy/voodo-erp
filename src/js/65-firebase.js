@@ -298,7 +298,7 @@ function setSuspended(list) {
 }
 
 function suspendBill() {
-  if (!cart.length) { alert('الفاتورة فارغة'); return; }
+  if (!cart.length) { showToast('الفاتورة فارغة'); return; }
   document.getElementById('suspendNote').value = '';
   document.getElementById('suspendSuccessMsg').classList.add('hidden');
   document.getElementById('suspendConfirmBtn').classList.remove('hidden');
@@ -401,7 +401,7 @@ function activateSuspended(id) {
 
   renderCart(); renderProducts();
   document.getElementById('adminDiscountRow').classList.add('hidden');
-  alert('تم تحميل الفاتورة — يمكن الآن الدفع من الكاشير');
+  showToast('تم تحميل الفاتورة — يمكن الآن الدفع من الكاشير');
 }
 
 function deleteSuspended(id) {

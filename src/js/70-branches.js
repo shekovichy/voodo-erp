@@ -74,7 +74,7 @@ function saveBranchNames() {
 // show up everywhere without a reload. Reloading immediately after saving
 // is simpler and safer than trying to hot-patch every one of those places.
 //
-// Uses a real in-app modal instead of window.prompt()/alert() — those are
+// Uses a real in-app modal instead of window.prompt()/window.alert() — those are
 // silently no-ops in a PWA running in standalone/installed mode on several
 // mobile browsers, which is exactly how this app is meant to be used (it
 // has an "install app" button). A prompt() call there just returns null
@@ -182,15 +182,15 @@ function updateTrQty(idx, val) {
 function confirmTransfer() {
   const from = document.getElementById('trFromBranch').value;
   const to   = document.getElementById('trToBranch').value;
-  if (from === to) { alert('الفرع المصدر والوجهة متطابقان'); return; }
-  if (!_trItems.length) { alert('أضف أصناف للتحويل'); return; }
+  if (from === to) { showToast('الفرع المصدر والوجهة متطابقان'); return; }
+  if (!_trItems.length) { showToast('أضف أصناف للتحويل'); return; }
   const note = document.getElementById('trNote').value.trim();
 
   // Validate quantities
   const srcInv = getInv(from);
   for (const item of _trItems) {
     const p = srcInv.find(x => x.code === item.code);
-    if (!p || p.qty < item.qty) { alert(`الكمية المطلوبة من "${item.name}" غير متاحة في المصدر`); return; }
+    if (!p || p.qty < item.qty) { showToast(`الكمية المطلوبة من "${item.name}" غير متاحة في المصدر`); return; }
   }
 
   // Deduct from source
@@ -228,7 +228,7 @@ function confirmTransfer() {
 
   document.getElementById('transferModal').classList.add('hidden');
   renderTransfersPage();
-  alert(`✅ تم التحويل بنجاح\nمن: ${record.fromName} → إلى: ${record.toName}\n${_trItems.length} صنف`);
+  showToast(`✅ تم التحويل بنجاح\nمن: ${record.fromName} → إلى: ${record.toName}\n${_trItems.length} صنف`);
 }
 
 function renderTransfersPage() {

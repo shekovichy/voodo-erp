@@ -170,23 +170,24 @@ function savePivotFavorite() {
   const rowDim = document.getElementById('pvRowDim').value;
   const metricKey = document.getElementById('pvMetric').value;
   if (!rowDim || !metricKey) { showToast('⚠️ اعمل تحليل الأول قبل الحفظ'); return; }
-  const name = prompt('اسم التقرير المفضّل:');
-  if (!name || !name.trim()) return;
-  const fav = {
-    id: 'pvf_' + Date.now(),
-    name: name.trim(),
-    rowDim, colDim: document.getElementById('pvColDim').value,
-    metric: metricKey,
-    period: document.getElementById('pvPeriod').value,
-    from: document.getElementById('pvFrom').value,
-    to: document.getElementById('pvTo').value,
-    branchId: document.getElementById('pvBranch').value,
-    createdBy: currentUser, createdAt: Date.now(),
-  };
-  setPivotFavorites([...getPivotFavorites(), fav]);
-  renderPivotFavorites();
-  document.getElementById('pvFavorites').value = fav.id;
-  showToast('⭐ تم حفظ التقرير في المفضّلة');
+  showPromptModal('اسم التقرير المفضّل:', '', function(name) {
+    if (!name || !name.trim()) return;
+    const fav = {
+      id: 'pvf_' + Date.now(),
+      name: name.trim(),
+      rowDim, colDim: document.getElementById('pvColDim').value,
+      metric: metricKey,
+      period: document.getElementById('pvPeriod').value,
+      from: document.getElementById('pvFrom').value,
+      to: document.getElementById('pvTo').value,
+      branchId: document.getElementById('pvBranch').value,
+      createdBy: currentUser, createdAt: Date.now(),
+    };
+    setPivotFavorites([...getPivotFavorites(), fav]);
+    renderPivotFavorites();
+    document.getElementById('pvFavorites').value = fav.id;
+    showToast('⭐ تم حفظ التقرير في المفضّلة');
+  });
 }
 
 function loadPivotFavorite() {

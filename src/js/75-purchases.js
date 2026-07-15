@@ -43,7 +43,7 @@ function openSupplierModal(id) {
 
 function saveSupplier() {
   const name = document.getElementById('supName').value.trim();
-  if (!name) { alert('أدخل اسم المورد'); return; }
+  if (!name) { showToast('أدخل اسم المورد'); return; }
   const editId = document.getElementById('supEditId').value;
   const list = getSuppliers();
   const rec = {
@@ -193,8 +193,8 @@ function calcPOTotals() {
 
 function savePO() {
   const supplierId = document.getElementById('poSupplierId').value;
-  if (!supplierId) { alert('اختر المورد أولاً'); return; }
-  if (!_poItems.length) { alert('أضف صنف واحد على الأقل'); return; }
+  if (!supplierId) { showToast('اختر المورد أولاً'); return; }
+  if (!_poItems.length) { showToast('أضف صنف واحد على الأقل'); return; }
   const editId = document.getElementById('poEditId').value;
   const shipping = parseFloat(document.getElementById('poShipping').value) || 0;
   const subtotal = _poItems.reduce((s, i) => s + i.qty * i.cost, 0);
@@ -279,7 +279,11 @@ function openPODetails(id) {
 function receivePO() {
   const po = getPurchases().find(p => p.id === _poViewId);
   if (!po) return;
-  if (!confirm(`استلام بضاعة أمر الشراء #${po.id.slice(-6)}؟\nسيتم تحديث مخزون فرع: ${getBranchName(po.branchId)}\nوتحديث تكلفة الأصناف بما في ذلك تكلفة الشحن الموزعة.`)) return;
+  showConfirmModal(`استلام بضاعة أمر الشراء #${po.id.slice(-6)}؟\nسيتم تحديث مخزون فرع: ${getBranchName(po.branchId)}\nوتحديث تكلفة الأصناف بما في ذلك تكلفة الشحن الموزعة.`, function() {
+  _receivePOConfirmed(po);
+  });
+}
+function _receivePOConfirmed(po) {
   const supplier = getSuppliers().find(s => s.id === po.supplierId);
 
   // Distribute shipping cost proportionally
@@ -329,7 +333,7 @@ function receivePO() {
   addAuditLog('po.receive', `استلام أمر شراء #${po.id.slice(-6)} — ${getBranchName(po.branchId)} — ${fmt(po.total)} ج`, po.branchId);
   closeModal('poDetailsModal');
   renderPurchasesPage();
-  alert(`✅ تم الاستلام بنجاح!\nتم تحديث مخزون ${getBranchName(po.branchId)} وتكاليف الأصناف.`);
+  showToast(`✅ تم الاستلام بنجاح!\nتم تحديث مخزون ${getBranchName(po.branchId)} وتكاليف الأصناف.`);
 }
 
 // ── Supplier Payments (AP) ──────────────────────────────────────
@@ -353,8 +357,8 @@ function saveSupplierPayment() {
   const supplierId = document.getElementById('spSupplierId').value;
   const amount = parseFloat(document.getElementById('spAmount').value);
   const date = document.getElementById('spDate').value;
-  if (!amount || amount <= 0) { alert('أدخل مبلغ صحيح'); return; }
-  if (!date) { alert('أدخل التاريخ'); return; }
+  if (!amount || amount <= 0) { showToast('أدخل مبلغ صحيح'); return; }
+  if (!date) { showToast('أدخل التاريخ'); return; }
   const sup = getSuppliers().find(s => s.id === supplierId);
   if (!sup) return;
 

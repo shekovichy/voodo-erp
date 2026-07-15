@@ -7,7 +7,7 @@ function addToCart(code) {
   if (!p || p.qty <= 0) return;
   const ex = cart.find(x => x.code === code);
   if (ex) {
-    if (ex.qty >= p.qty) { alert('لا يوجد مخزون كافٍ'); return; }
+    if (ex.qty >= p.qty) { showToast('لا يوجد مخزون كافٍ'); return; }
     ex.qty++;
   } else {
     cart.push({ code: p.code, name: p.name, price: p.priceAfter, cost: p.cost || 0, qty: 1 });
@@ -22,7 +22,7 @@ function changeQty(code, d) {
   const p = inv.find(x => x.code === code);
   item.qty += d;
   if (item.qty <= 0) cart = cart.filter(x => x.code !== code);
-  else if (p && item.qty > p.qty) { item.qty = p.qty; alert('لا يوجد مخزون كافٍ'); }
+  else if (p && item.qty > p.qty) { item.qty = p.qty; showToast('لا يوجد مخزون كافٍ'); }
   renderCart();
 }
 

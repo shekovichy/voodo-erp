@@ -79,13 +79,53 @@ function showToast(msg) {
   }
   const el = document.createElement('div');
   el.textContent = msg;
-  el.style.cssText = 'background:#1f2937;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25);opacity:0;transform:translateY(8px);transition:opacity .25s,transform .25s;max-width:90vw;text-align:center;';
+  el.style.cssText = 'background:#1f2937;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25);opacity:0;transform:translateY(8px);transition:opacity .25s,transform .25s;max-width:90vw;text-align:center;white-space:pre-line;';
   host.appendChild(el);
   requestAnimationFrame(() => { el.style.opacity = '1'; el.style.transform = 'translateY(0)'; });
   setTimeout(() => {
     el.style.opacity = '0'; el.style.transform = 'translateY(8px)';
     setTimeout(() => el.remove(), 250);
   }, 3000);
+}
+
+// Generic in-app replacements for window.prompt()/window.confirm() — both
+// are silent no-ops in a PWA running standalone/installed on several mobile
+// browsers (see the branch-add fix in 70-branches.js for the first place
+// this broke a real feature). Callback-based since a modal is inherently
+// async, unlike the browser-native blocking dialogs they replace.
+let _gpCallback = null;
+function showPromptModal(title, defaultValue, callback) {
+  document.getElementById('gpTitle').textContent = title;
+  document.getElementById('gpInput').value = defaultValue || '';
+  _gpCallback = callback;
+  document.getElementById('genericPromptModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('gpInput').focus(), 50);
+}
+function closeGenericPrompt() {
+  document.getElementById('genericPromptModal').classList.add('hidden');
+  _gpCallback = null;
+}
+function confirmGenericPrompt() {
+  const val = document.getElementById('gpInput').value;
+  const cb = _gpCallback;
+  closeGenericPrompt();
+  if (cb) cb(val);
+}
+
+let _gcCallback = null;
+function showConfirmModal(message, callback) {
+  document.getElementById('gcMessage').textContent = message;
+  _gcCallback = callback;
+  document.getElementById('genericConfirmModal').classList.remove('hidden');
+}
+function closeGenericConfirm() {
+  document.getElementById('genericConfirmModal').classList.add('hidden');
+  _gcCallback = null;
+}
+function confirmGenericConfirm() {
+  const cb = _gcCallback;
+  closeGenericConfirm();
+  if (cb) cb();
 }
 
 function getDateRange(period, fromId, toId) {

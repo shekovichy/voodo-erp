@@ -120,8 +120,12 @@ function processCashierReturn() {
     const qty = parseInt(document.getElementById('cr-qty-'+idx)?.value) || 0;
     if (qty > 0) { returnItems.push({...item, qty: -qty}); returnTotal += qty * item.price; }
   });
-  if (!returnItems.length) { alert('اختر على الأقل صنف واحد للإرجاع'); return; }
-  if (!confirm(`تأكيد إرجاع ${returnItems.length} صنف — المبلغ المسترد: ${fmt(returnTotal)} ج؟`)) return;
+  if (!returnItems.length) { showToast('اختر على الأقل صنف واحد للإرجاع'); return; }
+  showConfirmModal(`تأكيد إرجاع ${returnItems.length} صنف — المبلغ المسترد: ${fmt(returnTotal)} ج؟`, function() {
+  _processCashierReturnConfirmed(sale, reason, returnItems, returnTotal);
+  });
+}
+function _processCashierReturnConfirmed(sale, reason, returnItems, returnTotal) {
   // Restock
   const inv = getInv();
   returnItems.forEach(ri => { const p = inv.find(x => x.code === ri.code); if (p) p.qty += Math.abs(ri.qty); });

@@ -23,8 +23,8 @@ function openExpenseRequestModal() {
 function saveExpenseRequest() {
   const amount = parseFloat(document.getElementById('expReqAmount').value);
   const date   = document.getElementById('expReqDate').value;
-  if (!amount || amount <= 0) { alert('أدخل مبلغ صحيح'); return; }
-  if (!date) { alert('أدخل التاريخ'); return; }
+  if (!amount || amount <= 0) { showToast('أدخل مبلغ صحيح'); return; }
+  if (!date) { showToast('أدخل التاريخ'); return; }
   const rec = {
     id: 'expreq_' + Date.now(),
     branchId: document.getElementById('expReqBranchId').value || currentBranch,
@@ -41,16 +41,17 @@ function saveExpenseRequest() {
   showToast('✅ تم إرسال طلب المصروف — بانتظار اعتماد الإدارة');
 }
 function approveExpenseRequest(id) {
-  if (!confirm('تأكيد اعتماد هذا المصروف؟')) return;
-  const list = getExpenseRequests(); const req = list.find(r=>r.id===id); if (!req) return;
-  req.status = 'approved'; req.reviewedBy = currentUser; req.reviewedAt = Date.now();
-  setExpenseRequests(list);
-  const expenses = getExpenses();
-  expenses.push({ id:'exp_'+Date.now(), type:'branch', branchId:req.branchId, category:req.category,
-    amount:req.amount, date:req.date, month:req.month,
-    note:(req.note?req.note+' — ':'')+'معتمد من '+req.by, by:currentUser, createdAt:Date.now() });
-  setExpenses(expenses);
-  updateExpReqBadge(); renderExpensesPage(); showToast('✅ تمت الموافقة وتسجيل المصروف');
+  showConfirmModal('تأكيد اعتماد هذا المصروف؟', function() {
+    const list = getExpenseRequests(); const req = list.find(r=>r.id===id); if (!req) return;
+    req.status = 'approved'; req.reviewedBy = currentUser; req.reviewedAt = Date.now();
+    setExpenseRequests(list);
+    const expenses = getExpenses();
+    expenses.push({ id:'exp_'+Date.now(), type:'branch', branchId:req.branchId, category:req.category,
+      amount:req.amount, date:req.date, month:req.month,
+      note:(req.note?req.note+' — ':'')+'معتمد من '+req.by, by:currentUser, createdAt:Date.now() });
+    setExpenses(expenses);
+    updateExpReqBadge(); renderExpensesPage(); showToast('✅ تمت الموافقة وتسجيل المصروف');
+  });
 }
 function rejectExpenseRequest(id) {
   const list = getExpenseRequests(); const req = list.find(r=>r.id===id); if (!req) return;

@@ -46,7 +46,7 @@ function exportReorderList() {
   const inv    = getInv();
   const thresh = getThreshold();
   const items  = inv.filter(p => p.qty <= thresh);
-  if (!items.length) { alert('لا توجد منتجات تحتاج تجديد'); return; }
+  if (!items.length) { showToast('لا توجد منتجات تحتاج تجديد'); return; }
   const data = items.map(p => ({
     'الكود': p.code, 'الاسم': p.name,
     'الكمية الحالية': p.qty, 'حد التنبيه': thresh,
@@ -165,9 +165,11 @@ function exportBackup() {
 
 function importBackup(e) {
   const file = e.target.files[0]; if (!file) return;
-  if (!confirm('استعادة النسخة الاحتياطية ستستبدل البيانات الحالية. هل تريد المتابعة؟')) {
-    e.target.value = ''; return;
-  }
+  showConfirmModal('استعادة النسخة الاحتياطية ستستبدل البيانات الحالية. هل تريد المتابعة؟', function() {
+  _importBackupConfirmed(file);
+  });
+}
+function _importBackupConfirmed(file) {
   const reader = new FileReader();
   reader.onload = ev => {
     try {
@@ -182,7 +184,6 @@ function importBackup(e) {
     } catch(err) {
       showMsg('sBackupMsg', 'خطأ في قراءة الملف: ' + err.message, 'danger');
     }
-    e.target.value = '';
   };
   reader.readAsText(file);
 }

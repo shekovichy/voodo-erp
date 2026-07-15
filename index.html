@@ -3290,7 +3290,7 @@ function _loadChunk(page, cb) {
   const s = document.createElement('script');
   s.src = _CHUNK_FILES[page];
   s.onload  = () => { _loadedChunks.add(page); cb(); };
-  s.onerror = () => { console.error('Failed to load module for page:', page); alert('تعذّر تحميل الصفحة — تأكد من الاتصال بالإنترنت وحاول تاني'); };
+  s.onerror = () => { console.error('Failed to load module for page:', page); showToast('تعذّر تحميل الصفحة — تأكد من الاتصال بالإنترنت وحاول تاني'); };
   document.body.appendChild(s);
 }
 // ══ CLOUD DATA CACHES — synced with Firestore in real-time ══════════════
@@ -3717,13 +3717,53 @@ function showToast(msg) {
   }
   const el = document.createElement('div');
   el.textContent = msg;
-  el.style.cssText = 'background:#1f2937;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25);opacity:0;transform:translateY(8px);transition:opacity .25s,transform .25s;max-width:90vw;text-align:center;';
+  el.style.cssText = 'background:#1f2937;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25);opacity:0;transform:translateY(8px);transition:opacity .25s,transform .25s;max-width:90vw;text-align:center;white-space:pre-line;';
   host.appendChild(el);
   requestAnimationFrame(() => { el.style.opacity = '1'; el.style.transform = 'translateY(0)'; });
   setTimeout(() => {
     el.style.opacity = '0'; el.style.transform = 'translateY(8px)';
     setTimeout(() => el.remove(), 250);
   }, 3000);
+}
+
+// Generic in-app replacements for window.prompt()/window.confirm() — both
+// are silent no-ops in a PWA running standalone/installed on several mobile
+// browsers (see the branch-add fix in 70-branches.js for the first place
+// this broke a real feature). Callback-based since a modal is inherently
+// async, unlike the browser-native blocking dialogs they replace.
+let _gpCallback = null;
+function showPromptModal(title, defaultValue, callback) {
+  document.getElementById('gpTitle').textContent = title;
+  document.getElementById('gpInput').value = defaultValue || '';
+  _gpCallback = callback;
+  document.getElementById('genericPromptModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('gpInput').focus(), 50);
+}
+function closeGenericPrompt() {
+  document.getElementById('genericPromptModal').classList.add('hidden');
+  _gpCallback = null;
+}
+function confirmGenericPrompt() {
+  const val = document.getElementById('gpInput').value;
+  const cb = _gpCallback;
+  closeGenericPrompt();
+  if (cb) cb(val);
+}
+
+let _gcCallback = null;
+function showConfirmModal(message, callback) {
+  document.getElementById('gcMessage').textContent = message;
+  _gcCallback = callback;
+  document.getElementById('genericConfirmModal').classList.remove('hidden');
+}
+function closeGenericConfirm() {
+  document.getElementById('genericConfirmModal').classList.add('hidden');
+  _gcCallback = null;
+}
+function confirmGenericConfirm() {
+  const cb = _gcCallback;
+  closeGenericConfirm();
+  if (cb) cb();
 }
 
 function getDateRange(period, fromId, toId) {
@@ -4441,7 +4481,7 @@ function addToCart(code) {
   if (!p || p.qty <= 0) return;
   const ex = cart.find(x => x.code === code);
   if (ex) {
-    if (ex.qty >= p.qty) { alert('لا يوجد مخزون كافٍ'); return; }
+    if (ex.qty >= p.qty) { showToast('لا يوجد مخزون كافٍ'); return; }
     ex.qty++;
   } else {
     cart.push({ code: p.code, name: p.name, price: p.priceAfter, cost: p.cost || 0, qty: 1 });
@@ -4456,7 +4496,7 @@ function changeQty(code, d) {
   const p = inv.find(x => x.code === code);
   item.qty += d;
   if (item.qty <= 0) cart = cart.filter(x => x.code !== code);
-  else if (p && item.qty > p.qty) { item.qty = p.qty; alert('لا يوجد مخزون كافٍ'); }
+  else if (p && item.qty > p.qty) { item.qty = p.qty; showToast('لا يوجد مخزون كافٍ'); }
   renderCart();
 }
 
@@ -4561,7 +4601,7 @@ function updateCartUI() {
 // PAYMENT
 // ══════════════════════════════════════════════
 function openPayment() {
-  if (!cart.length) { alert('الفاتورة فارغة'); return; }
+  if (!cart.length) { showToast('الفاتورة فارغة'); return; }
   const { total } = cartTotals();
   document.getElementById('modalTotal').textContent = fmt(total) + ' ج';
   document.getElementById('paidAmount').value = '';
@@ -4598,7 +4638,7 @@ function completeSale() {
   let paid = total, change = 0;
   if (payMethod === 'cash') {
     paid = parseFloat(document.getElementById('paidAmount').value) || 0;
-    if (paid < total) { alert('المبلغ المدفوع أقل من الإجمالي'); return; }
+    if (paid < total) { showToast('المبلغ المدفوع أقل من الإجمالي'); return; }
     change = paid - total;
   }
 
@@ -5085,7 +5125,7 @@ function saveProduct() {
   const code       = document.getElementById('pm-code').value.trim();
   const name       = document.getElementById('pm-name').value.trim();
   const priceAfter = parseFloat(document.getElementById('pm-priceAfter').value);
-  if (!code || !name || isNaN(priceAfter)) { alert('الكود والاسم والسعر مطلوبون'); return; }
+  if (!code || !name || isNaN(priceAfter)) { showToast('الكود والاسم والسعر مطلوبون'); return; }
 
   const inv = getInv();
   const editCode = document.getElementById('pmEditCode').value;
@@ -5116,7 +5156,7 @@ function saveProduct() {
       addAuditLog('inv.edit', `تعديل: ${prod.name} (${prod.code}) — كمية: ${prod.qty}`, null, changes);
     }
   } else {
-    if (inv.find(x => x.code === code)) { alert('هذا الكود موجود مسبقاً'); return; }
+    if (inv.find(x => x.code === code)) { showToast('هذا الكود موجود مسبقاً'); return; }
     inv.push(prod);
     addAuditLog('inv.add', `إضافة: ${prod.name} (${prod.code}) — سعر: ${fmt(prod.priceAfter)} ج`, null);
   }
@@ -5790,7 +5830,7 @@ function exportReorderList() {
   const inv    = getInv();
   const thresh = getThreshold();
   const items  = inv.filter(p => p.qty <= thresh);
-  if (!items.length) { alert('لا توجد منتجات تحتاج تجديد'); return; }
+  if (!items.length) { showToast('لا توجد منتجات تحتاج تجديد'); return; }
   const data = items.map(p => ({
     'الكود': p.code, 'الاسم': p.name,
     'الكمية الحالية': p.qty, 'حد التنبيه': thresh,
@@ -5909,9 +5949,11 @@ function exportBackup() {
 
 function importBackup(e) {
   const file = e.target.files[0]; if (!file) return;
-  if (!confirm('استعادة النسخة الاحتياطية ستستبدل البيانات الحالية. هل تريد المتابعة؟')) {
-    e.target.value = ''; return;
-  }
+  showConfirmModal('استعادة النسخة الاحتياطية ستستبدل البيانات الحالية. هل تريد المتابعة؟', function() {
+  _importBackupConfirmed(file);
+  });
+}
+function _importBackupConfirmed(file) {
   const reader = new FileReader();
   reader.onload = ev => {
     try {
@@ -5926,7 +5968,6 @@ function importBackup(e) {
     } catch(err) {
       showMsg('sBackupMsg', 'خطأ في قراءة الملف: ' + err.message, 'danger');
     }
-    e.target.value = '';
   };
   reader.readAsText(file);
 }
@@ -6490,7 +6531,7 @@ function setSuspended(list) {
 }
 
 function suspendBill() {
-  if (!cart.length) { alert('الفاتورة فارغة'); return; }
+  if (!cart.length) { showToast('الفاتورة فارغة'); return; }
   document.getElementById('suspendNote').value = '';
   document.getElementById('suspendSuccessMsg').classList.add('hidden');
   document.getElementById('suspendConfirmBtn').classList.remove('hidden');
@@ -6593,7 +6634,7 @@ function activateSuspended(id) {
 
   renderCart(); renderProducts();
   document.getElementById('adminDiscountRow').classList.add('hidden');
-  alert('تم تحميل الفاتورة — يمكن الآن الدفع من الكاشير');
+  showToast('تم تحميل الفاتورة — يمكن الآن الدفع من الكاشير');
 }
 
 function deleteSuspended(id) {
@@ -6928,7 +6969,7 @@ function saveBranchNames() {
 // show up everywhere without a reload. Reloading immediately after saving
 // is simpler and safer than trying to hot-patch every one of those places.
 //
-// Uses a real in-app modal instead of window.prompt()/alert() — those are
+// Uses a real in-app modal instead of window.prompt()/window.alert() — those are
 // silently no-ops in a PWA running in standalone/installed mode on several
 // mobile browsers, which is exactly how this app is meant to be used (it
 // has an "install app" button). A prompt() call there just returns null
@@ -7036,15 +7077,15 @@ function updateTrQty(idx, val) {
 function confirmTransfer() {
   const from = document.getElementById('trFromBranch').value;
   const to   = document.getElementById('trToBranch').value;
-  if (from === to) { alert('الفرع المصدر والوجهة متطابقان'); return; }
-  if (!_trItems.length) { alert('أضف أصناف للتحويل'); return; }
+  if (from === to) { showToast('الفرع المصدر والوجهة متطابقان'); return; }
+  if (!_trItems.length) { showToast('أضف أصناف للتحويل'); return; }
   const note = document.getElementById('trNote').value.trim();
 
   // Validate quantities
   const srcInv = getInv(from);
   for (const item of _trItems) {
     const p = srcInv.find(x => x.code === item.code);
-    if (!p || p.qty < item.qty) { alert(`الكمية المطلوبة من "${item.name}" غير متاحة في المصدر`); return; }
+    if (!p || p.qty < item.qty) { showToast(`الكمية المطلوبة من "${item.name}" غير متاحة في المصدر`); return; }
   }
 
   // Deduct from source
@@ -7082,7 +7123,7 @@ function confirmTransfer() {
 
   document.getElementById('transferModal').classList.add('hidden');
   renderTransfersPage();
-  alert(`✅ تم التحويل بنجاح\nمن: ${record.fromName} → إلى: ${record.toName}\n${_trItems.length} صنف`);
+  showToast(`✅ تم التحويل بنجاح\nمن: ${record.fromName} → إلى: ${record.toName}\n${_trItems.length} صنف`);
 }
 
 function renderTransfersPage() {
@@ -7149,7 +7190,7 @@ function openHRTargetModal() {
 
 function saveHRTargets() {
   const month = document.getElementById('hrTargetMonth').value;
-  if (!month) { alert('اختر الشهر'); return; }
+  if (!month) { showToast('اختر الشهر'); return; }
   const salespeople = (getSalespeople ? getSalespeople() : (DB.g('pos_salespeople',[])))
     .map(sp => typeof sp === 'string' ? sp : sp.name);
   const targets = {};
@@ -7355,7 +7396,7 @@ function selectPromoProduct(code, name) {
 function savePromo() {
   const name = document.getElementById('promoName').value.trim();
   const type = document.getElementById('promoType').value;
-  if (!name) { alert('أدخل اسم العرض'); return; }
+  if (!name) { showToast('أدخل اسم العرض'); return; }
 
   const startDate = document.getElementById('promoStartDate').value;
   const endDate   = document.getElementById('promoEndDate').value;
@@ -7364,29 +7405,29 @@ function savePromo() {
   if (endDate)   promo.endDate   = endDate;
 
   if (type === 'bundle') {
-    if (_promoBundleItems.length < 2) { alert('أضف منتجين على الأقل للحزمة'); return; }
+    if (_promoBundleItems.length < 2) { showToast('أضف منتجين على الأقل للحزمة'); return; }
     const bPrice = parseFloat(document.getElementById('promoBundlePrice').value);
-    if (!bPrice || bPrice <= 0) { alert('أدخل سعر الحزمة'); return; }
+    if (!bPrice || bPrice <= 0) { showToast('أدخل سعر الحزمة'); return; }
     promo.items       = _promoBundleItems.map(b => ({...b}));
     promo.bundlePrice = bPrice;
   } else if (type === 'threshold') {
     const minAmt  = parseFloat(document.getElementById('promoMinAmount').value);
     const dType   = document.getElementById('promoDiscType').value;
     const dVal    = parseFloat(document.getElementById('promoDiscValue').value);
-    if (!minAmt || minAmt <= 0) { alert('أدخل الحد الأدنى للفاتورة'); return; }
-    if (!dVal  || dVal <= 0)   { alert('أدخل قيمة الخصم'); return; }
+    if (!minAmt || minAmt <= 0) { showToast('أدخل الحد الأدنى للفاتورة'); return; }
+    if (!dVal  || dVal <= 0)   { showToast('أدخل قيمة الخصم'); return; }
     promo.minAmount    = minAmt;
     promo.discountType = dType;
     promo.discountValue = dVal;
   } else if (type === 'category') {
     const catName = document.getElementById('promoCatName').value.trim();
     const catDisc = parseFloat(document.getElementById('promoCatDisc').value);
-    if (!catName) { alert('أدخل اسم الفئة'); return; }
-    if (!catDisc || catDisc <= 0 || catDisc > 100) { alert('أدخل نسبة الخصم (1-100)'); return; }
+    if (!catName) { showToast('أدخل اسم الفئة'); return; }
+    if (!catDisc || catDisc <= 0 || catDisc > 100) { showToast('أدخل نسبة الخصم (1-100)'); return; }
     promo.categoryName = catName;
     promo.categoryDisc = catDisc;
   } else if (type === 'bxgy') {
-    if (!_promoBundleItems.length) { alert('أضف المنتج المطلوب شراؤه'); return; }
+    if (!_promoBundleItems.length) { showToast('أضف المنتج المطلوب شراؤه'); return; }
     const buyQty = parseInt(document.getElementById('promoBuyQty').value) || 1;
     const getQty = parseInt(document.getElementById('promoGetQty').value) || 1;
     promo.items  = _promoBundleItems.map(b => ({...b}));
@@ -7541,7 +7582,7 @@ function detectEligiblePromos() {
 function applyPromo(id) {
   const promo = getPromos().find(p => p.id === id); if (!promo) return;
   const discAmt = calcPromoDiscount(promo);
-  if (discAmt <= 0) { alert('هذا العرض لا يوفر خصماً على الفاتورة الحالية'); return; }
+  if (discAmt <= 0) { showToast('هذا العرض لا يوفر خصماً على الفاتورة الحالية'); return; }
   if (!cart._appliedPromos) cart._appliedPromos = [];
   cart._appliedPromos.push({ id: promo.id, name: promo.name, discAmt });
   updateCartUI();
@@ -7643,7 +7684,7 @@ function openCustomerModal(id) {
 
 function saveCustomer() {
   const name = document.getElementById('cust-name').value.trim();
-  if (!name) { alert('الاسم مطلوب'); return; }
+  if (!name) { showToast('الاسم مطلوب'); return; }
   const editId = document.getElementById('custEditId').value;
   const list   = getCustomers();
   if (editId) {
@@ -7815,7 +7856,7 @@ let _returnOriginalSale = null;
 
 function openReturnFromModal() {
   if (!lastSaleForPrint) return;
-  if (lastSaleForPrint.isReturn) { alert('لا يمكن إرجاع فاتورة مرتجعة'); return; }
+  if (lastSaleForPrint.isReturn) { showToast('لا يمكن إرجاع فاتورة مرتجعة'); return; }
   _returnOriginalSale = lastSaleForPrint;
   document.getElementById('returnReason').value = '';
   document.getElementById('returnSummary').style.display = 'none';
@@ -7858,9 +7899,12 @@ function processReturn() {
     const qty = parseInt(document.getElementById('ret-qty-'+idx)?.value)||0;
     if (qty > 0) { returnItems.push({...item, qty:-qty}); returnTotal += qty * item.price; }
   });
-  if (!returnItems.length) { alert('اختر على الأقل صنف واحد للإرجاع'); return; }
-  if (!confirm(`تأكيد إرجاع ${returnItems.length} صنف — المبلغ المسترد: ${fmt(returnTotal)} ج؟`)) return;
-
+  if (!returnItems.length) { showToast('اختر على الأقل صنف واحد للإرجاع'); return; }
+  showConfirmModal(`تأكيد إرجاع ${returnItems.length} صنف — المبلغ المسترد: ${fmt(returnTotal)} ج؟`, function() {
+  _processReturnConfirmed(sale, reason, returnItems, returnTotal);
+  });
+}
+function _processReturnConfirmed(sale, reason, returnItems, returnTotal) {
   // Restock
   const inv = getInv();
   returnItems.forEach(ri => { const p = inv.find(x=>x.code===ri.code); if (p) p.qty += Math.abs(ri.qty); });
@@ -7887,7 +7931,7 @@ function processReturn() {
 
   document.getElementById('returnModal').classList.add('hidden');
   document.getElementById('saleDetailModal').classList.add('hidden');
-  alert(`✅ تم معالجة المرتجع — المبلغ المسترد: ${fmt(returnTotal)} ج\n📦 تم إعادة الكميات للمخزون`);
+  showToast(`✅ تم معالجة المرتجع — المبلغ المسترد: ${fmt(returnTotal)} ج\n📦 تم إعادة الكميات للمخزون`);
   if (!document.getElementById('page-sales').classList.contains('hidden')) renderSales();
   if (!document.getElementById('page-inventory').classList.contains('hidden')) renderInventory();
 }
@@ -7977,8 +8021,8 @@ function toggleExpBranch() {
 function saveExpense() {
   const amount = parseFloat(document.getElementById('expAmount').value);
   const date   = document.getElementById('expDate').value;
-  if (!amount || amount <= 0) { alert('أدخل مبلغ صحيح'); return; }
-  if (!date) { alert('أدخل التاريخ'); return; }
+  if (!amount || amount <= 0) { showToast('أدخل مبلغ صحيح'); return; }
+  if (!date) { showToast('أدخل التاريخ'); return; }
   const type     = document.getElementById('expType').value;
   const editId   = document.getElementById('expEditId').value;
   const list     = getExpenses();
@@ -8206,7 +8250,7 @@ let _lastSale = null; // stored in completeSale for WhatsApp
 function shareReceiptWhatsApp() {
   // Build text receipt from last sale
   const sale = _lastSale;
-  if (!sale) { alert('لا توجد فاتورة لمشاركتها'); return; }
+  if (!sale) { showToast('لا توجد فاتورة لمشاركتها'); return; }
   const lines = [
     `🧾 فاتورة من VOODO ERP`,
     `📅 ${new Date(sale.date).toLocaleString('ar-EG')}`,
@@ -8227,7 +8271,7 @@ function shareReceiptWhatsApp() {
 
 function shareOffersWhatsApp() {
   const promos = getPromos().filter(p => p.active);
-  if (!promos.length) { alert('لا توجد عروض نشطة للمشاركة'); return; }
+  if (!promos.length) { showToast('لا توجد عروض نشطة للمشاركة'); return; }
   const lines = [
     `🏷️ *عروض وحزم VOODO ERP*`,
     `━━━━━━━━━━━━━━━━━━━━`,
@@ -8368,8 +8412,12 @@ function processCashierReturn() {
     const qty = parseInt(document.getElementById('cr-qty-'+idx)?.value) || 0;
     if (qty > 0) { returnItems.push({...item, qty: -qty}); returnTotal += qty * item.price; }
   });
-  if (!returnItems.length) { alert('اختر على الأقل صنف واحد للإرجاع'); return; }
-  if (!confirm(`تأكيد إرجاع ${returnItems.length} صنف — المبلغ المسترد: ${fmt(returnTotal)} ج؟`)) return;
+  if (!returnItems.length) { showToast('اختر على الأقل صنف واحد للإرجاع'); return; }
+  showConfirmModal(`تأكيد إرجاع ${returnItems.length} صنف — المبلغ المسترد: ${fmt(returnTotal)} ج؟`, function() {
+  _processCashierReturnConfirmed(sale, reason, returnItems, returnTotal);
+  });
+}
+function _processCashierReturnConfirmed(sale, reason, returnItems, returnTotal) {
   // Restock
   const inv = getInv();
   returnItems.forEach(ri => { const p = inv.find(x => x.code === ri.code); if (p) p.qty += Math.abs(ri.qty); });
@@ -8501,7 +8549,7 @@ function buildPriceTag(item, showPrice, dim, preview) {
 
 function printBarcodes() {
   const inv = getInv().filter(i => _bcSelected.has(i.code));
-  if (!inv.length) { alert('اختر أصناف أولاً'); return; }
+  if (!inv.length) { showToast('اختر أصناف أولاً'); return; }
   const copies = parseInt(document.getElementById('bcCopies')?.value) || 1;
   const showPrice = document.getElementById('bcShowPrice')?.value || 'after';
   const dim = getBCTagDimensions();
@@ -8549,7 +8597,7 @@ function updatePrinterStatusUI() {
 }
 async function connectReceiptPrinter() {
   if (!('serial' in navigator)) {
-    alert('متصفحك لا يدعم Web Serial API\nاستخدم Chrome أو Edge على سطح المكتب فقط');
+    showToast('متصفحك لا يدعم Web Serial API\nاستخدم Chrome أو Edge على سطح المكتب فقط');
     return;
   }
   try {
@@ -8626,7 +8674,7 @@ async function printReceiptESCPOS(sale) {
   if (ok) showToast('✅ تم الإرسال للطابعة');
 }
 async function testReceiptPrint() {
-  if (!_serialWriter) { alert('الطابعة غير متصلة — اضغط اتصال أولاً'); return; }
+  if (!_serialWriter) { showToast('الطابعة غير متصلة — اضغط اتصال أولاً'); return; }
   await printReceiptESCPOS({
     id:'TEST001', date: new Date().toISOString().slice(0,10),
     salesperson:'اختبار', items:[{name:'منتج تجريبي',qty:2,price:50}],
@@ -8690,7 +8738,7 @@ function saveLoyaltySettings() {
     enabled: document.getElementById('loyEnabled').checked
   });
   document.getElementById('loyaltySettingsModal').classList.add('hidden');
-  alert('تم حفظ إعدادات الولاء ✓');
+  showToast('تم حفظ إعدادات الولاء ✓');
 }
 
 // ══════════════════════════════════════════════
@@ -8853,7 +8901,7 @@ function openAttendanceEdit(empName, date) {
 function saveAttendanceEdit() {
   const emp    = document.getElementById('attEmpSelect').value;
   const date   = document.getElementById('attDate').value;
-  if (!emp||!date) { alert('اختر الموظف والتاريخ'); return; }
+  if (!emp||!date) { showToast('اختر الموظف والتاريخ'); return; }
   saveAttendanceRecord(emp, date,
     document.getElementById('attStatus').value,
     document.getElementById('attCheckIn').value,
@@ -9072,7 +9120,7 @@ function saveBulkCategories() {
   });
   if (changed > 0) { setInv(inv); renderInventory(); }
   document.getElementById('bulkCatModal').classList.add('hidden');
-  alert(changed > 0 ? ('تم تحديث ' + changed + ' منتج') : 'لا يوجد تغييرات');
+  showToast(changed > 0 ? ('تم تحديث ' + changed + ' منتج') : 'لا يوجد تغييرات');
 }
 
 function filterUnclassified() {
@@ -9111,11 +9159,11 @@ function handleVlFile(input) {
       var wb   = XLSX.read(e.target.result, {type:'binary'});
       var ws   = wb.Sheets[wb.SheetNames[0]];
       var rows = XLSX.utils.sheet_to_json(ws, {defval:''});
-      if (!rows.length) { alert('الملف فارغ أو غير مقروء'); return; }
+      if (!rows.length) { showToast('الملف فارغ أو غير مقروء'); return; }
       _vlData    = rows;
       _vlHeaders = Object.keys(rows[0]);
       buildVlMappingUI();
-    } catch(ex) { alert('خطأ في قراءة الملف: ' + ex.message); }
+    } catch(ex) { showToast('خطأ في قراءة الملف: ' + ex.message); }
   };
   reader.readAsBinaryString(file);
 }
@@ -9161,7 +9209,7 @@ function buildVlMappingUI() {
 
 function previewVlookup() {
   var keyCol = document.getElementById('vlKeyCol').value;
-  if (!keyCol) { alert('اختر عمود الكود أولاً'); return; }
+  if (!keyCol) { showToast('اختر عمود الكود أولاً'); return; }
 
   var mapping = {
     cost:        document.getElementById('vlCostCol').value,
@@ -9173,7 +9221,7 @@ function previewVlookup() {
   };
 
   var hasAnyMapping = Object.values(mapping).some(function(v){ return v !== ''; });
-  if (!hasAnyMapping) { alert('اختر على الأقل حقل واحد للاستيراد'); return; }
+  if (!hasAnyMapping) { showToast('اختر على الأقل حقل واحد للاستيراد'); return; }
 
   var inv = getInv();
   var results = [];
@@ -9255,7 +9303,7 @@ function previewVlookup() {
 }
 
 function applyVlookup(matched) {
-  if (!matched || !matched.length) { alert('لا توجد تغييرات للتطبيق'); return; }
+  if (!matched || !matched.length) { showToast('لا توجد تغييرات للتطبيق'); return; }
   var inv = getInv();
   matched.forEach(function(r) {
     var prod = inv.find(function(p){ return p.code === r.keyVal || p.code.toLowerCase() === r.keyVal.toLowerCase(); });
@@ -9265,7 +9313,7 @@ function applyVlookup(matched) {
   setInv(inv);
   renderInventory();
   document.getElementById('vlookupModal').classList.add('hidden');
-  alert('تم تحديث ' + matched.length + ' منتج بنجاح');
+  showToast('تم تحديث ' + matched.length + ' منتج بنجاح');
 }
 
 
@@ -9293,40 +9341,44 @@ function setApprovals(v) {
 function editItemPrice(code) {
   var item = cart.find(function(i){ return i.code === code; });
   if (!item) return;
-  var newPrice = parseFloat(prompt('السعر الجديد لـ "' + item.name + '" (السعر الحالي: ' + item.price + ')', item.price));
-  if (isNaN(newPrice) || newPrice <= 0) return;
-  if (newPrice === item.price) return;
-  if (!item.priceModified) item.originalPrice = item.price;
-  item.price = newPrice;
-  item.priceModified = true;
-  renderCart();
+  showPromptModal('السعر الجديد لـ "' + item.name + '" (السعر الحالي: ' + item.price + ')', item.price, function(val) {
+    var newPrice = parseFloat(val);
+    if (isNaN(newPrice) || newPrice <= 0) return;
+    if (newPrice === item.price) return;
+    if (!item.priceModified) item.originalPrice = item.price;
+    item.price = newPrice;
+    item.priceModified = true;
+    renderCart();
+  });
 }
 
 // ── Cashier: send for approval ──────────────────────────
 function sendForApproval() {
-  if (!cart.length) { alert('الفاتورة فارغة'); return; }
+  if (!cart.length) { showToast('الفاتورة فارغة'); return; }
   var hasModified = cart.some(function(i){ return i.priceModified; });
   if (!hasModified) { openPayment(); return; }
-  var note = prompt('ملاحظة للمدير (اختياري):', '') || '';
-  var { total } = cartTotals();
-  var request = {
-    id: Date.now(),
-    date: new Date().toISOString(),
-    cashier: currentUser || 'كاشير',
-    branchId: currentBranch,
-    branchName: (getBranches()[currentBranch] || BRANCH_DEFAULTS[currentBranch]),
-    items: cart.map(function(i){ return Object.assign({}, i); }),
-    total: total,
-    note: note,
-    status: 'pending',
-    adminNote: ''
-  };
-  var list = getApprovals();
-  list.unshift(request);
-  setApprovals(list);
-  clearCart();
-  updateApprovalBadge();
-  alert('✅ تم إرسال الفاتورة للمدير\nسيتم إشعارك عند الموافقة');
+  showPromptModal('ملاحظة للمدير (اختياري):', '', function(val) {
+    var note = val || '';
+    var { total } = cartTotals();
+    var request = {
+      id: Date.now(),
+      date: new Date().toISOString(),
+      cashier: currentUser || 'كاشير',
+      branchId: currentBranch,
+      branchName: (getBranches()[currentBranch] || BRANCH_DEFAULTS[currentBranch]),
+      items: cart.map(function(i){ return Object.assign({}, i); }),
+      total: total,
+      note: note,
+      status: 'pending',
+      adminNote: ''
+    };
+    var list = getApprovals();
+    list.unshift(request);
+    setApprovals(list);
+    clearCart();
+    updateApprovalBadge();
+    showToast('✅ تم إرسال الفاتورة للمدير\nسيتم إشعارك عند الموافقة');
+  });
 }
 
 // ── Admin: open approvals panel ─────────────────────────
@@ -9378,7 +9430,7 @@ function approveRequest(id) {
   setApprovals(list);
   updateApprovalBadge();
   renderApprovalsList();
-  alert('✅ تمت الموافقة — سيتم إشعار الكاشير');
+  showToast('✅ تمت الموافقة — سيتم إشعار الكاشير');
 }
 
 function rejectRequest(id) {
@@ -9634,8 +9686,8 @@ function openExpenseRequestModal() {
 function saveExpenseRequest() {
   const amount = parseFloat(document.getElementById('expReqAmount').value);
   const date   = document.getElementById('expReqDate').value;
-  if (!amount || amount <= 0) { alert('أدخل مبلغ صحيح'); return; }
-  if (!date) { alert('أدخل التاريخ'); return; }
+  if (!amount || amount <= 0) { showToast('أدخل مبلغ صحيح'); return; }
+  if (!date) { showToast('أدخل التاريخ'); return; }
   const rec = {
     id: 'expreq_' + Date.now(),
     branchId: document.getElementById('expReqBranchId').value || currentBranch,
@@ -9652,16 +9704,17 @@ function saveExpenseRequest() {
   showToast('✅ تم إرسال طلب المصروف — بانتظار اعتماد الإدارة');
 }
 function approveExpenseRequest(id) {
-  if (!confirm('تأكيد اعتماد هذا المصروف؟')) return;
-  const list = getExpenseRequests(); const req = list.find(r=>r.id===id); if (!req) return;
-  req.status = 'approved'; req.reviewedBy = currentUser; req.reviewedAt = Date.now();
-  setExpenseRequests(list);
-  const expenses = getExpenses();
-  expenses.push({ id:'exp_'+Date.now(), type:'branch', branchId:req.branchId, category:req.category,
-    amount:req.amount, date:req.date, month:req.month,
-    note:(req.note?req.note+' — ':'')+'معتمد من '+req.by, by:currentUser, createdAt:Date.now() });
-  setExpenses(expenses);
-  updateExpReqBadge(); renderExpensesPage(); showToast('✅ تمت الموافقة وتسجيل المصروف');
+  showConfirmModal('تأكيد اعتماد هذا المصروف؟', function() {
+    const list = getExpenseRequests(); const req = list.find(r=>r.id===id); if (!req) return;
+    req.status = 'approved'; req.reviewedBy = currentUser; req.reviewedAt = Date.now();
+    setExpenseRequests(list);
+    const expenses = getExpenses();
+    expenses.push({ id:'exp_'+Date.now(), type:'branch', branchId:req.branchId, category:req.category,
+      amount:req.amount, date:req.date, month:req.month,
+      note:(req.note?req.note+' — ':'')+'معتمد من '+req.by, by:currentUser, createdAt:Date.now() });
+    setExpenses(expenses);
+    updateExpReqBadge(); renderExpensesPage(); showToast('✅ تمت الموافقة وتسجيل المصروف');
+  });
 }
 function rejectExpenseRequest(id) {
   const list = getExpenseRequests(); const req = list.find(r=>r.id===id); if (!req) return;
@@ -9744,8 +9797,8 @@ function saveLeaveRequest() {
   const empName = document.getElementById('leaveReqEmpName').value;
   const date    = document.getElementById('leaveReqDate').value;
   const type    = document.getElementById('leaveReqType').value;
-  if (!empName) { alert('اختر الموظف'); return; }
-  if (!date)    { alert('أدخل التاريخ'); return; }
+  if (!empName) { showToast('اختر الموظف'); return; }
+  if (!date)    { showToast('أدخل التاريخ'); return; }
   const rec = {
     id: 'leaveq_' + Date.now(),
     branchId: currentBranch,
@@ -9763,17 +9816,18 @@ function saveLeaveRequest() {
   showToast('✅ تم إرسال الطلب — بانتظار موافقة الإدارة');
 }
 function approveLeaveRequest(id) {
-  if (!confirm('تأكيد الموافقة على هذا الطلب؟')) return;
-  const list = getLeaveRequests(); const req = list.find(r=>r.id===id); if (!req) return;
-  req.status = 'approved'; req.reviewedBy = currentUser; req.reviewedAt = Date.now();
-  setLeaveRequests(list);
-  if (req.type === 'leave') {
-    saveAttendanceRecord(req.empName, req.date, 'absent', '', '', 'إجازة معتمدة');
-  } else {
-    const notes = (req.fromTime && req.toTime) ? 'إذن انصراف '+req.fromTime+' - '+req.toTime : 'إذن انصراف معتمد';
-    saveAttendanceRecord(req.empName, req.date, 'late', req.fromTime||'', req.toTime||'', notes);
-  }
-  updateLeaveReqBadge(); renderHRPage(); showToast('✅ تمت الموافقة وتسجيل الحضور');
+  showConfirmModal('تأكيد الموافقة على هذا الطلب؟', function() {
+    const list = getLeaveRequests(); const req = list.find(r=>r.id===id); if (!req) return;
+    req.status = 'approved'; req.reviewedBy = currentUser; req.reviewedAt = Date.now();
+    setLeaveRequests(list);
+    if (req.type === 'leave') {
+      saveAttendanceRecord(req.empName, req.date, 'absent', '', '', 'إجازة معتمدة');
+    } else {
+      const notes = (req.fromTime && req.toTime) ? 'إذن انصراف '+req.fromTime+' - '+req.toTime : 'إذن انصراف معتمد';
+      saveAttendanceRecord(req.empName, req.date, 'late', req.fromTime||'', req.toTime||'', notes);
+    }
+    updateLeaveReqBadge(); renderHRPage(); showToast('✅ تمت الموافقة وتسجيل الحضور');
+  });
 }
 function rejectLeaveRequest(id) {
   const list = getLeaveRequests(); const req = list.find(r=>r.id===id); if (!req) return;
@@ -9995,6 +10049,30 @@ function switchHRTab(tab) {
     <div class="modal-footer">
       <button class="btn btn-gray" onclick="closeSupplierPaymentModal()">إلغاء</button>
       <button class="btn btn-primary" onclick="saveSupplierPayment()">💾 تسجيل الدفعة</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== GENERIC PROMPT / CONFIRM MODALS ===================== -->
+<!-- Real in-app replacements for window.prompt()/window.confirm() — see the
+     note above showPromptModal()/showConfirmModal() in 05-utils.js. -->
+<div id="genericPromptModal" class="modal-overlay hidden">
+  <div class="modal" style="width:380px;">
+    <h2 id="gpTitle"></h2>
+    <div class="form-group"><input class="form-control" id="gpInput" onkeydown="if(event.key==='Enter')confirmGenericPrompt()" /></div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeGenericPrompt()">إلغاء</button>
+      <button class="btn btn-primary" onclick="confirmGenericPrompt()">تأكيد</button>
+    </div>
+  </div>
+</div>
+
+<div id="genericConfirmModal" class="modal-overlay hidden">
+  <div class="modal" style="width:380px;">
+    <p id="gcMessage" style="font-size:14.5px;white-space:pre-line;margin:4px 0 18px;"></p>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeGenericConfirm()">إلغاء</button>
+      <button class="btn btn-primary" onclick="confirmGenericConfirm()">تأكيد</button>
     </div>
   </div>
 </div>

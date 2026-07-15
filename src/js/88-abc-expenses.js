@@ -44,8 +44,8 @@ function toggleExpBranch() {
 function saveExpense() {
   const amount = parseFloat(document.getElementById('expAmount').value);
   const date   = document.getElementById('expDate').value;
-  if (!amount || amount <= 0) { alert('أدخل مبلغ صحيح'); return; }
-  if (!date) { alert('أدخل التاريخ'); return; }
+  if (!amount || amount <= 0) { showToast('أدخل مبلغ صحيح'); return; }
+  if (!date) { showToast('أدخل التاريخ'); return; }
   const type     = document.getElementById('expType').value;
   const editId   = document.getElementById('expEditId').value;
   const list     = getExpenses();
@@ -273,7 +273,7 @@ let _lastSale = null; // stored in completeSale for WhatsApp
 function shareReceiptWhatsApp() {
   // Build text receipt from last sale
   const sale = _lastSale;
-  if (!sale) { alert('لا توجد فاتورة لمشاركتها'); return; }
+  if (!sale) { showToast('لا توجد فاتورة لمشاركتها'); return; }
   const lines = [
     `🧾 فاتورة من VOODO ERP`,
     `📅 ${new Date(sale.date).toLocaleString('ar-EG')}`,
@@ -294,7 +294,7 @@ function shareReceiptWhatsApp() {
 
 function shareOffersWhatsApp() {
   const promos = getPromos().filter(p => p.active);
-  if (!promos.length) { alert('لا توجد عروض نشطة للمشاركة'); return; }
+  if (!promos.length) { showToast('لا توجد عروض نشطة للمشاركة'); return; }
   const lines = [
     `🏷️ *عروض وحزم VOODO ERP*`,
     `━━━━━━━━━━━━━━━━━━━━`,

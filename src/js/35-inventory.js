@@ -79,7 +79,7 @@ function saveProduct() {
   const code       = document.getElementById('pm-code').value.trim();
   const name       = document.getElementById('pm-name').value.trim();
   const priceAfter = parseFloat(document.getElementById('pm-priceAfter').value);
-  if (!code || !name || isNaN(priceAfter)) { alert('الكود والاسم والسعر مطلوبون'); return; }
+  if (!code || !name || isNaN(priceAfter)) { showToast('الكود والاسم والسعر مطلوبون'); return; }
 
   const inv = getInv();
   const editCode = document.getElementById('pmEditCode').value;
@@ -110,7 +110,7 @@ function saveProduct() {
       addAuditLog('inv.edit', `تعديل: ${prod.name} (${prod.code}) — كمية: ${prod.qty}`, null, changes);
     }
   } else {
-    if (inv.find(x => x.code === code)) { alert('هذا الكود موجود مسبقاً'); return; }
+    if (inv.find(x => x.code === code)) { showToast('هذا الكود موجود مسبقاً'); return; }
     inv.push(prod);
     addAuditLog('inv.add', `إضافة: ${prod.name} (${prod.code}) — سعر: ${fmt(prod.priceAfter)} ج`, null);
   }

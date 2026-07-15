@@ -53,5 +53,5 @@ function saveLoyaltySettings() {
     enabled: document.getElementById('loyEnabled').checked
   });
   document.getElementById('loyaltySettingsModal').classList.add('hidden');
-  alert('تم حفظ إعدادات الولاء ✓');
+  showToast('تم حفظ إعدادات الولاء ✓');
 }

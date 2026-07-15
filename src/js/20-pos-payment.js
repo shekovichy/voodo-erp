@@ -2,7 +2,7 @@
 // PAYMENT
 // ══════════════════════════════════════════════
 function openPayment() {
-  if (!cart.length) { alert('الفاتورة فارغة'); return; }
+  if (!cart.length) { showToast('الفاتورة فارغة'); return; }
   const { total } = cartTotals();
   document.getElementById('modalTotal').textContent = fmt(total) + ' ج';
   document.getElementById('paidAmount').value = '';
@@ -39,7 +39,7 @@ function completeSale() {
   let paid = total, change = 0;
   if (payMethod === 'cash') {
     paid = parseFloat(document.getElementById('paidAmount').value) || 0;
-    if (paid < total) { alert('المبلغ المدفوع أقل من الإجمالي'); return; }
+    if (paid < total) { showToast('المبلغ المدفوع أقل من الإجمالي'); return; }
     change = paid - total;
   }
 

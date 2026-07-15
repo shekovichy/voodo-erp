@@ -32,7 +32,7 @@ function openHRTargetModal() {
 
 function saveHRTargets() {
   const month = document.getElementById('hrTargetMonth').value;
-  if (!month) { alert('اختر الشهر'); return; }
+  if (!month) { showToast('اختر الشهر'); return; }
   const salespeople = (getSalespeople ? getSalespeople() : (DB.g('pos_salespeople',[])))
     .map(sp => typeof sp === 'string' ? sp : sp.name);
   const targets = {};

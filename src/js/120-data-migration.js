@@ -30,9 +30,9 @@ function _readMigrationExcel(input, onRows) {
       const wb = XLSX.read(e.target.result, { type: 'binary' });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
-      if (!rows.length) { alert('الملف فارغ أو غير مقروء'); return; }
+      if (!rows.length) { showToast('الملف فارغ أو غير مقروء'); return; }
       onRows(rows);
-    } catch (ex) { alert('خطأ في قراءة الملف: ' + ex.message); }
+    } catch (ex) { showToast('خطأ في قراءة الملف: ' + ex.message); }
   };
   reader.readAsBinaryString(file);
 }
@@ -109,7 +109,11 @@ function previewSalesImport(rows) {
 function confirmSalesImport() {
   const groups = _pendingSalesImportGroups;
   if (!groups.length) return;
-  if (!confirm(`تأكيد استيراد ${groups.length} فاتورة مركّبة من البيانات القديمة؟ العملية دي هتضيف بس ومش هتمسح أي بيانات موجودة.`)) return;
+  showConfirmModal(`تأكيد استيراد ${groups.length} فاتورة مركّبة من البيانات القديمة؟ العملية دي هتضيف بس ومش هتمسح أي بيانات موجودة.`, function() {
+  _confirmSalesImportConfirmed(groups);
+  });
+}
+function _confirmSalesImportConfirmed(groups) {
   groups.forEach(g => {
     const sub = g.items.reduce((s, i) => s + i.price * i.qty, 0);
     addSale({
@@ -191,7 +195,11 @@ function previewExpensesImport(rows) {
 function confirmExpensesImport() {
   const rows = _pendingExpenseImportRows;
   if (!rows.length) return;
-  if (!confirm(`تأكيد استيراد ${rows.length} مصروف من البيانات القديمة؟ العملية دي هتضيف بس ومش هتمسح أي بيانات موجودة.`)) return;
+  showConfirmModal(`تأكيد استيراد ${rows.length} مصروف من البيانات القديمة؟ العملية دي هتضيف بس ومش هتمسح أي بيانات موجودة.`, function() {
+  _confirmExpensesImportConfirmed(rows);
+  });
+}
+function _confirmExpensesImportConfirmed(rows) {
   const list = getExpenses();
   rows.forEach(r => {
     list.push({

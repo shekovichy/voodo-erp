@@ -71,7 +71,7 @@ function buildPriceTag(item, showPrice, dim, preview) {
 
 function printBarcodes() {
   const inv = getInv().filter(i => _bcSelected.has(i.code));
-  if (!inv.length) { alert('اختر أصناف أولاً'); return; }
+  if (!inv.length) { showToast('اختر أصناف أولاً'); return; }
   const copies = parseInt(document.getElementById('bcCopies')?.value) || 1;
   const showPrice = document.getElementById('bcShowPrice')?.value || 'after';
   const dim = getBCTagDimensions();
@@ -119,7 +119,7 @@ function updatePrinterStatusUI() {
 }
 async function connectReceiptPrinter() {
   if (!('serial' in navigator)) {
-    alert('متصفحك لا يدعم Web Serial API\nاستخدم Chrome أو Edge على سطح المكتب فقط');
+    showToast('متصفحك لا يدعم Web Serial API\nاستخدم Chrome أو Edge على سطح المكتب فقط');
     return;
   }
   try {
@@ -196,7 +196,7 @@ async function printReceiptESCPOS(sale) {
   if (ok) showToast('✅ تم الإرسال للطابعة');
 }
 async function testReceiptPrint() {
-  if (!_serialWriter) { alert('الطابعة غير متصلة — اضغط اتصال أولاً'); return; }
+  if (!_serialWriter) { showToast('الطابعة غير متصلة — اضغط اتصال أولاً'); return; }
   await printReceiptESCPOS({
     id:'TEST001', date: new Date().toISOString().slice(0,10),
     salesperson:'اختبار', items:[{name:'منتج تجريبي',qty:2,price:50}],

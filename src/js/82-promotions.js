@@ -93,7 +93,7 @@ function selectPromoProduct(code, name) {
 function savePromo() {
   const name = document.getElementById('promoName').value.trim();
   const type = document.getElementById('promoType').value;
-  if (!name) { alert('أدخل اسم العرض'); return; }
+  if (!name) { showToast('أدخل اسم العرض'); return; }
 
   const startDate = document.getElementById('promoStartDate').value;
   const endDate   = document.getElementById('promoEndDate').value;
@@ -102,29 +102,29 @@ function savePromo() {
   if (endDate)   promo.endDate   = endDate;
 
   if (type === 'bundle') {
-    if (_promoBundleItems.length < 2) { alert('أضف منتجين على الأقل للحزمة'); return; }
+    if (_promoBundleItems.length < 2) { showToast('أضف منتجين على الأقل للحزمة'); return; }
     const bPrice = parseFloat(document.getElementById('promoBundlePrice').value);
-    if (!bPrice || bPrice <= 0) { alert('أدخل سعر الحزمة'); return; }
+    if (!bPrice || bPrice <= 0) { showToast('أدخل سعر الحزمة'); return; }
     promo.items       = _promoBundleItems.map(b => ({...b}));
     promo.bundlePrice = bPrice;
   } else if (type === 'threshold') {
     const minAmt  = parseFloat(document.getElementById('promoMinAmount').value);
     const dType   = document.getElementById('promoDiscType').value;
     const dVal    = parseFloat(document.getElementById('promoDiscValue').value);
-    if (!minAmt || minAmt <= 0) { alert('أدخل الحد الأدنى للفاتورة'); return; }
-    if (!dVal  || dVal <= 0)   { alert('أدخل قيمة الخصم'); return; }
+    if (!minAmt || minAmt <= 0) { showToast('أدخل الحد الأدنى للفاتورة'); return; }
+    if (!dVal  || dVal <= 0)   { showToast('أدخل قيمة الخصم'); return; }
     promo.minAmount    = minAmt;
     promo.discountType = dType;
     promo.discountValue = dVal;
   } else if (type === 'category') {
     const catName = document.getElementById('promoCatName').value.trim();
     const catDisc = parseFloat(document.getElementById('promoCatDisc').value);
-    if (!catName) { alert('أدخل اسم الفئة'); return; }
-    if (!catDisc || catDisc <= 0 || catDisc > 100) { alert('أدخل نسبة الخصم (1-100)'); return; }
+    if (!catName) { showToast('أدخل اسم الفئة'); return; }
+    if (!catDisc || catDisc <= 0 || catDisc > 100) { showToast('أدخل نسبة الخصم (1-100)'); return; }
     promo.categoryName = catName;
     promo.categoryDisc = catDisc;
   } else if (type === 'bxgy') {
-    if (!_promoBundleItems.length) { alert('أضف المنتج المطلوب شراؤه'); return; }
+    if (!_promoBundleItems.length) { showToast('أضف المنتج المطلوب شراؤه'); return; }
     const buyQty = parseInt(document.getElementById('promoBuyQty').value) || 1;
     const getQty = parseInt(document.getElementById('promoGetQty').value) || 1;
     promo.items  = _promoBundleItems.map(b => ({...b}));
@@ -279,7 +279,7 @@ function detectEligiblePromos() {
 function applyPromo(id) {
   const promo = getPromos().find(p => p.id === id); if (!promo) return;
   const discAmt = calcPromoDiscount(promo);
-  if (discAmt <= 0) { alert('هذا العرض لا يوفر خصماً على الفاتورة الحالية'); return; }
+  if (discAmt <= 0) { showToast('هذا العرض لا يوفر خصماً على الفاتورة الحالية'); return; }
   if (!cart._appliedPromos) cart._appliedPromos = [];
   cart._appliedPromos.push({ id: promo.id, name: promo.name, discAmt });
   updateCartUI();

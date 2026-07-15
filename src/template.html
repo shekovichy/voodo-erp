@@ -2732,6 +2732,30 @@
   </div>
 </div>
 
+<!-- ===================== GENERIC PROMPT / CONFIRM MODALS ===================== -->
+<!-- Real in-app replacements for window.prompt()/window.confirm() — see the
+     note above showPromptModal()/showConfirmModal() in 05-utils.js. -->
+<div id="genericPromptModal" class="modal-overlay hidden">
+  <div class="modal" style="width:380px;">
+    <h2 id="gpTitle"></h2>
+    <div class="form-group"><input class="form-control" id="gpInput" onkeydown="if(event.key==='Enter')confirmGenericPrompt()" /></div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeGenericPrompt()">إلغاء</button>
+      <button class="btn btn-primary" onclick="confirmGenericPrompt()">تأكيد</button>
+    </div>
+  </div>
+</div>
+
+<div id="genericConfirmModal" class="modal-overlay hidden">
+  <div class="modal" style="width:380px;">
+    <p id="gcMessage" style="font-size:14.5px;white-space:pre-line;margin:4px 0 18px;"></p>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeGenericConfirm()">إلغاء</button>
+      <button class="btn btn-primary" onclick="confirmGenericConfirm()">تأكيد</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===================== ADD BRANCH MODAL ===================== -->
 <div id="addBranchModal" class="modal-overlay hidden">
   <div class="modal" style="width:400px;">

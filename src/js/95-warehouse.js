@@ -162,8 +162,8 @@ function whTrRemoveItem(idx) { _whTrItems.splice(idx,1); renderWhTrItems(); }
 
 function confirmWhTransfer() {
   var to = document.getElementById('whTrToBranch').value;
-  if (!to) { alert('اختر الفرع'); return; }
-  if (!_whTrItems.length) { alert('أضف أصناف للتحويل'); return; }
+  if (!to) { showToast('اختر الفرع'); return; }
+  if (!_whTrItems.length) { showToast('أضف أصناف للتحويل'); return; }
   var note = document.getElementById('whTrNote').value.trim();
 
   // Validate quantities from warehouse
@@ -172,7 +172,7 @@ function confirmWhTransfer() {
     var it = _whTrItems[k];
     var p  = whInv.find(function(x){ return x.code===it.code; });
     if (!p || p.qty < it.qty) {
-      alert('الكمية المطلوبة من "'+it.name+'" غير متاحة في المخزن الرئيسي (متاح: '+(p?p.qty:0)+')');
+      showToast('الكمية المطلوبة من "'+it.name+'" غير متاحة في المخزن الرئيسي (متاح: '+(p?p.qty:0)+')');
       return;
     }
   }
@@ -211,6 +211,6 @@ function confirmWhTransfer() {
 
   document.getElementById('whTransferModal').classList.add('hidden');
   renderWarehousePage();
-  alert('✅ تم التحويل بنجاح\nمن: المخزن الرئيسي → إلى: '+(record.toName)+'\n'+_whTrItems.length+' صنف');
+  showToast('✅ تم التحويل بنجاح\nمن: المخزن الرئيسي → إلى: '+(record.toName)+'\n'+_whTrItems.length+' صنف');
 }
 

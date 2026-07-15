@@ -70,7 +70,7 @@ function openCustomerModal(id) {
 
 function saveCustomer() {
   const name = document.getElementById('cust-name').value.trim();
-  if (!name) { alert('الاسم مطلوب'); return; }
+  if (!name) { showToast('الاسم مطلوب'); return; }
   const editId = document.getElementById('custEditId').value;
   const list   = getCustomers();
   if (editId) {
