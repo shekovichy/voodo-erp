@@ -119,6 +119,7 @@ function initFirebase() {
         if (snap.exists) {
           _settingsCache = snap.data();
           if (!_settingsCache.salespeople) _settingsCache.salespeople = DB.g('salespeople', ['محمد','الاء']);
+          if (!_settingsCache.sellerBranches) _settingsCache.sellerBranches = {};
         } else {
           const localThresh      = DB.g('threshold', 5);
           const localSalespeople = DB.g('salespeople', ['محمد','الاء']);

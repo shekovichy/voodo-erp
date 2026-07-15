@@ -47,7 +47,7 @@ let _salesCache         = [];                        // filled by Firebase liste
 // persisted it but nothing ever read it back at load time, so renamed/added
 // branch names silently reset to BRANCH_DEFAULTS on every fresh page load
 // until Firestore's settings listener happened to fire and repopulate it.
-let _settingsCache      = { threshold: DB.g('threshold', 5), salespeople: DB.g('salespeople', ['محمد','الاء']), branches: DB.g('pos_branches', null) || undefined };
+let _settingsCache      = { threshold: DB.g('threshold', 5), salespeople: DB.g('salespeople', ['محمد','الاء']), branches: DB.g('pos_branches', null) || undefined, sellerBranches: DB.g('pos_seller_branches', {}) };
 let _transfersCache     = [];                        // inter-branch transfers
 let _suppliersCache     = [];                        // suppliers list
 let _purchaseCache      = [];                        // purchase orders
@@ -138,11 +138,24 @@ function setAccounts(v) {
 // SETTINGS
 const getThreshold    = () => _settingsCache.threshold || 5;
 const getSalespeople  = () => _settingsCache.salespeople && _settingsCache.salespeople.length ? _settingsCache.salespeople : ['محمد','الاء'];
+// Seller → branch assignment. A seller with no entry (or branchId === null)
+// works across all branches; kept as a separate map (not baked into the
+// salespeople array) so every existing consumer that expects plain name
+// strings (POS payment dropdown, reports, HR targets/attendance, leave
+// requests) keeps working unchanged.
+const getSellerBranch = (name) => (_settingsCache.sellerBranches || {})[name] || null;
+function setSellerBranch(name, branchId) {
+  if (!_settingsCache.sellerBranches) _settingsCache.sellerBranches = {};
+  if (branchId) _settingsCache.sellerBranches[name] = branchId;
+  else delete _settingsCache.sellerBranches[name];
+  saveSettingsCache();
+}
 
 function saveSettingsCache() {
   if (!_fbReady) {
     DB.s('threshold',   _settingsCache.threshold);
     DB.s('salespeople', _settingsCache.salespeople);
+    DB.s('pos_seller_branches', _settingsCache.sellerBranches || {});
     return;
   }
   _db.collection('pos_data').doc('settings')

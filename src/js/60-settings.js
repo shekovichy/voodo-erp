@@ -177,15 +177,32 @@ function saveSettings() {
   showMsg('sSettingsMsg','تم حفظ الإعدادات');
 }
 
+function _sellerBranchOptionsHtml(selected) {
+  return '<option value="">🏬 كل الفروع</option>' +
+    BRANCH_IDS.filter(function(b){ return b !== 'wh'; }).map(function(b) {
+      return `<option value="${b}" ${selected===b?'selected':''}>${escHtml(getBranchName(b))}</option>`;
+    }).join('');
+}
+
 function renderSellersSettings() {
   const wrap = document.getElementById('sellersListWrap');
   if (!wrap) return;
   const people = getSalespeople();
   wrap.innerHTML = people.map((n,i) => `
-    <div style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:13px;font-weight:600;">
+    <div style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:20px;padding:5px 6px 5px 12px;font-size:13px;font-weight:600;">
       <span>👤 ${escHtml(n)}</span>
+      <select onchange="changeSellerBranch('${escHtml(n).replace(/'/g,"\\'")}', this.value)" style="border:1px solid var(--border);border-radius:12px;font-size:11px;padding:2px 6px;background:white;">
+        ${_sellerBranchOptionsHtml(getSellerBranch(n))}
+      </select>
       <button onclick="removeSeller(${i})" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:14px;line-height:1;padding:0 2px;" title="حذف">×</button>
     </div>`).join('');
+  const newBranchSel = document.getElementById('sNewSellerBranch');
+  if (newBranchSel && newBranchSel.options.length <= 1) newBranchSel.innerHTML = _sellerBranchOptionsHtml('');
+}
+
+function changeSellerBranch(name, branchId) {
+  setSellerBranch(name, branchId || null);
+  showMsg('sSellersMsg', branchId ? `تم نقل ${name} إلى ${getBranchName(branchId)}` : `${name} بقى شغال في كل الفروع`);
 }
 
 function addSeller() {
@@ -195,16 +212,21 @@ function addSeller() {
   const arr = [...getSalespeople()];
   if (arr.includes(name)) { showMsg('sSellersMsg','الاسم موجود بالفعل','danger'); return; }
   arr.push(name);
+  const branchSel = document.getElementById('sNewSellerBranch');
+  if (branchSel && branchSel.value) setSellerBranch(name, branchSel.value);
   setSalespeople(arr);
   inp.value = '';
+  if (branchSel) branchSel.value = '';
   showMsg('sSellersMsg','تمت الإضافة');
 }
 
 function removeSeller(idx) {
   const arr = [...getSalespeople()];
   if (arr.length <= 1) { showMsg('sSellersMsg','لازم يكون فيه بائع واحد على الأقل','danger'); return; }
+  const removedName = arr[idx];
   arr.splice(idx, 1);
   setSalespeople(arr);
+  setSellerBranch(removedName, null);
   showMsg('sSellersMsg','تم الحذف');
 }
 

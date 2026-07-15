@@ -2700,6 +2700,7 @@ body.warehouse-mode #cartFab {
             <div id="sellersListWrap" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;"></div>
             <div class="flex gap-8">
               <input class="form-control" id="sNewSeller" placeholder="اسم البائع الجديد" style="max-width:220px;" onkeydown="if(event.key==='Enter')addSeller()" />
+              <select class="form-control" id="sNewSellerBranch" style="max-width:160px;"></select>
               <button class="btn btn-primary" onclick="addSeller()">➕ إضافة</button>
             </div>
             <div id="sSellersMsg" class="mt-16"></div>
@@ -3310,7 +3311,7 @@ let _salesCache         = [];                        // filled by Firebase liste
 // persisted it but nothing ever read it back at load time, so renamed/added
 // branch names silently reset to BRANCH_DEFAULTS on every fresh page load
 // until Firestore's settings listener happened to fire and repopulate it.
-let _settingsCache      = { threshold: DB.g('threshold', 5), salespeople: DB.g('salespeople', ['محمد','الاء']), branches: DB.g('pos_branches', null) || undefined };
+let _settingsCache      = { threshold: DB.g('threshold', 5), salespeople: DB.g('salespeople', ['محمد','الاء']), branches: DB.g('pos_branches', null) || undefined, sellerBranches: DB.g('pos_seller_branches', {}) };
 let _transfersCache     = [];                        // inter-branch transfers
 let _suppliersCache     = [];                        // suppliers list
 let _purchaseCache      = [];                        // purchase orders
@@ -3401,11 +3402,24 @@ function setAccounts(v) {
 // SETTINGS
 const getThreshold    = () => _settingsCache.threshold || 5;
 const getSalespeople  = () => _settingsCache.salespeople && _settingsCache.salespeople.length ? _settingsCache.salespeople : ['محمد','الاء'];
+// Seller → branch assignment. A seller with no entry (or branchId === null)
+// works across all branches; kept as a separate map (not baked into the
+// salespeople array) so every existing consumer that expects plain name
+// strings (POS payment dropdown, reports, HR targets/attendance, leave
+// requests) keeps working unchanged.
+const getSellerBranch = (name) => (_settingsCache.sellerBranches || {})[name] || null;
+function setSellerBranch(name, branchId) {
+  if (!_settingsCache.sellerBranches) _settingsCache.sellerBranches = {};
+  if (branchId) _settingsCache.sellerBranches[name] = branchId;
+  else delete _settingsCache.sellerBranches[name];
+  saveSettingsCache();
+}
 
 function saveSettingsCache() {
   if (!_fbReady) {
     DB.s('threshold',   _settingsCache.threshold);
     DB.s('salespeople', _settingsCache.salespeople);
+    DB.s('pos_seller_branches', _settingsCache.sellerBranches || {});
     return;
   }
   _db.collection('pos_data').doc('settings')
@@ -4606,9 +4620,13 @@ function openPayment() {
   document.getElementById('modalTotal').textContent = fmt(total) + ' ج';
   document.getElementById('paidAmount').value = '';
   document.getElementById('changeAmt').textContent = '0.00 ج';
-  // Populate salesperson dropdown
+  // Populate salesperson dropdown — only sellers assigned to this branch
+  // (plus any unassigned "all branches" sellers); falls back to everyone
+  // if that filter would leave the list empty.
   const sel = document.getElementById('paymentSalesperson');
-  const people = getSalespeople();
+  const allPeople = getSalespeople();
+  const branchPeople = allPeople.filter(n => !getSellerBranch(n) || getSellerBranch(n) === currentBranch);
+  const people = branchPeople.length ? branchPeople : allPeople;
   sel.innerHTML = people.map(n => `<option value="${escHtml(n)}">${escHtml(n)}</option>`).join('');
   if (window._lastSalesperson && people.includes(window._lastSalesperson)) sel.value = window._lastSalesperson;
   clearSelectedCustomer();
@@ -6169,15 +6187,32 @@ function saveSettings() {
   showMsg('sSettingsMsg','تم حفظ الإعدادات');
 }
 
+function _sellerBranchOptionsHtml(selected) {
+  return '<option value="">🏬 كل الفروع</option>' +
+    BRANCH_IDS.filter(function(b){ return b !== 'wh'; }).map(function(b) {
+      return `<option value="${b}" ${selected===b?'selected':''}>${escHtml(getBranchName(b))}</option>`;
+    }).join('');
+}
+
 function renderSellersSettings() {
   const wrap = document.getElementById('sellersListWrap');
   if (!wrap) return;
   const people = getSalespeople();
   wrap.innerHTML = people.map((n,i) => `
-    <div style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:13px;font-weight:600;">
+    <div style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:20px;padding:5px 6px 5px 12px;font-size:13px;font-weight:600;">
       <span>👤 ${escHtml(n)}</span>
+      <select onchange="changeSellerBranch('${escHtml(n).replace(/'/g,"\\'")}', this.value)" style="border:1px solid var(--border);border-radius:12px;font-size:11px;padding:2px 6px;background:white;">
+        ${_sellerBranchOptionsHtml(getSellerBranch(n))}
+      </select>
       <button onclick="removeSeller(${i})" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:14px;line-height:1;padding:0 2px;" title="حذف">×</button>
     </div>`).join('');
+  const newBranchSel = document.getElementById('sNewSellerBranch');
+  if (newBranchSel && newBranchSel.options.length <= 1) newBranchSel.innerHTML = _sellerBranchOptionsHtml('');
+}
+
+function changeSellerBranch(name, branchId) {
+  setSellerBranch(name, branchId || null);
+  showMsg('sSellersMsg', branchId ? `تم نقل ${name} إلى ${getBranchName(branchId)}` : `${name} بقى شغال في كل الفروع`);
 }
 
 function addSeller() {
@@ -6187,16 +6222,21 @@ function addSeller() {
   const arr = [...getSalespeople()];
   if (arr.includes(name)) { showMsg('sSellersMsg','الاسم موجود بالفعل','danger'); return; }
   arr.push(name);
+  const branchSel = document.getElementById('sNewSellerBranch');
+  if (branchSel && branchSel.value) setSellerBranch(name, branchSel.value);
   setSalespeople(arr);
   inp.value = '';
+  if (branchSel) branchSel.value = '';
   showMsg('sSellersMsg','تمت الإضافة');
 }
 
 function removeSeller(idx) {
   const arr = [...getSalespeople()];
   if (arr.length <= 1) { showMsg('sSellersMsg','لازم يكون فيه بائع واحد على الأقل','danger'); return; }
+  const removedName = arr[idx];
   arr.splice(idx, 1);
   setSalespeople(arr);
+  setSellerBranch(removedName, null);
   showMsg('sSellersMsg','تم الحذف');
 }
 
@@ -6352,6 +6392,7 @@ function initFirebase() {
         if (snap.exists) {
           _settingsCache = snap.data();
           if (!_settingsCache.salespeople) _settingsCache.salespeople = DB.g('salespeople', ['محمد','الاء']);
+          if (!_settingsCache.sellerBranches) _settingsCache.sellerBranches = {};
         } else {
           const localThresh      = DB.g('threshold', 5);
           const localSalespeople = DB.g('salespeople', ['محمد','الاء']);

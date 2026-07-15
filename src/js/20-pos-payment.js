@@ -7,9 +7,13 @@ function openPayment() {
   document.getElementById('modalTotal').textContent = fmt(total) + ' ج';
   document.getElementById('paidAmount').value = '';
   document.getElementById('changeAmt').textContent = '0.00 ج';
-  // Populate salesperson dropdown
+  // Populate salesperson dropdown — only sellers assigned to this branch
+  // (plus any unassigned "all branches" sellers); falls back to everyone
+  // if that filter would leave the list empty.
   const sel = document.getElementById('paymentSalesperson');
-  const people = getSalespeople();
+  const allPeople = getSalespeople();
+  const branchPeople = allPeople.filter(n => !getSellerBranch(n) || getSellerBranch(n) === currentBranch);
+  const people = branchPeople.length ? branchPeople : allPeople;
   sel.innerHTML = people.map(n => `<option value="${escHtml(n)}">${escHtml(n)}</option>`).join('');
   if (window._lastSalesperson && people.includes(window._lastSalesperson)) sel.value = window._lastSalesperson;
   clearSelectedCustomer();
