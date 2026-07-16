@@ -193,21 +193,14 @@ function confirmTransfer() {
     if (!p || p.qty < item.qty) { showToast(`الكمية المطلوبة من "${item.name}" غير متاحة في المصدر`); return; }
   }
 
-  // Deduct from source
-  const newSrc = srcInv.map(p => {
-    const tr = _trItems.find(i => i.code === p.code);
-    return tr ? { ...p, qty: p.qty - tr.qty } : p;
-  });
-  setInv(newSrc, from);
-
-  // Add to destination
-  const dstInv = getInv(to).map(p => ({...p}));
-  _trItems.forEach(item => {
-    const dp = dstInv.find(x => x.code === item.code);
-    if (dp) dp.qty += item.qty;
-    else dstInv.push({ ...srcInv.find(x=>x.code===item.code), qty: item.qty });
-  });
-  setInv(dstInv, to);
+  // Deduct from source / add to destination — transactional per-product deltas
+  // so a concurrent sale on either branch isn't clobbered (see adjustStock).
+  // `insert` seeds the product in the destination if it doesn't stock it yet.
+  adjustStock(_trItems.map(i => ({ code: i.code, delta: -i.qty })), from);
+  adjustStock(_trItems.map(i => ({
+    code: i.code, delta: i.qty,
+    insert: srcInv.find(x => x.code === i.code)
+  })), to);
 
   // Save transfer record
   const branches = getBranches();

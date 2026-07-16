@@ -144,20 +144,20 @@ function openBulkCategoryModal() {
 
 function saveBulkCategories() {
   var inv     = getInv();
-  var changed = 0;
+  var updates = [];
   inv.forEach(function(p, i) {
     var catEl = document.getElementById('bcat_' + i);
     var famEl = document.getElementById('bfam_' + i);
     if (!catEl || !famEl) return;
     if (catEl.value !== (p.category||'') || famEl.value !== (p.family||'')) {
-      p.category = catEl.value;
-      p.family   = famEl.value;
-      changed++;
+      updates.push({ code: p.code, set: { category: catEl.value, family: famEl.value } });
     }
   });
-  if (changed > 0) { setInv(inv); renderInventory(); }
+  // Transactional field updates (see adjustStock) — the old whole-array
+  // setInv() clobbered any sale that happened while this modal was open.
+  if (updates.length) { adjustStock(updates); renderInventory(); }
   document.getElementById('bulkCatModal').classList.add('hidden');
-  showToast(changed > 0 ? ('تم تحديث ' + changed + ' منتج') : 'لا يوجد تغييرات');
+  showToast(updates.length > 0 ? ('تم تحديث ' + updates.length + ' منتج') : 'لا يوجد تغييرات');
 }
 
 function filterUnclassified() {
@@ -342,14 +342,17 @@ function previewVlookup() {
 function applyVlookup(matched) {
   if (!matched || !matched.length) { showToast('لا توجد تغييرات للتطبيق'); return; }
   var inv = getInv();
+  var updates = [];
   matched.forEach(function(r) {
     var prod = inv.find(function(p){ return p.code === r.keyVal || p.code.toLowerCase() === r.keyVal.toLowerCase(); });
     if (!prod) return;
-    Object.keys(r.changes).forEach(function(field){ prod[field] = r.changes[field]; });
+    updates.push({ code: prod.code, set: r.changes });
   });
-  setInv(inv);
+  // Transactional field updates (see adjustStock) — the old whole-array
+  // setInv() clobbered any sale that happened during the VLOOKUP apply.
+  if (updates.length) adjustStock(updates);
   renderInventory();
   document.getElementById('vlookupModal').classList.add('hidden');
-  showToast('تم تحديث ' + matched.length + ' منتج بنجاح');
+  showToast('تم تحديث ' + updates.length + ' منتج بنجاح');
 }
 

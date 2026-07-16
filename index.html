@@ -3348,6 +3348,12 @@ function getBranches()    { return _settingsCache.branches || BRANCH_DEFAULTS; }
 
 // INVENTORY — branch-aware
 const getInv = (branch) => _invCacheByBranch[branch || currentBranch] || [];
+// ⚠️ setInv REPLACES the whole branch inventory — it's inherently last-write-
+// wins, so it must only be used for intentional full replacement (backup
+// restore, demo seed). Anything that MODIFIES stock (sale, return, transfer,
+// receive, product edit/delete/import) must go through adjustStock() below,
+// which applies per-product deltas inside a Firestore transaction so two
+// devices writing at the same moment can't clobber each other's changes.
 function setInv(v, branch) {
   const b = branch || currentBranch;
   _invCacheByBranch[b] = v;
@@ -3356,6 +3362,50 @@ function setInv(v, branch) {
   _db.collection('pos_data').doc(`inv_${b}`)
      .set({ items: v, updatedAt: Date.now() })
      .catch(e => console.error('Firestore setInv:', e));
+}
+
+// Race-safe inventory mutation. deltas = [{ code, delta?, set?, insert?, remove? }]
+//   delta:  add to qty (negative = deduct)          — sales, returns, transfers, receiving
+//   set:    Object.assign fields onto the product   — cost/price/category edits, absolute qty corrections
+//   insert: product template to create (qty starts at 0) if `code` isn't in the branch yet
+//   remove: true → delete the product from the branch
+// Applied optimistically to the local cache/localStorage first, then re-applied
+// server-side inside a transaction against the CURRENT server state — so a
+// concurrent sale on another device survives (the old read-modify-setInv
+// pattern silently lost one of the two writes). If the transaction can't run
+// (offline / repeated contention), falls back to writing the local array —
+// no worse than the old behavior, and the SDK queues it until reconnect.
+function adjustStock(deltas, branch) {
+  const b = branch || currentBranch;
+  const applyTo = (items) => {
+    deltas.forEach(d => {
+      const idx = items.findIndex(x => x.code === d.code);
+      if (d.remove) { if (idx >= 0) items.splice(idx, 1); return; }
+      let p = idx >= 0 ? items[idx] : null;
+      if (!p) {
+        if (!d.insert) return;
+        p = Object.assign({}, d.insert, { qty: 0 });
+        items.push(p);
+      }
+      if (d.set)   Object.assign(p, d.set);
+      if (d.delta) p.qty = (p.qty || 0) + d.delta;
+    });
+    return items;
+  };
+  _invCacheByBranch[b] = applyTo(_invCacheByBranch[b] || []);
+  DB.s(`pos_inv_${b}`, _invCacheByBranch[b]);
+  if (!_fbReady) return;
+  const ref = _db.collection('pos_data').doc(`inv_${b}`);
+  _db.runTransaction(tx =>
+    tx.get(ref).then(snap => {
+      const items = applyTo(snap.exists ? (snap.data().items || []) : []);
+      tx.set(ref, { items, updatedAt: Date.now() });
+    })
+  ).catch(e => {
+    console.error('Firestore adjustStock (falling back to direct write):', e);
+    ref.set({ items: _invCacheByBranch[b], updatedAt: Date.now() })
+       .catch(e2 => console.error('Firestore adjustStock fallback:', e2));
+  });
 }
 
 // SALES — addSale() لإضافة فاتورة / setSales([]) لمسح الكل
@@ -4697,10 +4747,9 @@ function completeSale() {
     change = paid - total;
   }
 
-  // Deduct stock
-  const inv = getInv();
-  cart.forEach(ci => { const p = inv.find(x => x.code === ci.code); if (p) p.qty -= ci.qty; });
-  setInv(inv);
+  // Deduct stock — transactional per-product deltas so two cashiers selling
+  // at the same moment can't clobber each other's deductions (see adjustStock).
+  adjustStock(cart.map(ci => ({ code: ci.code, delta: -ci.qty })));
 
   // Save sale
   const salesperson = document.getElementById('paymentSalesperson')?.value || '';
@@ -5160,9 +5209,14 @@ function renderInventory() {
 }
 
 function updateQty(code, val) {
-  const inv = getInv();
-  const p = inv.find(x => x.code === code);
-  if (p) { p.qty = parseInt(val) || 0; setInv(inv); renderInventory(); }
+  const p = getInv().find(x => x.code === code);
+  if (!p) return;
+  // Absolute correction of ONE product's count — routed through adjustStock so
+  // it no longer rewrites the whole array (which clobbered concurrent sales of
+  // OTHER products). The corrected product itself is intentionally last-write-
+  // wins: the admin is overriding the count on purpose.
+  adjustStock([{ code, set: { qty: parseInt(val) || 0 } }]);
+  renderInventory();
 }
 
 function openProductModal(p) {
@@ -5203,9 +5257,14 @@ function saveProduct() {
   };
 
   if (editCode) {
-    const idx = inv.findIndex(x => x.code === editCode);
-    const oldProd = inv[idx];
-    if (idx >= 0) inv[idx] = prod; else inv.push(prod);
+    const oldProd = inv.find(x => x.code === editCode);
+    // Upsert this ONE product transactionally (see adjustStock) — the old
+    // whole-array setInv() clobbered concurrent sales of other products.
+    // If the admin changed the product code, remove the old entry first.
+    const deltas = [];
+    if (editCode !== prod.code) deltas.push({ code: editCode, remove: true });
+    deltas.push({ code: prod.code, insert: prod, set: prod });
+    adjustStock(deltas);
     // Audit: price change?
     const fieldLabels = { name:'الاسم', cost:'التكلفة', priceBefore:'السعر قبل الخصم', priceAfter:'السعر', qty:'الكمية', category:'الفئة', family:'العائلة' };
     const changes = oldProd ? buildAuditDiff(
@@ -5220,10 +5279,9 @@ function saveProduct() {
     }
   } else {
     if (inv.find(x => x.code === code)) { showToast('هذا الكود موجود مسبقاً'); return; }
-    inv.push(prod);
+    adjustStock([{ code: prod.code, insert: prod, set: prod }]);
     addAuditLog('inv.add', `إضافة: ${prod.name} (${prod.code}) — سعر: ${fmt(prod.priceAfter)} ج`, null);
   }
-  setInv(inv);
   document.getElementById('productModal').classList.add('hidden');
   renderInventory();
 }
@@ -5231,7 +5289,7 @@ function saveProduct() {
 function deleteProduct(code) {
   showConfirmModal('حذف هذا المنتج؟', function() {
     const prod = getInv().find(x => x.code === code);
-    setInv(getInv().filter(x => x.code !== code));
+    adjustStock([{ code, remove: true }]);
     if (prod) addAuditLog('inv.delete', `حذف: ${prod.name} (${prod.code})`, null);
     renderInventory();
   });
@@ -5246,6 +5304,7 @@ function importExcel(e) {
     const rows = XLSX.utils.sheet_to_json(ws, { defval:'' });
     const inv  = getInv();
     let added=0, updated=0, errors=[];
+    const upserts = [];
 
     rows.forEach((row, i) => {
       // Normalize keys: trim whitespace + lowercase for case-insensitive matching
@@ -5269,10 +5328,14 @@ function importExcel(e) {
         family:   String(g('family','المجموعة','مجموعة','فاميلى','فاميلي','')||'').trim()
       };
       const ex = inv.find(x => x.code === code);
-      if (ex) { Object.assign(ex, prod); updated++; } else { inv.push(prod); added++; }
+      if (ex) { updated++; } else { added++; }
+      upserts.push({ code, insert: prod, set: prod });
     });
 
-    setInv(inv); e.target.value = '';
+    // One transactional bulk upsert (see adjustStock) — the old whole-array
+    // setInv() clobbered any sale that happened during the import.
+    if (upserts.length) adjustStock(upserts);
+    e.target.value = '';
     const msg = `✅ تم الاستيراد: ${added} منتج جديد · ${updated} تم تحديثه${errors.length ? `<br>⚠️ ${errors.slice(0,3).join(' | ')}` : ''}`;
     document.getElementById('importAlert').innerHTML = `<div class="alert alert-success">${msg}</div>`;
     setTimeout(() => document.getElementById('importAlert').innerHTML='', 6000);
@@ -7187,21 +7250,14 @@ function confirmTransfer() {
     if (!p || p.qty < item.qty) { showToast(`الكمية المطلوبة من "${item.name}" غير متاحة في المصدر`); return; }
   }
 
-  // Deduct from source
-  const newSrc = srcInv.map(p => {
-    const tr = _trItems.find(i => i.code === p.code);
-    return tr ? { ...p, qty: p.qty - tr.qty } : p;
-  });
-  setInv(newSrc, from);
-
-  // Add to destination
-  const dstInv = getInv(to).map(p => ({...p}));
-  _trItems.forEach(item => {
-    const dp = dstInv.find(x => x.code === item.code);
-    if (dp) dp.qty += item.qty;
-    else dstInv.push({ ...srcInv.find(x=>x.code===item.code), qty: item.qty });
-  });
-  setInv(dstInv, to);
+  // Deduct from source / add to destination — transactional per-product deltas
+  // so a concurrent sale on either branch isn't clobbered (see adjustStock).
+  // `insert` seeds the product in the destination if it doesn't stock it yet.
+  adjustStock(_trItems.map(i => ({ code: i.code, delta: -i.qty })), from);
+  adjustStock(_trItems.map(i => ({
+    code: i.code, delta: i.qty,
+    insert: srcInv.find(x => x.code === i.code)
+  })), to);
 
   // Save transfer record
   const branches = getBranches();
@@ -8008,11 +8064,9 @@ function processReturn() {
 function _processReturnConfirmed(sale, reason, returnItems, returnTotal) {
   // Restock into the ORIGINAL sale's branch, not whatever branch the admin is
   // currently viewing — otherwise returning a b1 invoice while viewing b2 would
-  // credit the wrong branch's stock.
+  // credit the wrong branch's stock. Transactional (see adjustStock).
   const branchId = sale.branchId || currentBranch;
-  const inv = getInv(branchId);
-  returnItems.forEach(ri => { const p = inv.find(x=>x.code===ri.code); if (p) p.qty += Math.abs(ri.qty); });
-  setInv(inv, branchId);
+  adjustStock(returnItems.map(ri => ({ code: ri.code, delta: Math.abs(ri.qty) })), branchId);
 
   // Save return sale — carry over branch and customer so it shows up in the
   // right branch's reports and the customer's history.
@@ -8529,10 +8583,9 @@ function processCashierReturn() {
   });
 }
 function _processCashierReturnConfirmed(sale, reason, returnItems, returnTotal) {
-  // Restock
-  const inv = getInv();
-  returnItems.forEach(ri => { const p = inv.find(x => x.code === ri.code); if (p) p.qty += Math.abs(ri.qty); });
-  setInv(inv);
+  // Restock into the original sale's branch (matches the branchId recorded on
+  // the return record below). Transactional per-product deltas (see adjustStock).
+  adjustStock(returnItems.map(ri => ({ code: ri.code, delta: Math.abs(ri.qty) })), sale.branchId || currentBranch);
   // Save return record
   const returnSale = {
     id:             Date.now(),
@@ -9218,20 +9271,20 @@ function openBulkCategoryModal() {
 
 function saveBulkCategories() {
   var inv     = getInv();
-  var changed = 0;
+  var updates = [];
   inv.forEach(function(p, i) {
     var catEl = document.getElementById('bcat_' + i);
     var famEl = document.getElementById('bfam_' + i);
     if (!catEl || !famEl) return;
     if (catEl.value !== (p.category||'') || famEl.value !== (p.family||'')) {
-      p.category = catEl.value;
-      p.family   = famEl.value;
-      changed++;
+      updates.push({ code: p.code, set: { category: catEl.value, family: famEl.value } });
     }
   });
-  if (changed > 0) { setInv(inv); renderInventory(); }
+  // Transactional field updates (see adjustStock) — the old whole-array
+  // setInv() clobbered any sale that happened while this modal was open.
+  if (updates.length) { adjustStock(updates); renderInventory(); }
   document.getElementById('bulkCatModal').classList.add('hidden');
-  showToast(changed > 0 ? ('تم تحديث ' + changed + ' منتج') : 'لا يوجد تغييرات');
+  showToast(updates.length > 0 ? ('تم تحديث ' + updates.length + ' منتج') : 'لا يوجد تغييرات');
 }
 
 function filterUnclassified() {
@@ -9416,15 +9469,18 @@ function previewVlookup() {
 function applyVlookup(matched) {
   if (!matched || !matched.length) { showToast('لا توجد تغييرات للتطبيق'); return; }
   var inv = getInv();
+  var updates = [];
   matched.forEach(function(r) {
     var prod = inv.find(function(p){ return p.code === r.keyVal || p.code.toLowerCase() === r.keyVal.toLowerCase(); });
     if (!prod) return;
-    Object.keys(r.changes).forEach(function(field){ prod[field] = r.changes[field]; });
+    updates.push({ code: prod.code, set: r.changes });
   });
-  setInv(inv);
+  // Transactional field updates (see adjustStock) — the old whole-array
+  // setInv() clobbered any sale that happened during the VLOOKUP apply.
+  if (updates.length) adjustStock(updates);
   renderInventory();
   document.getElementById('vlookupModal').classList.add('hidden');
-  showToast('تم تحديث ' + matched.length + ' منتج بنجاح');
+  showToast('تم تحديث ' + updates.length + ' منتج بنجاح');
 }
 
 

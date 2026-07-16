@@ -64,6 +64,12 @@ function getBranches()    { return _settingsCache.branches || BRANCH_DEFAULTS; }
 
 // INVENTORY — branch-aware
 const getInv = (branch) => _invCacheByBranch[branch || currentBranch] || [];
+// ⚠️ setInv REPLACES the whole branch inventory — it's inherently last-write-
+// wins, so it must only be used for intentional full replacement (backup
+// restore, demo seed). Anything that MODIFIES stock (sale, return, transfer,
+// receive, product edit/delete/import) must go through adjustStock() below,
+// which applies per-product deltas inside a Firestore transaction so two
+// devices writing at the same moment can't clobber each other's changes.
 function setInv(v, branch) {
   const b = branch || currentBranch;
   _invCacheByBranch[b] = v;
@@ -72,6 +78,50 @@ function setInv(v, branch) {
   _db.collection('pos_data').doc(`inv_${b}`)
      .set({ items: v, updatedAt: Date.now() })
      .catch(e => console.error('Firestore setInv:', e));
+}
+
+// Race-safe inventory mutation. deltas = [{ code, delta?, set?, insert?, remove? }]
+//   delta:  add to qty (negative = deduct)          — sales, returns, transfers, receiving
+//   set:    Object.assign fields onto the product   — cost/price/category edits, absolute qty corrections
+//   insert: product template to create (qty starts at 0) if `code` isn't in the branch yet
+//   remove: true → delete the product from the branch
+// Applied optimistically to the local cache/localStorage first, then re-applied
+// server-side inside a transaction against the CURRENT server state — so a
+// concurrent sale on another device survives (the old read-modify-setInv
+// pattern silently lost one of the two writes). If the transaction can't run
+// (offline / repeated contention), falls back to writing the local array —
+// no worse than the old behavior, and the SDK queues it until reconnect.
+function adjustStock(deltas, branch) {
+  const b = branch || currentBranch;
+  const applyTo = (items) => {
+    deltas.forEach(d => {
+      const idx = items.findIndex(x => x.code === d.code);
+      if (d.remove) { if (idx >= 0) items.splice(idx, 1); return; }
+      let p = idx >= 0 ? items[idx] : null;
+      if (!p) {
+        if (!d.insert) return;
+        p = Object.assign({}, d.insert, { qty: 0 });
+        items.push(p);
+      }
+      if (d.set)   Object.assign(p, d.set);
+      if (d.delta) p.qty = (p.qty || 0) + d.delta;
+    });
+    return items;
+  };
+  _invCacheByBranch[b] = applyTo(_invCacheByBranch[b] || []);
+  DB.s(`pos_inv_${b}`, _invCacheByBranch[b]);
+  if (!_fbReady) return;
+  const ref = _db.collection('pos_data').doc(`inv_${b}`);
+  _db.runTransaction(tx =>
+    tx.get(ref).then(snap => {
+      const items = applyTo(snap.exists ? (snap.data().items || []) : []);
+      tx.set(ref, { items, updatedAt: Date.now() });
+    })
+  ).catch(e => {
+    console.error('Firestore adjustStock (falling back to direct write):', e);
+    ref.set({ items: _invCacheByBranch[b], updatedAt: Date.now() })
+       .catch(e2 => console.error('Firestore adjustStock fallback:', e2));
+  });
 }
 
 // SALES — addSale() لإضافة فاتورة / setSales([]) لمسح الكل

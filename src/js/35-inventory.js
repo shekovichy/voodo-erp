@@ -51,9 +51,14 @@ function renderInventory() {
 }
 
 function updateQty(code, val) {
-  const inv = getInv();
-  const p = inv.find(x => x.code === code);
-  if (p) { p.qty = parseInt(val) || 0; setInv(inv); renderInventory(); }
+  const p = getInv().find(x => x.code === code);
+  if (!p) return;
+  // Absolute correction of ONE product's count — routed through adjustStock so
+  // it no longer rewrites the whole array (which clobbered concurrent sales of
+  // OTHER products). The corrected product itself is intentionally last-write-
+  // wins: the admin is overriding the count on purpose.
+  adjustStock([{ code, set: { qty: parseInt(val) || 0 } }]);
+  renderInventory();
 }
 
 function openProductModal(p) {
@@ -94,9 +99,14 @@ function saveProduct() {
   };
 
   if (editCode) {
-    const idx = inv.findIndex(x => x.code === editCode);
-    const oldProd = inv[idx];
-    if (idx >= 0) inv[idx] = prod; else inv.push(prod);
+    const oldProd = inv.find(x => x.code === editCode);
+    // Upsert this ONE product transactionally (see adjustStock) — the old
+    // whole-array setInv() clobbered concurrent sales of other products.
+    // If the admin changed the product code, remove the old entry first.
+    const deltas = [];
+    if (editCode !== prod.code) deltas.push({ code: editCode, remove: true });
+    deltas.push({ code: prod.code, insert: prod, set: prod });
+    adjustStock(deltas);
     // Audit: price change?
     const fieldLabels = { name:'الاسم', cost:'التكلفة', priceBefore:'السعر قبل الخصم', priceAfter:'السعر', qty:'الكمية', category:'الفئة', family:'العائلة' };
     const changes = oldProd ? buildAuditDiff(
@@ -111,10 +121,9 @@ function saveProduct() {
     }
   } else {
     if (inv.find(x => x.code === code)) { showToast('هذا الكود موجود مسبقاً'); return; }
-    inv.push(prod);
+    adjustStock([{ code: prod.code, insert: prod, set: prod }]);
     addAuditLog('inv.add', `إضافة: ${prod.name} (${prod.code}) — سعر: ${fmt(prod.priceAfter)} ج`, null);
   }
-  setInv(inv);
   document.getElementById('productModal').classList.add('hidden');
   renderInventory();
 }
@@ -122,7 +131,7 @@ function saveProduct() {
 function deleteProduct(code) {
   showConfirmModal('حذف هذا المنتج؟', function() {
     const prod = getInv().find(x => x.code === code);
-    setInv(getInv().filter(x => x.code !== code));
+    adjustStock([{ code, remove: true }]);
     if (prod) addAuditLog('inv.delete', `حذف: ${prod.name} (${prod.code})`, null);
     renderInventory();
   });
@@ -137,6 +146,7 @@ function importExcel(e) {
     const rows = XLSX.utils.sheet_to_json(ws, { defval:'' });
     const inv  = getInv();
     let added=0, updated=0, errors=[];
+    const upserts = [];
 
     rows.forEach((row, i) => {
       // Normalize keys: trim whitespace + lowercase for case-insensitive matching
@@ -160,10 +170,14 @@ function importExcel(e) {
         family:   String(g('family','المجموعة','مجموعة','فاميلى','فاميلي','')||'').trim()
       };
       const ex = inv.find(x => x.code === code);
-      if (ex) { Object.assign(ex, prod); updated++; } else { inv.push(prod); added++; }
+      if (ex) { updated++; } else { added++; }
+      upserts.push({ code, insert: prod, set: prod });
     });
 
-    setInv(inv); e.target.value = '';
+    // One transactional bulk upsert (see adjustStock) — the old whole-array
+    // setInv() clobbered any sale that happened during the import.
+    if (upserts.length) adjustStock(upserts);
+    e.target.value = '';
     const msg = `✅ تم الاستيراد: ${added} منتج جديد · ${updated} تم تحديثه${errors.length ? `<br>⚠️ ${errors.slice(0,3).join(' | ')}` : ''}`;
     document.getElementById('importAlert').innerHTML = `<div class="alert alert-success">${msg}</div>`;
     setTimeout(() => document.getElementById('importAlert').innerHTML='', 6000);

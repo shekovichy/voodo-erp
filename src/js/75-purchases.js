@@ -287,28 +287,32 @@ function receivePO() {
 function _receivePOConfirmed(po) {
   const supplier = getSuppliers().find(s => s.id === po.supplierId);
 
-  // Distribute shipping cost proportionally
+  // Distribute shipping cost proportionally, then apply as transactional
+  // per-product deltas so a cashier selling during goods-receiving isn't
+  // clobbered (see adjustStock). The qty is a delta (race-safe); the weighted-
+  // average cost is computed from the local snapshot and applied via `set` —
+  // a concurrent sale can skew it by at most a rounding hair, while the
+  // critical number (the count) stays exact.
   const subtotal = po.subtotal || po.items.reduce((s,i)=>s+i.qty*i.cost, 0);
   const shipping = po.shipping || 0;
-  const inv = [...(getInv(po.branchId) || [])];
+  const inv = getInv(po.branchId) || [];
 
-  po.items.forEach(item => {
+  adjustStock(po.items.map(item => {
     const shippingShare = subtotal > 0 ? (item.qty * item.cost / subtotal) * shipping : 0;
     const landedCost = item.cost + (item.qty > 0 ? shippingShare / item.qty : 0);
-    const idx = inv.findIndex(i => i.code === item.code);
-    if (idx >= 0) {
-      // Weighted average cost
-      const oldQty  = inv[idx].qty || 0;
-      const oldCost = inv[idx].cost || 0;
+    const existing = inv.find(i => i.code === item.code);
+    if (existing) {
+      const oldQty  = existing.qty || 0;
+      const oldCost = existing.cost || 0;
       const newTotalQty = oldQty + item.qty;
-      inv[idx].cost = newTotalQty > 0 ? (oldQty * oldCost + item.qty * landedCost) / newTotalQty : landedCost;
-      inv[idx].qty  = newTotalQty;
-    } else {
-      // Add as new item
-      inv.push({ code: item.code, name: item.name, qty: item.qty, cost: landedCost, price: item.cost * 1.3 });
+      const newCost = newTotalQty > 0 ? (oldQty * oldCost + item.qty * landedCost) / newTotalQty : landedCost;
+      return { code: item.code, delta: item.qty, set: { cost: newCost } };
     }
-  });
-  setInv(inv, po.branchId);
+    return {
+      code: item.code, delta: item.qty,
+      insert: { code: item.code, name: item.name, cost: landedCost, price: item.cost * 1.3 }
+    };
+  }), po.branchId);
 
   // Update PO status + AP tracking (due date, payment status — see recordSupplierPayment())
   const list = getPurchases();

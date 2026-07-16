@@ -177,24 +177,16 @@ function confirmWhTransfer() {
     }
   }
 
-  // Deduct from warehouse
-  var newWh = whInv.map(function(p){
-    var tr = _whTrItems.find(function(i){ return i.code===p.code; });
-    return tr ? Object.assign({},p,{qty: p.qty - tr.qty}) : p;
-  });
-  setInv(newWh, 'wh');
-
-  // Add to destination branch
-  var dstInv = getInv(to).map(function(p){ return Object.assign({},p); });
-  _whTrItems.forEach(function(item){
-    var dp = dstInv.find(function(x){ return x.code===item.code; });
-    if (dp) dp.qty += item.qty;
-    else {
-      var src = whInv.find(function(x){ return x.code===item.code; });
-      dstInv.push(Object.assign({}, src, {qty: item.qty}));
-    }
-  });
-  setInv(dstInv, to);
+  // Deduct from warehouse / add to destination — transactional per-product
+  // deltas so a concurrent sale on the destination branch isn't clobbered
+  // (see adjustStock). `insert` seeds products the branch doesn't stock yet.
+  adjustStock(_whTrItems.map(function(i){ return { code: i.code, delta: -i.qty }; }), 'wh');
+  adjustStock(_whTrItems.map(function(i){
+    return {
+      code: i.code, delta: i.qty,
+      insert: whInv.find(function(x){ return x.code === i.code; })
+    };
+  }), to);
 
   // Save transfer record
   var branches = getBranches();

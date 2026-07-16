@@ -47,10 +47,9 @@ function completeSale() {
     change = paid - total;
   }
 
-  // Deduct stock
-  const inv = getInv();
-  cart.forEach(ci => { const p = inv.find(x => x.code === ci.code); if (p) p.qty -= ci.qty; });
-  setInv(inv);
+  // Deduct stock — transactional per-product deltas so two cashiers selling
+  // at the same moment can't clobber each other's deductions (see adjustStock).
+  adjustStock(cart.map(ci => ({ code: ci.code, delta: -ci.qty })));
 
   // Save sale
   const salesperson = document.getElementById('paymentSalesperson')?.value || '';

@@ -126,10 +126,9 @@ function processCashierReturn() {
   });
 }
 function _processCashierReturnConfirmed(sale, reason, returnItems, returnTotal) {
-  // Restock
-  const inv = getInv();
-  returnItems.forEach(ri => { const p = inv.find(x => x.code === ri.code); if (p) p.qty += Math.abs(ri.qty); });
-  setInv(inv);
+  // Restock into the original sale's branch (matches the branchId recorded on
+  // the return record below). Transactional per-product deltas (see adjustStock).
+  adjustStock(returnItems.map(ri => ({ code: ri.code, delta: Math.abs(ri.qty) })), sale.branchId || currentBranch);
   // Save return record
   const returnSale = {
     id:             Date.now(),

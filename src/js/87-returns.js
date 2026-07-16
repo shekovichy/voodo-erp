@@ -56,11 +56,9 @@ function processReturn() {
 function _processReturnConfirmed(sale, reason, returnItems, returnTotal) {
   // Restock into the ORIGINAL sale's branch, not whatever branch the admin is
   // currently viewing — otherwise returning a b1 invoice while viewing b2 would
-  // credit the wrong branch's stock.
+  // credit the wrong branch's stock. Transactional (see adjustStock).
   const branchId = sale.branchId || currentBranch;
-  const inv = getInv(branchId);
-  returnItems.forEach(ri => { const p = inv.find(x=>x.code===ri.code); if (p) p.qty += Math.abs(ri.qty); });
-  setInv(inv, branchId);
+  adjustStock(returnItems.map(ri => ({ code: ri.code, delta: Math.abs(ri.qty) })), branchId);
 
   // Save return sale — carry over branch and customer so it shows up in the
   // right branch's reports and the customer's history.
