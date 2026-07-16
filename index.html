@@ -3423,7 +3423,14 @@ function addSale(sale) {
   // (merge:true creates the doc if the month is new.)
   _db.collection('pos_sales').doc(month)
      .set({ items: firebase.firestore.FieldValue.arrayUnion(sale), updatedAt: Date.now() }, { merge: true })
-     .catch(e => console.error('Firestore addSale:', e));
+     .catch(e => {
+       // Write refused (e.g. a legacy/unauthenticated session during the
+       // auth transition, or a rules change) — persist the whole sales
+       // cache locally so the invoice survives a reload instead of
+       // silently evaporating with the failed cloud write.
+       console.error('Firestore addSale (persisted locally):', e);
+       DB.s('sales', _salesCache);
+     });
 }
 function setSales(v) {
   // Used only for reset (v = [])

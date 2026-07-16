@@ -3,19 +3,21 @@ rules_version = '2';
 // ═══════════════════════════════════════════════════════════════════
 // VOODO ERP — Firestore Security Rules (v2: real role enforcement)
 //
-// ⚠️ DEPLOYMENT ORDER MATTERS — publishing these rules before the
-// email/password client is live will lock out every device:
-//   1. Firebase Console → Authentication → Sign-in method →
-//      enable "Email/Password".
-//   2. Firebase Console → Authentication → Users → Add user:
-//      shekovichy@gmail.com + a STRONG password (this is the owner
-//      account — the rules below grant it admin unconditionally).
-//   3. Deploy the client (merge to main) and confirm you can log in
-//      with the owner account and create staff accounts from
-//      "إدارة المستخدمين".
-//   4. ONLY THEN publish these rules (test in Rules Playground first —
-//      see CLAUDE.md). Old anonymous-auth clients stop working at this
-//      point, which is the goal.
+// ⚠️ DEPLOYMENT ORDER MATTERS:
+//   1. Owner account: shekovichy@gmail.com must exist in Firebase Auth
+//      with a KNOWN password (it already exists in this project — reset
+//      its password from the console if forgotten; deleting & re-adding
+//      is also safe, the owner is recognized by email, not uid).
+//   2. Deploy the client (merge to main) and confirm owner login works.
+//   3. Publish these rules (test in Rules Playground first — see
+//      CLAUDE.md). The owner is unaffected (email-based). Old
+//      anonymous-auth clients stop working here, which is the goal.
+//   4. ONLY AFTER these rules are live: create staff accounts from
+//      "إدارة المستخدمين" and log each branch device in. (Staff
+//      provisioning WRITES the roles collection, which the OLD rules
+//      deny — so it cannot happen before this step.) Do steps 2→4 the
+//      same day: in between, branch devices run local-only and their
+//      sales stay on-device (addSale persists locally on write failure).
 //
 // Model:
 //   roles/{uid} = { username, email, role: 'admin'|'manager'|'cashier',
