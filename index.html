@@ -3950,12 +3950,15 @@ async function doLogin() {
   // comes from roles/{uid} (or the hardcoded owner email) and is what
   // firestore.rules actually enforces server-side.
   const online = navigator.onLine !== false;
+  let fbErr = null;
   if (online && typeof firebase !== 'undefined' && FIREBASE_CONFIG.projectId) {
     try {
       const cred = await firebase.auth().signInWithEmailAndPassword(usernameToEmail(user), pass);
       await resolveRoleAndEnter(cred.user);
       return;
     } catch (e) {
+      fbErr = e;
+      console.error('Firebase sign-in error:', e && e.code, e && e.message);
       if (e && e.message === 'no-role') {
         _showLoginError('الحساب موجود لكن ملوش صلاحية بعد — كلّم المدير يضيفك من "إدارة المستخدمين"');
         return;
@@ -3964,17 +3967,23 @@ async function doLogin() {
         _showLoginError('محاولات كتير غلط — استنى شوية وحاول تاني');
         return;
       }
-      // auth/network-request-failed → fall through to the offline path.
-      // auth/invalid-credential etc. → also fall through: during the
-      // transition, devices may still hold legacy-only accounts. A legacy
-      // session has NO Firebase token, so firestore.rules block all cloud
-      // access anyway — it's local-only, not a bypass.
+      // Expected/normal for typos or for devices that haven't been migrated
+      // to a real account yet → fall through to the legacy path below.
+      // Anything else (network/config/internal errors) is NOT a "wrong
+      // password" — surfaced with its real code below instead of hiding it
+      // behind the generic message, so it doesn't get misread as a typo.
     }
   }
 
   // ── Legacy/offline fallback (local credentials on THIS device) ──
   if (await _legacyLogin(user, pass)) return;
-  _showLoginError('بيانات الدخول غير صحيحة');
+
+  const expectedCodes = ['auth/wrong-password', 'auth/invalid-credential', 'auth/user-not-found', 'auth/invalid-email'];
+  if (fbErr && fbErr.code && !expectedCodes.includes(fbErr.code)) {
+    _showLoginError(`تعذّر الاتصال بحساب الدخول (${fbErr.code}) — جرّب تاني أو راجع إعدادات Firebase`);
+  } else {
+    _showLoginError('بيانات الدخول غير صحيحة');
+  }
 }
 
 // The old localStorage-credential chain, kept for offline use and for
