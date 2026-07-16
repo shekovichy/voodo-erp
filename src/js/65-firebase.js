@@ -257,11 +257,16 @@ function initFirebase() {
               ...monthItems
             ];
           } else {
-            // Read fresh from localStorage each time (not a stale startup snapshot)
+            // Read fresh from localStorage each time (not a stale startup snapshot).
+            // Seed with arrayUnion+merge (not a plain overwrite) so that if
+            // another device created this month's doc at the same moment, its
+            // sales aren't clobbered by this first-time seed — same lost-update
+            // race that addSale() guards against.
             const localSalesAll = DB.g('sales', []);
             const localMonth = localSalesAll.filter(s => s.date.slice(0, 7) === month);
             if (localMonth.length) {
-              _db.collection('pos_sales').doc(month).set({ items: localMonth, updatedAt: Date.now() });
+              _db.collection('pos_sales').doc(month)
+                 .set({ items: firebase.firestore.FieldValue.arrayUnion(...localMonth), updatedAt: Date.now() }, { merge: true });
             }
           }
           visRefresh('page-sales', () => { initSalesFilter(); renderSales(); });

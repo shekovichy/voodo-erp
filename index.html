@@ -3364,9 +3364,15 @@ function addSale(sale) {
   _salesCache.push(sale);
   if (!_fbReady) { DB.s('sales', _salesCache); return; }
   const month = sale.date.slice(0, 7); // YYYY-MM
-  const monthItems = _salesCache.filter(s => s.date.slice(0, 7) === month);
+  // Atomically append ONLY this sale to the month document instead of
+  // rewriting the whole month array. The old rewrite had a lost-update race:
+  // two branches (or two cashiers) selling at the same moment would each read
+  // the month array, add their own invoice, and write the whole thing back —
+  // the second write silently clobbering the first branch's invoice.
+  // arrayUnion appends server-side, so every concurrent sale survives.
+  // (merge:true creates the doc if the month is new.)
   _db.collection('pos_sales').doc(month)
-     .set({ items: monthItems, updatedAt: Date.now() })
+     .set({ items: firebase.firestore.FieldValue.arrayUnion(sale), updatedAt: Date.now() }, { merge: true })
      .catch(e => console.error('Firestore addSale:', e));
 }
 function setSales(v) {
@@ -6576,11 +6582,16 @@ function initFirebase() {
               ...monthItems
             ];
           } else {
-            // Read fresh from localStorage each time (not a stale startup snapshot)
+            // Read fresh from localStorage each time (not a stale startup snapshot).
+            // Seed with arrayUnion+merge (not a plain overwrite) so that if
+            // another device created this month's doc at the same moment, its
+            // sales aren't clobbered by this first-time seed — same lost-update
+            // race that addSale() guards against.
             const localSalesAll = DB.g('sales', []);
             const localMonth = localSalesAll.filter(s => s.date.slice(0, 7) === month);
             if (localMonth.length) {
-              _db.collection('pos_sales').doc(month).set({ items: localMonth, updatedAt: Date.now() });
+              _db.collection('pos_sales').doc(month)
+                 .set({ items: firebase.firestore.FieldValue.arrayUnion(...localMonth), updatedAt: Date.now() }, { merge: true });
             }
           }
           visRefresh('page-sales', () => { initSalesFilter(); renderSales(); });

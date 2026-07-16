@@ -80,9 +80,15 @@ function addSale(sale) {
   _salesCache.push(sale);
   if (!_fbReady) { DB.s('sales', _salesCache); return; }
   const month = sale.date.slice(0, 7); // YYYY-MM
-  const monthItems = _salesCache.filter(s => s.date.slice(0, 7) === month);
+  // Atomically append ONLY this sale to the month document instead of
+  // rewriting the whole month array. The old rewrite had a lost-update race:
+  // two branches (or two cashiers) selling at the same moment would each read
+  // the month array, add their own invoice, and write the whole thing back —
+  // the second write silently clobbering the first branch's invoice.
+  // arrayUnion appends server-side, so every concurrent sale survives.
+  // (merge:true creates the doc if the month is new.)
   _db.collection('pos_sales').doc(month)
-     .set({ items: monthItems, updatedAt: Date.now() })
+     .set({ items: firebase.firestore.FieldValue.arrayUnion(sale), updatedAt: Date.now() }, { merge: true })
      .catch(e => console.error('Firestore addSale:', e));
 }
 function setSales(v) {
