@@ -14,8 +14,104 @@ let _db            = null;
 let _fbReady       = false;
 let _suspendCache  = [];
 
+// ═══════════════════════════════════════════════════════════════
+// REAL AUTHENTICATION — Firebase email/password + roles/{uid}
+// Replaces the DIY localStorage-password system (kept below only as
+// an OFFLINE fallback). Server-side enforcement lives in
+// firestore.rules: an account without a roles/{uid} doc has no
+// Firestore access at all.
+// ═══════════════════════════════════════════════════════════════
+// This exact account is always admin (mirrors isOwner() in the rules)
+// — it bootstraps the system before any roles exist.
+const OWNER_EMAIL = 'shekovichy@gmail.com';
+// Staff log in with short usernames; Firebase Auth requires emails, so
+// usernames map to a synthetic internal domain (never receives mail).
+const AUTH_EMAIL_DOMAIN = 'voodo-pos.local';
+function usernameToEmail(u) {
+  u = String(u || '').trim().toLowerCase();
+  return u.includes('@') ? u : (u + '@' + AUTH_EMAIL_DOMAIN);
+}
+function emailToUsername(e) {
+  e = String(e || '');
+  return e.endsWith('@' + AUTH_EMAIL_DOMAIN) ? e.slice(0, e.indexOf('@')) : e;
+}
 
-// ── PASSWORD SECURITY ─────────────────────────────────────────
+// Resolve the signed-in Firebase user's role and enter the matching
+// session. Role source: owner email → admin; otherwise roles/{uid}.
+// The resolved role is cached in localStorage so a POS device that
+// restarts offline can resume its session (Firebase Auth itself
+// persists the sign-in locally).
+async function resolveRoleAndEnter(fbUser) {
+  let rec = null;
+  if ((fbUser.email || '').toLowerCase() === OWNER_EMAIL) {
+    rec = { role: 'admin', username: emailToUsername(fbUser.email), branchId: null };
+  } else {
+    const snap = await firebase.firestore().collection('roles').doc(fbUser.uid).get();
+    if (snap.exists) rec = snap.data();
+  }
+  if (!rec) {
+    await firebase.auth().signOut();
+    throw new Error('no-role');
+  }
+  rec.uid = fbUser.uid;
+  DB.s('pos_role_cache', rec);
+  _enterSessionByRole(rec);
+  return rec;
+}
+
+function _enterSessionByRole(rec) {
+  if (rec.role === 'admin') {
+    _enterAdminSession(`تسجيل دخول: ${rec.username}`);
+  } else {
+    _enterBranchSession(rec.branchId || 'b1', rec.role === 'manager' ? 'manager' : 'cashier', rec.username);
+  }
+}
+
+// Revocation check for cached sessions: if an admin deleted this
+// user's role doc while the device was away, sign it out on resume.
+function _verifyRoleStillValid(fbUser) {
+  if ((fbUser.email || '').toLowerCase() === OWNER_EMAIL) return;
+  firebase.firestore().collection('roles').doc(fbUser.uid).get()
+    .then(snap => {
+      if (!snap.exists) {
+        localStorage.removeItem('pos_role_cache');
+        firebase.auth().signOut().finally(() => location.reload());
+      } else {
+        const rec = snap.data(); rec.uid = fbUser.uid;
+        DB.s('pos_role_cache', rec);
+      }
+    })
+    .catch(() => {}); // offline — keep cached session
+}
+
+// ── ADMIN USER MANAGEMENT (Firebase accounts + roles docs) ──────
+// Creating a user with the primary auth instance would sign the admin
+// OUT and the new user IN (client-SDK behavior) — so account creation
+// runs on a throwaway secondary app instance, and the roles doc is
+// written from the still-signed-in admin session.
+function _secondaryAuth() {
+  const existing = firebase.apps.find(a => a.name === 'user-mgmt');
+  const app = existing || firebase.initializeApp(FIREBASE_CONFIG, 'user-mgmt');
+  return app.auth();
+}
+async function createManagedUser(username, password, role, branchId) {
+  const email = usernameToEmail(username);
+  const sec = _secondaryAuth();
+  const cred = await sec.createUserWithEmailAndPassword(email, password);
+  const uid = cred.user.uid;
+  await sec.signOut();
+  await firebase.firestore().collection('roles').doc(uid).set({
+    username: username.trim().toLowerCase(),
+    email,
+    role,
+    branchId: branchId || null,
+    createdAt: Date.now(),
+    createdBy: (firebase.auth().currentUser || {}).uid || null
+  });
+  return uid;
+}
+
+// ── PASSWORD SECURITY (legacy local accounts — offline fallback) ──
 async function hashPass(plain) {
   const data = new TextEncoder().encode(plain + 'voodo-pos-salt');
   const buf  = await crypto.subtle.digest('SHA-256', data);
@@ -61,8 +157,11 @@ function initFirebase() {
       fbEl.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:10px;background:#fef3c7;color:#92400e;';
       fbEl.textContent   = 'جاري الاتصال...';
     }
-    // Anonymous auth — required for Firestore Security Rules
-    firebase.auth().signInAnonymously().catch(e => console.warn('Firebase Auth:', e.message));
+    // NOTE: no anonymous sign-in anymore — the user is already signed in
+    // with a real email/password account by the time initFirebase() runs
+    // (see doLogin/resolveRoleAndEnter). In legacy-offline sessions there
+    // is no Firebase auth at all: the listeners below fail permission
+    // checks and every err handler falls back to localStorage.
 
     _db.collection('pos_data').doc('suspended')
       .onSnapshot(snap => {
@@ -665,4 +764,36 @@ function resumeFromModal(id) {
   document.getElementById('resumeModal').classList.add('hidden');
   activateSuspended(id);
 }
+
+// ═══════════════════════════════════════════════════════════════
+// AUTH BOOTSTRAP — runs once at page load (this file executes near
+// the end of the bundle, so every function it needs is defined).
+// Initializes the Firebase app + auth listener so a device that is
+// already signed in resumes its session automatically instead of
+// showing the login page on every restart. The async callback fires
+// after the whole bundle has executed.
+// ═══════════════════════════════════════════════════════════════
+(function initAuthLayer() {
+  if (!FIREBASE_CONFIG.projectId || typeof firebase === 'undefined') return;
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    firebase.auth().onAuthStateChanged(fbUser => {
+      if (!fbUser || currentUser) return; // not signed in, or already in a session
+      const cached = DB.g('pos_role_cache', null);
+      if (cached && cached.uid === fbUser.uid) {
+        // Instant resume from cache (works offline), then re-verify the
+        // role against the server in the background (revocation check).
+        _enterSessionByRole(cached);
+        _verifyRoleStillValid(fbUser);
+      } else {
+        resolveRoleAndEnter(fbUser).catch(e => {
+          if (e && e.message === 'no-role') console.warn('Auth: account has no role — signed out.');
+          else console.error('Auth resume error:', e);
+        });
+      }
+    });
+  } catch (e) {
+    console.error('Auth init error:', e);
+  }
+})();
 

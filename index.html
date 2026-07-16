@@ -771,7 +771,7 @@ body.warehouse-mode #cartFab {
       </div>
       <div class="form-group">
         <label>اسم المستخدم</label>
-        <input class="form-control" id="loginUser" placeholder="admin  أو  cashier" autocomplete="username" />
+        <input class="form-control" id="loginUser" placeholder="اسم المستخدم أو الإيميل" autocomplete="username" />
       </div>
       <div class="form-group">
         <label>كلمة المرور</label>
@@ -3926,27 +3926,64 @@ function _enterBranchSession(branchId, role, username) {
   }
 }
 
+function _showLoginError(msg) {
+  const el = document.getElementById('loginError');
+  if (msg) el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
 async function doLogin() {
   const user = document.getElementById('loginUser').value.trim().toLowerCase();
   const pass = document.getElementById('loginPass').value;
-  const users = getUsers();
   document.getElementById('loginError').classList.add('hidden');
-  if (!pass) { document.getElementById('loginError').textContent = 'أدخل كلمة المرور'; document.getElementById('loginError').classList.remove('hidden'); return; }
+  if (!pass) { _showLoginError('أدخل كلمة المرور'); return; }
 
-  // First-run: no admin password set yet → show setup
-  if (!users.admin) {
-    showFirstRunSetup();
-    return;
+  // ── Real authentication first: Firebase email/password ──────────
+  // Usernames map to a synthetic email (see usernameToEmail). The role
+  // comes from roles/{uid} (or the hardcoded owner email) and is what
+  // firestore.rules actually enforces server-side.
+  const online = navigator.onLine !== false;
+  if (online && typeof firebase !== 'undefined' && FIREBASE_CONFIG.projectId) {
+    try {
+      const cred = await firebase.auth().signInWithEmailAndPassword(usernameToEmail(user), pass);
+      await resolveRoleAndEnter(cred.user);
+      return;
+    } catch (e) {
+      if (e && e.message === 'no-role') {
+        _showLoginError('الحساب موجود لكن ملوش صلاحية بعد — كلّم المدير يضيفك من "إدارة المستخدمين"');
+        return;
+      }
+      if (e && e.code === 'auth/too-many-requests') {
+        _showLoginError('محاولات كتير غلط — استنى شوية وحاول تاني');
+        return;
+      }
+      // auth/network-request-failed → fall through to the offline path.
+      // auth/invalid-credential etc. → also fall through: during the
+      // transition, devices may still hold legacy-only accounts. A legacy
+      // session has NO Firebase token, so firestore.rules block all cloud
+      // access anyway — it's local-only, not a bypass.
+    }
   }
 
-  if (user === 'admin' && await checkPass(pass, users.admin)) {
+  // ── Legacy/offline fallback (local credentials on THIS device) ──
+  if (await _legacyLogin(user, pass)) return;
+  _showLoginError('بيانات الدخول غير صحيحة');
+}
+
+// The old localStorage-credential chain, kept for offline use and for
+// the transition period before every device moves to real accounts.
+// Sessions entered this way have no Firebase auth token, so once the
+// v2 firestore.rules are published they can only see local data.
+async function _legacyLogin(user, pass) {
+  const users = getUsers();
+
+  if (user === 'admin' && users.admin && await checkPass(pass, users.admin)) {
     await upgradePassIfNeeded(pass, users.admin, 'admin');
-    _enterAdminSession('تسجيل دخول: admin');
-    return;
+    _enterAdminSession('تسجيل دخول (محلي): admin');
+    return true;
   }
 
-  if (user === 'cashier' && pass === users.cashier) {
-    // Legacy cashier (all branches)
+  if (user === 'cashier' && users.cashier && pass === users.cashier) {
     currentUser = 'cashier';
     isBranchManager = false;
     document.getElementById('loginPage').classList.add('hidden');
@@ -3957,36 +3994,27 @@ async function doLogin() {
     updateClock();
     setInterval(updateClock, 30000);
     setTimeout(function(){ checkForApprovedCarts(); }, 1000);
-    return;
+    return true;
   }
 
-  // New admin-managed accounts (extra admins + branch cashiers/managers) —
-  // synced via Firestore, so this works on any device, unlike the legacy
-  // per-branch slot below which is local-only.
   for (const acc of getAccounts()) {
     if ((acc.username || '').toLowerCase() === user && await checkPass(pass, acc.password)) {
-      if (acc.type === 'admin') {
-        _enterAdminSession(`تسجيل دخول: ${user}`);
-      } else {
-        _enterBranchSession(acc.branchId, acc.role, user);
-      }
-      return;
+      if (acc.type === 'admin') _enterAdminSession(`تسجيل دخول (محلي): ${user}`);
+      else _enterBranchSession(acc.branchId, acc.role, user);
+      return true;
     }
   }
 
-  // Legacy per-branch single-slot login (kept as a fallback for devices that
-  // already have real credentials cached locally from before "إدارة المستخدمين" existed)
   const branchUsers = getBranchUsers();
   for (const b of BRANCH_IDS) {
     if (branchUsers[b] &&
         user === (branchUsers[b].username || '').toLowerCase() &&
         await checkPass(pass, branchUsers[b].password)) {
       _enterBranchSession(b, branchUsers[b].role, user);
-      return;
+      return true;
     }
   }
-
-  document.getElementById('loginError').classList.remove('hidden');
+  return false;
 }
 
 
@@ -4189,6 +4217,10 @@ setTimeout(() => checkAutoBackup(false), 5000);
 function logout() {
   showConfirmModal('هل تريد تسجيل الخروج؟', function() {
     currentUser = null; isBranchManager = false; cart = [];
+    // End the real Firebase session too, and drop the cached role so the
+    // auth bootstrap doesn't auto-resume on the next page load.
+    localStorage.removeItem('pos_role_cache');
+    try { if (typeof firebase !== 'undefined' && firebase.apps.length) firebase.auth().signOut(); } catch(e) {}
     document.getElementById('loginPage').classList.remove('hidden');
     document.getElementById('cashierView').classList.add('hidden');
     document.getElementById('managerView').classList.add('hidden');
@@ -6121,48 +6153,39 @@ function printReport(sectionId) {
 // SETTINGS
 // ══════════════════════════════════════════════
 // ── USER ACCOUNTS (admin-managed) ──────────────────────────────
-// One-time import of any real credentials already sitting in the old
-// per-branch-slot storage on THIS device, so whichever device the admin
-// used to set up real branch logins before doesn't lose them — they get
-// published to Firestore (pos_data/accounts) the first time this renders.
-function _migrateLegacyBranchUsersOnce() {
-  if (DB.g('pos_accounts_migrated_v1', false)) return;
-  DB.s('pos_accounts_migrated_v1', true);
-  const legacy = getBranchUsers();
-  const accounts = getAccounts();
-  const additions = [];
-  BRANCH_IDS.forEach(b => {
-    const lu = legacy[b];
-    if (lu && lu.username && lu.password &&
-        !accounts.find(a => a.username.toLowerCase() === (lu.username || '').toLowerCase())) {
-      additions.push({
-        id: 'u_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7) + '_' + b,
-        username: lu.username, password: lu.password,
-        type: 'branch', branchId: b, role: lu.role || 'cashier',
-      });
-    }
-  });
-  if (additions.length) setAccounts([...accounts, ...additions]);
-}
-
-function renderUserAccountsSettings() {
-  _migrateLegacyBranchUsersOnce();
+// User management now runs on REAL Firebase accounts: each staff member
+// is a Firebase Auth user plus a roles/{uid} doc (the thing
+// firestore.rules actually enforces). The legacy pos_data/accounts doc
+// is no longer written — it survives only as an offline login fallback.
+let _rolesListCache = [];
+async function renderUserAccountsSettings() {
   const container = document.getElementById('userAccountsContainer');
   if (!container) return;
-  const accounts = getAccounts();
-  if (!accounts.length) {
+  if (!_fbReady || !firebase.auth().currentUser) {
+    container.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:8px 0;">إدارة المستخدمين تحتاج تسجيل دخول بحساب حقيقي متصل بالإنترنت</div>';
+    return;
+  }
+  container.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:8px 0;">⏳ جاري تحميل المستخدمين...</div>';
+  try {
+    const snap = await firebase.firestore().collection('roles').get();
+    _rolesListCache = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+  } catch (e) {
+    container.innerHTML = '<div style="font-size:13px;color:var(--danger);padding:8px 0;">تعذّر تحميل المستخدمين — اتأكد إنك أدمن وإن الاتصال شغال</div>';
+    return;
+  }
+  if (!_rolesListCache.length) {
     container.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:8px 0;">لا يوجد مستخدمين بعد — اضغط "إضافة مستخدم"</div>';
     return;
   }
-  container.innerHTML = accounts.map(acc => {
-    const typeLabel   = acc.type === 'admin' ? '👑 أدمن' : (acc.role === 'manager' ? '🧑‍💼 مدير فرع' : '🧑‍💻 كاشير');
-    const branchLabel = acc.type === 'branch' ? ` — ${escHtml(getBranchName(acc.branchId))}` : '';
+  container.innerHTML = _rolesListCache.map(acc => {
+    const typeLabel   = acc.role === 'admin' ? '👑 أدمن' : (acc.role === 'manager' ? '🧑‍💼 مدير فرع' : '🧑‍💻 كاشير');
+    const branchLabel = acc.role !== 'admin' && acc.branchId ? ` — ${escHtml(getBranchName(acc.branchId))}` : '';
     return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--border);border-radius:8px;padding:8px 12px;background:var(--bg);">
       <div style="font-size:13px;"><strong>${escHtml(acc.username)}</strong>
         <span style="color:var(--text-muted);"> — ${typeLabel}${branchLabel}</span></div>
       <div style="display:flex;gap:6px;">
-        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;" onclick="openUserAccountModal('${acc.id}')">✏️</button>
-        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;color:var(--danger);" onclick="deleteUserAccount('${acc.id}')">🗑️</button>
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;" onclick="openUserAccountModal('${escJsAttr(acc.uid)}')">✏️</button>
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;color:var(--danger);" onclick="deleteUserAccount('${escJsAttr(acc.uid)}')">🗑️</button>
       </div>
     </div>`;
   }).join('');
@@ -6173,28 +6196,34 @@ function toggleUserAccountFields() {
   document.getElementById('uaBranchFields').style.display = isAdmin ? 'none' : 'flex';
 }
 
-function openUserAccountModal(id) {
+function openUserAccountModal(uid) {
   const branchSel = document.getElementById('uaBranch');
   branchSel.innerHTML = BRANCH_IDS.map(b => `<option value="${b}">${escHtml(getBranchName(b))}</option>`).join('');
-  document.getElementById('uaEditId').value = id || '';
+  document.getElementById('uaEditId').value = uid || '';
   document.getElementById('uaMsg').innerHTML = '';
-  if (id) {
-    const acc = getAccounts().find(a => a.id === id);
+  const userInp = document.getElementById('uaUsername');
+  const passInp = document.getElementById('uaPassword');
+  if (uid) {
+    const acc = _rolesListCache.find(a => a.uid === uid);
     if (!acc) return;
     document.getElementById('uaModalTitle').textContent = '✏️ تعديل مستخدم';
-    document.getElementById('uaUsername').value = acc.username;
-    document.getElementById('uaPassword').value = '';
-    document.getElementById('uaPassword').placeholder = 'اتركها فارغة للإبقاء على نفس كلمة المرور';
-    document.getElementById('uaType').value = acc.type;
-    if (acc.type === 'branch') {
-      branchSel.value = acc.branchId;
-      document.getElementById('uaRole').value = acc.role || 'cashier';
+    // The username IS the Firebase account's email — it can't change
+    // without creating a new account, and an admin can't set another
+    // user's password from the client SDK (the user changes their own
+    // from Settings, or delete + recreate the account).
+    userInp.value = acc.username; userInp.disabled = true;
+    passInp.value = ''; passInp.disabled = true;
+    passInp.placeholder = 'المستخدم يغيّر كلمة سره بنفسه من الإعدادات';
+    document.getElementById('uaType').value = acc.role === 'admin' ? 'admin' : 'branch';
+    if (acc.role !== 'admin') {
+      branchSel.value = acc.branchId || 'b1';
+      document.getElementById('uaRole').value = acc.role === 'manager' ? 'manager' : 'cashier';
     }
   } else {
     document.getElementById('uaModalTitle').textContent = '➕ إضافة مستخدم';
-    document.getElementById('uaUsername').value = '';
-    document.getElementById('uaPassword').value = '';
-    document.getElementById('uaPassword').placeholder = 'password';
+    userInp.value = ''; userInp.disabled = false;
+    passInp.value = ''; passInp.disabled = false;
+    passInp.placeholder = 'كلمة المرور (6 أحرف على الأقل)';
     document.getElementById('uaType').value = 'branch';
     document.getElementById('uaRole').value = 'cashier';
   }
@@ -6207,73 +6236,105 @@ function closeUserAccountModal() {
 }
 
 async function saveUserAccount() {
-  const id       = document.getElementById('uaEditId').value;
+  const uid      = document.getElementById('uaEditId').value;
   const username = document.getElementById('uaUsername').value.trim().toLowerCase();
   const passRaw  = document.getElementById('uaPassword').value;
   const type     = document.getElementById('uaType').value;
   const branchId = document.getElementById('uaBranch').value;
   const role     = document.getElementById('uaRole').value;
   const msg      = document.getElementById('uaMsg');
+  const showErr  = t => { msg.innerHTML = `<div style="color:var(--danger);font-size:12px;">${t}</div>`; };
 
-  if (!username) { msg.innerHTML = '<div style="color:var(--danger);font-size:12px;">اكتب اسم مستخدم</div>'; return; }
-  if (['admin', 'cashier'].includes(username)) { msg.innerHTML = '<div style="color:var(--danger);font-size:12px;">اسم المستخدم ده محجوز</div>'; return; }
+  const roleValue = type === 'admin' ? 'admin' : (role === 'manager' ? 'manager' : 'cashier');
+  const roleLabel = r => r === 'admin' ? 'أدمن' : (r === 'manager' ? 'مدير فرع' : 'كاشير');
 
-  const accounts = getAccounts();
-  if (accounts.find(a => a.username.toLowerCase() === username && a.id !== id)) {
-    msg.innerHTML = '<div style="color:var(--danger);font-size:12px;">اسم المستخدم ده مستخدم بالفعل</div>'; return;
+  if (uid) {
+    // Edit = update the roles doc only (identity/password are Firebase Auth's)
+    const existing = _rolesListCache.find(a => a.uid === uid);
+    if (!existing) return;
+    try {
+      await firebase.firestore().collection('roles').doc(uid).set({
+        role: roleValue,
+        branchId: roleValue === 'admin' ? null : branchId,
+      }, { merge: true });
+    } catch (e) { showErr('تعذّر الحفظ: ' + e.message); return; }
+    const changes = buildAuditDiff(
+      { role: roleLabel(existing.role), branch: existing.branchId ? getBranchName(existing.branchId) : '-' },
+      { role: roleLabel(roleValue), branch: roleValue !== 'admin' ? getBranchName(branchId) : '-' },
+      { role: 'النوع/الصلاحية', branch: 'الفرع' }
+    );
+    addAuditLog('user.save', `تعديل صلاحيات: ${existing.username} (${roleLabel(roleValue)})`, currentBranch, changes);
+  } else {
+    // Create = real Firebase account (via secondary app) + roles doc
+    if (!username || !/^[a-z0-9._-]+$/.test(username)) { showErr('اسم المستخدم: حروف إنجليزية وأرقام بس (من غير مسافات)'); return; }
+    if (!passRaw || passRaw.length < 6) { showErr('كلمة المرور لازم تكون 6 أحرف على الأقل (شرط Firebase)'); return; }
+    if (_rolesListCache.find(a => a.username === username)) { showErr('اسم المستخدم ده مستخدم بالفعل'); return; }
+    try {
+      await createManagedUser(username, passRaw, roleValue, roleValue === 'admin' ? null : branchId);
+    } catch (e) {
+      if (e && e.code === 'auth/email-already-in-use') showErr('اسم المستخدم ده عليه حساب بالفعل');
+      else if (e && e.code === 'auth/weak-password') showErr('كلمة المرور ضعيفة — 6 أحرف على الأقل');
+      else showErr('تعذّر إنشاء الحساب: ' + (e.message || e));
+      return;
+    }
+    addAuditLog('user.save', `إنشاء مستخدم: ${username} (${roleLabel(roleValue)})`, currentBranch);
   }
 
-  const existing = id ? accounts.find(a => a.id === id) : null;
-  if (!existing && (!passRaw || passRaw.length < 4)) {
-    msg.innerHTML = '<div style="color:var(--danger);font-size:12px;">كلمة المرور لازم تكون 4 أحرف على الأقل</div>'; return;
-  }
-  const password = passRaw && passRaw.length >= 4 ? await hashPass(passRaw) : (existing ? existing.password : '');
-
-  const record = {
-    id: id || ('u_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7)),
-    username, password, type,
-    branchId: type === 'branch' ? branchId : null,
-    role:     type === 'branch' ? role : null,
-  };
-
-  const roleLabel = a => a.type === 'admin' ? 'أدمن' : (a.role === 'manager' ? 'مدير فرع' : 'كاشير');
-  const changes = existing ? buildAuditDiff(
-    { username: existing.username, role: roleLabel(existing), branch: existing.branchId ? getBranchName(existing.branchId) : '-' },
-    { username: record.username, role: roleLabel(record), branch: record.branchId ? getBranchName(record.branchId) : '-' },
-    { username: 'اسم المستخدم', role: 'النوع/الصلاحية', branch: 'الفرع' }
-  ) : null;
-  if (changes && existing.password !== record.password) changes.push({ label: 'كلمة المرور', before: '••••', after: '(تم التغيير)' });
-
-  setAccounts(id ? accounts.map(a => a.id === id ? record : a) : [...accounts, record]);
   renderUserAccountsSettings();
   closeUserAccountModal();
   showMsg('sSettingsMsg', '✅ تم حفظ المستخدم');
-  addAuditLog('user.save', `تم حفظ مستخدم: ${username} (${roleLabel(record)})`, currentBranch, changes);
 }
 
-function deleteUserAccount(id) {
-  const accounts = getAccounts();
-  const acc = accounts.find(a => a.id === id);
+function deleteUserAccount(uid) {
+  const acc = _rolesListCache.find(a => a.uid === uid);
   if (!acc) return;
-  showConfirmModal(`حذف المستخدم "${acc.username}"؟`, function() {
-    setAccounts(accounts.filter(a => a.id !== id));
-    renderUserAccountsSettings();
-    addAuditLog('user.delete', `تم حذف مستخدم: ${acc.username}`, currentBranch);
+  showConfirmModal(`حذف المستخدم "${acc.username}"؟ سيفقد كل صلاحيات الوصول فوراً.`, function() {
+    // Removing the roles doc revokes ALL access server-side (see
+    // firestore.rules). The orphaned Firebase Auth account is harmless —
+    // deleting it needs the Admin SDK, which a client app doesn't have.
+    firebase.firestore().collection('roles').doc(uid).delete()
+      .then(() => {
+        renderUserAccountsSettings();
+        addAuditLog('user.delete', `تم حذف مستخدم: ${acc.username}`, currentBranch);
+        showMsg('sSettingsMsg', '✅ تم حذف المستخدم وسحب صلاحياته');
+      })
+      .catch(e => showMsg('sSettingsMsg', 'تعذّر الحذف: ' + e.message, 'danger'));
   });
 }
 
 function changePass(role) {
-  const users = getUsers();
   const curr = document.getElementById('sCurrPass').value;
   const np   = document.getElementById('sNewPass').value;
+  const fu   = (typeof firebase !== 'undefined' && firebase.apps.length) ? firebase.auth().currentUser : null;
+
+  if (fu && fu.email) {
+    // Real account: reauthenticate then update in Firebase Auth
+    if (np.length < 6) { showMsg('sAdminMsg','كلمة المرور لازم تكون 6 أحرف على الأقل','danger'); return; }
+    const cred = firebase.auth.EmailAuthProvider.credential(fu.email, curr);
+    fu.reauthenticateWithCredential(cred)
+      .then(() => fu.updatePassword(np))
+      .then(() => {
+        showMsg('sAdminMsg','✅ تم تغيير كلمة المرور');
+        document.getElementById('sCurrPass').value = '';
+        document.getElementById('sNewPass').value  = '';
+      })
+      .catch(e => {
+        if (e && (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential'))
+          showMsg('sAdminMsg','كلمة المرور الحالية غلط','danger');
+        else showMsg('sAdminMsg','تعذّر التغيير: ' + e.message,'danger');
+      });
+    return;
+  }
+
+  // Legacy/offline session: local admin password on this device
+  const users = getUsers();
   checkPass(curr, users.admin).then(ok => {
     if (!ok) { showMsg('sAdminMsg','كلمة المرور الحالية غلط','danger'); return; }
     if (np.length < 4) { showMsg('sAdminMsg','يجب أن تكون 4 أحرف على الأقل','danger'); return; }
     hashPass(np).then(hashed => {
       users.admin = hashed;
       setUsersLocal(users);
-      // Password stays local only — never synced to Firestore (see CLAUDE.md security notes)
-      showMsg('sAdminMsg','✅ تم تغيير كلمة المرور');
+      showMsg('sAdminMsg','✅ تم تغيير كلمة المرور (محلياً)');
       document.getElementById('sCurrPass').value = '';
       document.getElementById('sNewPass').value  = '';
     });
@@ -6402,8 +6463,104 @@ let _db            = null;
 let _fbReady       = false;
 let _suspendCache  = [];
 
+// ═══════════════════════════════════════════════════════════════
+// REAL AUTHENTICATION — Firebase email/password + roles/{uid}
+// Replaces the DIY localStorage-password system (kept below only as
+// an OFFLINE fallback). Server-side enforcement lives in
+// firestore.rules: an account without a roles/{uid} doc has no
+// Firestore access at all.
+// ═══════════════════════════════════════════════════════════════
+// This exact account is always admin (mirrors isOwner() in the rules)
+// — it bootstraps the system before any roles exist.
+const OWNER_EMAIL = 'shekovichy@gmail.com';
+// Staff log in with short usernames; Firebase Auth requires emails, so
+// usernames map to a synthetic internal domain (never receives mail).
+const AUTH_EMAIL_DOMAIN = 'voodo-pos.local';
+function usernameToEmail(u) {
+  u = String(u || '').trim().toLowerCase();
+  return u.includes('@') ? u : (u + '@' + AUTH_EMAIL_DOMAIN);
+}
+function emailToUsername(e) {
+  e = String(e || '');
+  return e.endsWith('@' + AUTH_EMAIL_DOMAIN) ? e.slice(0, e.indexOf('@')) : e;
+}
 
-// ── PASSWORD SECURITY ─────────────────────────────────────────
+// Resolve the signed-in Firebase user's role and enter the matching
+// session. Role source: owner email → admin; otherwise roles/{uid}.
+// The resolved role is cached in localStorage so a POS device that
+// restarts offline can resume its session (Firebase Auth itself
+// persists the sign-in locally).
+async function resolveRoleAndEnter(fbUser) {
+  let rec = null;
+  if ((fbUser.email || '').toLowerCase() === OWNER_EMAIL) {
+    rec = { role: 'admin', username: emailToUsername(fbUser.email), branchId: null };
+  } else {
+    const snap = await firebase.firestore().collection('roles').doc(fbUser.uid).get();
+    if (snap.exists) rec = snap.data();
+  }
+  if (!rec) {
+    await firebase.auth().signOut();
+    throw new Error('no-role');
+  }
+  rec.uid = fbUser.uid;
+  DB.s('pos_role_cache', rec);
+  _enterSessionByRole(rec);
+  return rec;
+}
+
+function _enterSessionByRole(rec) {
+  if (rec.role === 'admin') {
+    _enterAdminSession(`تسجيل دخول: ${rec.username}`);
+  } else {
+    _enterBranchSession(rec.branchId || 'b1', rec.role === 'manager' ? 'manager' : 'cashier', rec.username);
+  }
+}
+
+// Revocation check for cached sessions: if an admin deleted this
+// user's role doc while the device was away, sign it out on resume.
+function _verifyRoleStillValid(fbUser) {
+  if ((fbUser.email || '').toLowerCase() === OWNER_EMAIL) return;
+  firebase.firestore().collection('roles').doc(fbUser.uid).get()
+    .then(snap => {
+      if (!snap.exists) {
+        localStorage.removeItem('pos_role_cache');
+        firebase.auth().signOut().finally(() => location.reload());
+      } else {
+        const rec = snap.data(); rec.uid = fbUser.uid;
+        DB.s('pos_role_cache', rec);
+      }
+    })
+    .catch(() => {}); // offline — keep cached session
+}
+
+// ── ADMIN USER MANAGEMENT (Firebase accounts + roles docs) ──────
+// Creating a user with the primary auth instance would sign the admin
+// OUT and the new user IN (client-SDK behavior) — so account creation
+// runs on a throwaway secondary app instance, and the roles doc is
+// written from the still-signed-in admin session.
+function _secondaryAuth() {
+  const existing = firebase.apps.find(a => a.name === 'user-mgmt');
+  const app = existing || firebase.initializeApp(FIREBASE_CONFIG, 'user-mgmt');
+  return app.auth();
+}
+async function createManagedUser(username, password, role, branchId) {
+  const email = usernameToEmail(username);
+  const sec = _secondaryAuth();
+  const cred = await sec.createUserWithEmailAndPassword(email, password);
+  const uid = cred.user.uid;
+  await sec.signOut();
+  await firebase.firestore().collection('roles').doc(uid).set({
+    username: username.trim().toLowerCase(),
+    email,
+    role,
+    branchId: branchId || null,
+    createdAt: Date.now(),
+    createdBy: (firebase.auth().currentUser || {}).uid || null
+  });
+  return uid;
+}
+
+// ── PASSWORD SECURITY (legacy local accounts — offline fallback) ──
 async function hashPass(plain) {
   const data = new TextEncoder().encode(plain + 'voodo-pos-salt');
   const buf  = await crypto.subtle.digest('SHA-256', data);
@@ -6449,8 +6606,11 @@ function initFirebase() {
       fbEl.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:10px;background:#fef3c7;color:#92400e;';
       fbEl.textContent   = 'جاري الاتصال...';
     }
-    // Anonymous auth — required for Firestore Security Rules
-    firebase.auth().signInAnonymously().catch(e => console.warn('Firebase Auth:', e.message));
+    // NOTE: no anonymous sign-in anymore — the user is already signed in
+    // with a real email/password account by the time initFirebase() runs
+    // (see doLogin/resolveRoleAndEnter). In legacy-offline sessions there
+    // is no Firebase auth at all: the listeners below fail permission
+    // checks and every err handler falls back to localStorage.
 
     _db.collection('pos_data').doc('suspended')
       .onSnapshot(snap => {
@@ -7053,6 +7213,38 @@ function resumeFromModal(id) {
   document.getElementById('resumeModal').classList.add('hidden');
   activateSuspended(id);
 }
+
+// ═══════════════════════════════════════════════════════════════
+// AUTH BOOTSTRAP — runs once at page load (this file executes near
+// the end of the bundle, so every function it needs is defined).
+// Initializes the Firebase app + auth listener so a device that is
+// already signed in resumes its session automatically instead of
+// showing the login page on every restart. The async callback fires
+// after the whole bundle has executed.
+// ═══════════════════════════════════════════════════════════════
+(function initAuthLayer() {
+  if (!FIREBASE_CONFIG.projectId || typeof firebase === 'undefined') return;
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    firebase.auth().onAuthStateChanged(fbUser => {
+      if (!fbUser || currentUser) return; // not signed in, or already in a session
+      const cached = DB.g('pos_role_cache', null);
+      if (cached && cached.uid === fbUser.uid) {
+        // Instant resume from cache (works offline), then re-verify the
+        // role against the server in the background (revocation check).
+        _enterSessionByRole(cached);
+        _verifyRoleStillValid(fbUser);
+      } else {
+        resolveRoleAndEnter(fbUser).catch(e => {
+          if (e && e.message === 'no-role') console.warn('Auth: account has no role — signed out.');
+          else console.error('Auth resume error:', e);
+        });
+      }
+    });
+  } catch (e) {
+    console.error('Auth init error:', e);
+  }
+})();
 
 
 // ══════════════════════════════════════════════

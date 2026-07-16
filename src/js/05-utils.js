@@ -191,27 +191,64 @@ function _enterBranchSession(branchId, role, username) {
   }
 }
 
+function _showLoginError(msg) {
+  const el = document.getElementById('loginError');
+  if (msg) el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
 async function doLogin() {
   const user = document.getElementById('loginUser').value.trim().toLowerCase();
   const pass = document.getElementById('loginPass').value;
-  const users = getUsers();
   document.getElementById('loginError').classList.add('hidden');
-  if (!pass) { document.getElementById('loginError').textContent = 'أدخل كلمة المرور'; document.getElementById('loginError').classList.remove('hidden'); return; }
+  if (!pass) { _showLoginError('أدخل كلمة المرور'); return; }
 
-  // First-run: no admin password set yet → show setup
-  if (!users.admin) {
-    showFirstRunSetup();
-    return;
+  // ── Real authentication first: Firebase email/password ──────────
+  // Usernames map to a synthetic email (see usernameToEmail). The role
+  // comes from roles/{uid} (or the hardcoded owner email) and is what
+  // firestore.rules actually enforces server-side.
+  const online = navigator.onLine !== false;
+  if (online && typeof firebase !== 'undefined' && FIREBASE_CONFIG.projectId) {
+    try {
+      const cred = await firebase.auth().signInWithEmailAndPassword(usernameToEmail(user), pass);
+      await resolveRoleAndEnter(cred.user);
+      return;
+    } catch (e) {
+      if (e && e.message === 'no-role') {
+        _showLoginError('الحساب موجود لكن ملوش صلاحية بعد — كلّم المدير يضيفك من "إدارة المستخدمين"');
+        return;
+      }
+      if (e && e.code === 'auth/too-many-requests') {
+        _showLoginError('محاولات كتير غلط — استنى شوية وحاول تاني');
+        return;
+      }
+      // auth/network-request-failed → fall through to the offline path.
+      // auth/invalid-credential etc. → also fall through: during the
+      // transition, devices may still hold legacy-only accounts. A legacy
+      // session has NO Firebase token, so firestore.rules block all cloud
+      // access anyway — it's local-only, not a bypass.
+    }
   }
 
-  if (user === 'admin' && await checkPass(pass, users.admin)) {
+  // ── Legacy/offline fallback (local credentials on THIS device) ──
+  if (await _legacyLogin(user, pass)) return;
+  _showLoginError('بيانات الدخول غير صحيحة');
+}
+
+// The old localStorage-credential chain, kept for offline use and for
+// the transition period before every device moves to real accounts.
+// Sessions entered this way have no Firebase auth token, so once the
+// v2 firestore.rules are published they can only see local data.
+async function _legacyLogin(user, pass) {
+  const users = getUsers();
+
+  if (user === 'admin' && users.admin && await checkPass(pass, users.admin)) {
     await upgradePassIfNeeded(pass, users.admin, 'admin');
-    _enterAdminSession('تسجيل دخول: admin');
-    return;
+    _enterAdminSession('تسجيل دخول (محلي): admin');
+    return true;
   }
 
-  if (user === 'cashier' && pass === users.cashier) {
-    // Legacy cashier (all branches)
+  if (user === 'cashier' && users.cashier && pass === users.cashier) {
     currentUser = 'cashier';
     isBranchManager = false;
     document.getElementById('loginPage').classList.add('hidden');
@@ -222,36 +259,27 @@ async function doLogin() {
     updateClock();
     setInterval(updateClock, 30000);
     setTimeout(function(){ checkForApprovedCarts(); }, 1000);
-    return;
+    return true;
   }
 
-  // New admin-managed accounts (extra admins + branch cashiers/managers) —
-  // synced via Firestore, so this works on any device, unlike the legacy
-  // per-branch slot below which is local-only.
   for (const acc of getAccounts()) {
     if ((acc.username || '').toLowerCase() === user && await checkPass(pass, acc.password)) {
-      if (acc.type === 'admin') {
-        _enterAdminSession(`تسجيل دخول: ${user}`);
-      } else {
-        _enterBranchSession(acc.branchId, acc.role, user);
-      }
-      return;
+      if (acc.type === 'admin') _enterAdminSession(`تسجيل دخول (محلي): ${user}`);
+      else _enterBranchSession(acc.branchId, acc.role, user);
+      return true;
     }
   }
 
-  // Legacy per-branch single-slot login (kept as a fallback for devices that
-  // already have real credentials cached locally from before "إدارة المستخدمين" existed)
   const branchUsers = getBranchUsers();
   for (const b of BRANCH_IDS) {
     if (branchUsers[b] &&
         user === (branchUsers[b].username || '').toLowerCase() &&
         await checkPass(pass, branchUsers[b].password)) {
       _enterBranchSession(b, branchUsers[b].role, user);
-      return;
+      return true;
     }
   }
-
-  document.getElementById('loginError').classList.remove('hidden');
+  return false;
 }
 
 
@@ -454,6 +482,10 @@ setTimeout(() => checkAutoBackup(false), 5000);
 function logout() {
   showConfirmModal('هل تريد تسجيل الخروج؟', function() {
     currentUser = null; isBranchManager = false; cart = [];
+    // End the real Firebase session too, and drop the cached role so the
+    // auth bootstrap doesn't auto-resume on the next page load.
+    localStorage.removeItem('pos_role_cache');
+    try { if (typeof firebase !== 'undefined' && firebase.apps.length) firebase.auth().signOut(); } catch(e) {}
     document.getElementById('loginPage').classList.remove('hidden');
     document.getElementById('cashierView').classList.add('hidden');
     document.getElementById('managerView').classList.add('hidden');

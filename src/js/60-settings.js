@@ -2,48 +2,39 @@
 // SETTINGS
 // ══════════════════════════════════════════════
 // ── USER ACCOUNTS (admin-managed) ──────────────────────────────
-// One-time import of any real credentials already sitting in the old
-// per-branch-slot storage on THIS device, so whichever device the admin
-// used to set up real branch logins before doesn't lose them — they get
-// published to Firestore (pos_data/accounts) the first time this renders.
-function _migrateLegacyBranchUsersOnce() {
-  if (DB.g('pos_accounts_migrated_v1', false)) return;
-  DB.s('pos_accounts_migrated_v1', true);
-  const legacy = getBranchUsers();
-  const accounts = getAccounts();
-  const additions = [];
-  BRANCH_IDS.forEach(b => {
-    const lu = legacy[b];
-    if (lu && lu.username && lu.password &&
-        !accounts.find(a => a.username.toLowerCase() === (lu.username || '').toLowerCase())) {
-      additions.push({
-        id: 'u_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7) + '_' + b,
-        username: lu.username, password: lu.password,
-        type: 'branch', branchId: b, role: lu.role || 'cashier',
-      });
-    }
-  });
-  if (additions.length) setAccounts([...accounts, ...additions]);
-}
-
-function renderUserAccountsSettings() {
-  _migrateLegacyBranchUsersOnce();
+// User management now runs on REAL Firebase accounts: each staff member
+// is a Firebase Auth user plus a roles/{uid} doc (the thing
+// firestore.rules actually enforces). The legacy pos_data/accounts doc
+// is no longer written — it survives only as an offline login fallback.
+let _rolesListCache = [];
+async function renderUserAccountsSettings() {
   const container = document.getElementById('userAccountsContainer');
   if (!container) return;
-  const accounts = getAccounts();
-  if (!accounts.length) {
+  if (!_fbReady || !firebase.auth().currentUser) {
+    container.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:8px 0;">إدارة المستخدمين تحتاج تسجيل دخول بحساب حقيقي متصل بالإنترنت</div>';
+    return;
+  }
+  container.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:8px 0;">⏳ جاري تحميل المستخدمين...</div>';
+  try {
+    const snap = await firebase.firestore().collection('roles').get();
+    _rolesListCache = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+  } catch (e) {
+    container.innerHTML = '<div style="font-size:13px;color:var(--danger);padding:8px 0;">تعذّر تحميل المستخدمين — اتأكد إنك أدمن وإن الاتصال شغال</div>';
+    return;
+  }
+  if (!_rolesListCache.length) {
     container.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:8px 0;">لا يوجد مستخدمين بعد — اضغط "إضافة مستخدم"</div>';
     return;
   }
-  container.innerHTML = accounts.map(acc => {
-    const typeLabel   = acc.type === 'admin' ? '👑 أدمن' : (acc.role === 'manager' ? '🧑‍💼 مدير فرع' : '🧑‍💻 كاشير');
-    const branchLabel = acc.type === 'branch' ? ` — ${escHtml(getBranchName(acc.branchId))}` : '';
+  container.innerHTML = _rolesListCache.map(acc => {
+    const typeLabel   = acc.role === 'admin' ? '👑 أدمن' : (acc.role === 'manager' ? '🧑‍💼 مدير فرع' : '🧑‍💻 كاشير');
+    const branchLabel = acc.role !== 'admin' && acc.branchId ? ` — ${escHtml(getBranchName(acc.branchId))}` : '';
     return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--border);border-radius:8px;padding:8px 12px;background:var(--bg);">
       <div style="font-size:13px;"><strong>${escHtml(acc.username)}</strong>
         <span style="color:var(--text-muted);"> — ${typeLabel}${branchLabel}</span></div>
       <div style="display:flex;gap:6px;">
-        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;" onclick="openUserAccountModal('${acc.id}')">✏️</button>
-        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;color:var(--danger);" onclick="deleteUserAccount('${acc.id}')">🗑️</button>
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;" onclick="openUserAccountModal('${escJsAttr(acc.uid)}')">✏️</button>
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;color:var(--danger);" onclick="deleteUserAccount('${escJsAttr(acc.uid)}')">🗑️</button>
       </div>
     </div>`;
   }).join('');
@@ -54,28 +45,34 @@ function toggleUserAccountFields() {
   document.getElementById('uaBranchFields').style.display = isAdmin ? 'none' : 'flex';
 }
 
-function openUserAccountModal(id) {
+function openUserAccountModal(uid) {
   const branchSel = document.getElementById('uaBranch');
   branchSel.innerHTML = BRANCH_IDS.map(b => `<option value="${b}">${escHtml(getBranchName(b))}</option>`).join('');
-  document.getElementById('uaEditId').value = id || '';
+  document.getElementById('uaEditId').value = uid || '';
   document.getElementById('uaMsg').innerHTML = '';
-  if (id) {
-    const acc = getAccounts().find(a => a.id === id);
+  const userInp = document.getElementById('uaUsername');
+  const passInp = document.getElementById('uaPassword');
+  if (uid) {
+    const acc = _rolesListCache.find(a => a.uid === uid);
     if (!acc) return;
     document.getElementById('uaModalTitle').textContent = '✏️ تعديل مستخدم';
-    document.getElementById('uaUsername').value = acc.username;
-    document.getElementById('uaPassword').value = '';
-    document.getElementById('uaPassword').placeholder = 'اتركها فارغة للإبقاء على نفس كلمة المرور';
-    document.getElementById('uaType').value = acc.type;
-    if (acc.type === 'branch') {
-      branchSel.value = acc.branchId;
-      document.getElementById('uaRole').value = acc.role || 'cashier';
+    // The username IS the Firebase account's email — it can't change
+    // without creating a new account, and an admin can't set another
+    // user's password from the client SDK (the user changes their own
+    // from Settings, or delete + recreate the account).
+    userInp.value = acc.username; userInp.disabled = true;
+    passInp.value = ''; passInp.disabled = true;
+    passInp.placeholder = 'المستخدم يغيّر كلمة سره بنفسه من الإعدادات';
+    document.getElementById('uaType').value = acc.role === 'admin' ? 'admin' : 'branch';
+    if (acc.role !== 'admin') {
+      branchSel.value = acc.branchId || 'b1';
+      document.getElementById('uaRole').value = acc.role === 'manager' ? 'manager' : 'cashier';
     }
   } else {
     document.getElementById('uaModalTitle').textContent = '➕ إضافة مستخدم';
-    document.getElementById('uaUsername').value = '';
-    document.getElementById('uaPassword').value = '';
-    document.getElementById('uaPassword').placeholder = 'password';
+    userInp.value = ''; userInp.disabled = false;
+    passInp.value = ''; passInp.disabled = false;
+    passInp.placeholder = 'كلمة المرور (6 أحرف على الأقل)';
     document.getElementById('uaType').value = 'branch';
     document.getElementById('uaRole').value = 'cashier';
   }
@@ -88,73 +85,105 @@ function closeUserAccountModal() {
 }
 
 async function saveUserAccount() {
-  const id       = document.getElementById('uaEditId').value;
+  const uid      = document.getElementById('uaEditId').value;
   const username = document.getElementById('uaUsername').value.trim().toLowerCase();
   const passRaw  = document.getElementById('uaPassword').value;
   const type     = document.getElementById('uaType').value;
   const branchId = document.getElementById('uaBranch').value;
   const role     = document.getElementById('uaRole').value;
   const msg      = document.getElementById('uaMsg');
+  const showErr  = t => { msg.innerHTML = `<div style="color:var(--danger);font-size:12px;">${t}</div>`; };
 
-  if (!username) { msg.innerHTML = '<div style="color:var(--danger);font-size:12px;">اكتب اسم مستخدم</div>'; return; }
-  if (['admin', 'cashier'].includes(username)) { msg.innerHTML = '<div style="color:var(--danger);font-size:12px;">اسم المستخدم ده محجوز</div>'; return; }
+  const roleValue = type === 'admin' ? 'admin' : (role === 'manager' ? 'manager' : 'cashier');
+  const roleLabel = r => r === 'admin' ? 'أدمن' : (r === 'manager' ? 'مدير فرع' : 'كاشير');
 
-  const accounts = getAccounts();
-  if (accounts.find(a => a.username.toLowerCase() === username && a.id !== id)) {
-    msg.innerHTML = '<div style="color:var(--danger);font-size:12px;">اسم المستخدم ده مستخدم بالفعل</div>'; return;
+  if (uid) {
+    // Edit = update the roles doc only (identity/password are Firebase Auth's)
+    const existing = _rolesListCache.find(a => a.uid === uid);
+    if (!existing) return;
+    try {
+      await firebase.firestore().collection('roles').doc(uid).set({
+        role: roleValue,
+        branchId: roleValue === 'admin' ? null : branchId,
+      }, { merge: true });
+    } catch (e) { showErr('تعذّر الحفظ: ' + e.message); return; }
+    const changes = buildAuditDiff(
+      { role: roleLabel(existing.role), branch: existing.branchId ? getBranchName(existing.branchId) : '-' },
+      { role: roleLabel(roleValue), branch: roleValue !== 'admin' ? getBranchName(branchId) : '-' },
+      { role: 'النوع/الصلاحية', branch: 'الفرع' }
+    );
+    addAuditLog('user.save', `تعديل صلاحيات: ${existing.username} (${roleLabel(roleValue)})`, currentBranch, changes);
+  } else {
+    // Create = real Firebase account (via secondary app) + roles doc
+    if (!username || !/^[a-z0-9._-]+$/.test(username)) { showErr('اسم المستخدم: حروف إنجليزية وأرقام بس (من غير مسافات)'); return; }
+    if (!passRaw || passRaw.length < 6) { showErr('كلمة المرور لازم تكون 6 أحرف على الأقل (شرط Firebase)'); return; }
+    if (_rolesListCache.find(a => a.username === username)) { showErr('اسم المستخدم ده مستخدم بالفعل'); return; }
+    try {
+      await createManagedUser(username, passRaw, roleValue, roleValue === 'admin' ? null : branchId);
+    } catch (e) {
+      if (e && e.code === 'auth/email-already-in-use') showErr('اسم المستخدم ده عليه حساب بالفعل');
+      else if (e && e.code === 'auth/weak-password') showErr('كلمة المرور ضعيفة — 6 أحرف على الأقل');
+      else showErr('تعذّر إنشاء الحساب: ' + (e.message || e));
+      return;
+    }
+    addAuditLog('user.save', `إنشاء مستخدم: ${username} (${roleLabel(roleValue)})`, currentBranch);
   }
 
-  const existing = id ? accounts.find(a => a.id === id) : null;
-  if (!existing && (!passRaw || passRaw.length < 4)) {
-    msg.innerHTML = '<div style="color:var(--danger);font-size:12px;">كلمة المرور لازم تكون 4 أحرف على الأقل</div>'; return;
-  }
-  const password = passRaw && passRaw.length >= 4 ? await hashPass(passRaw) : (existing ? existing.password : '');
-
-  const record = {
-    id: id || ('u_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7)),
-    username, password, type,
-    branchId: type === 'branch' ? branchId : null,
-    role:     type === 'branch' ? role : null,
-  };
-
-  const roleLabel = a => a.type === 'admin' ? 'أدمن' : (a.role === 'manager' ? 'مدير فرع' : 'كاشير');
-  const changes = existing ? buildAuditDiff(
-    { username: existing.username, role: roleLabel(existing), branch: existing.branchId ? getBranchName(existing.branchId) : '-' },
-    { username: record.username, role: roleLabel(record), branch: record.branchId ? getBranchName(record.branchId) : '-' },
-    { username: 'اسم المستخدم', role: 'النوع/الصلاحية', branch: 'الفرع' }
-  ) : null;
-  if (changes && existing.password !== record.password) changes.push({ label: 'كلمة المرور', before: '••••', after: '(تم التغيير)' });
-
-  setAccounts(id ? accounts.map(a => a.id === id ? record : a) : [...accounts, record]);
   renderUserAccountsSettings();
   closeUserAccountModal();
   showMsg('sSettingsMsg', '✅ تم حفظ المستخدم');
-  addAuditLog('user.save', `تم حفظ مستخدم: ${username} (${roleLabel(record)})`, currentBranch, changes);
 }
 
-function deleteUserAccount(id) {
-  const accounts = getAccounts();
-  const acc = accounts.find(a => a.id === id);
+function deleteUserAccount(uid) {
+  const acc = _rolesListCache.find(a => a.uid === uid);
   if (!acc) return;
-  showConfirmModal(`حذف المستخدم "${acc.username}"؟`, function() {
-    setAccounts(accounts.filter(a => a.id !== id));
-    renderUserAccountsSettings();
-    addAuditLog('user.delete', `تم حذف مستخدم: ${acc.username}`, currentBranch);
+  showConfirmModal(`حذف المستخدم "${acc.username}"؟ سيفقد كل صلاحيات الوصول فوراً.`, function() {
+    // Removing the roles doc revokes ALL access server-side (see
+    // firestore.rules). The orphaned Firebase Auth account is harmless —
+    // deleting it needs the Admin SDK, which a client app doesn't have.
+    firebase.firestore().collection('roles').doc(uid).delete()
+      .then(() => {
+        renderUserAccountsSettings();
+        addAuditLog('user.delete', `تم حذف مستخدم: ${acc.username}`, currentBranch);
+        showMsg('sSettingsMsg', '✅ تم حذف المستخدم وسحب صلاحياته');
+      })
+      .catch(e => showMsg('sSettingsMsg', 'تعذّر الحذف: ' + e.message, 'danger'));
   });
 }
 
 function changePass(role) {
-  const users = getUsers();
   const curr = document.getElementById('sCurrPass').value;
   const np   = document.getElementById('sNewPass').value;
+  const fu   = (typeof firebase !== 'undefined' && firebase.apps.length) ? firebase.auth().currentUser : null;
+
+  if (fu && fu.email) {
+    // Real account: reauthenticate then update in Firebase Auth
+    if (np.length < 6) { showMsg('sAdminMsg','كلمة المرور لازم تكون 6 أحرف على الأقل','danger'); return; }
+    const cred = firebase.auth.EmailAuthProvider.credential(fu.email, curr);
+    fu.reauthenticateWithCredential(cred)
+      .then(() => fu.updatePassword(np))
+      .then(() => {
+        showMsg('sAdminMsg','✅ تم تغيير كلمة المرور');
+        document.getElementById('sCurrPass').value = '';
+        document.getElementById('sNewPass').value  = '';
+      })
+      .catch(e => {
+        if (e && (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential'))
+          showMsg('sAdminMsg','كلمة المرور الحالية غلط','danger');
+        else showMsg('sAdminMsg','تعذّر التغيير: ' + e.message,'danger');
+      });
+    return;
+  }
+
+  // Legacy/offline session: local admin password on this device
+  const users = getUsers();
   checkPass(curr, users.admin).then(ok => {
     if (!ok) { showMsg('sAdminMsg','كلمة المرور الحالية غلط','danger'); return; }
     if (np.length < 4) { showMsg('sAdminMsg','يجب أن تكون 4 أحرف على الأقل','danger'); return; }
     hashPass(np).then(hashed => {
       users.admin = hashed;
       setUsersLocal(users);
-      // Password stays local only — never synced to Firestore (see CLAUDE.md security notes)
-      showMsg('sAdminMsg','✅ تم تغيير كلمة المرور');
+      showMsg('sAdminMsg','✅ تم تغيير كلمة المرور (محلياً)');
       document.getElementById('sCurrPass').value = '';
       document.getElementById('sNewPass').value  = '';
     });

@@ -1,5 +1,20 @@
 # VOODO ERP — CLAUDE.md
 
+## 🔐 الأمان والأدوار (v2 — Firebase Auth حقيقي)
+النظام اتنقل من الباسوردات المحلية (localStorage) لـ **Firebase Authentication** (email/password) + مجموعة `roles/{uid}` في Firestore:
+- **الدخول**: اليوزرنيم بيتحول لإيميل داخلي (`branch1@voodo-pos.local`) — شوف `usernameToEmail()` في `65-firebase.js`. الإيميل `shekovichy@gmail.com` هو الـ **owner** — أدمن دايماً حتى من غير role doc (hardcoded في الكود وفي `firestore.rules`).
+- **الأدوار**: `roles/{uid} = { username, email, role: admin|manager|cashier, branchId }` — الأدمن بيديرها من "إدارة المستخدمين" (بتنشئ حساب Firebase حقيقي عبر secondary app + role doc). حذف المستخدم = حذف الـ role doc (بيسحب كل الصلاحيات فوراً — حساب الـ Auth اليتيم مش خطر).
+- **الإنفاذ الحقيقي في `firestore.rules`**: مفيش role = مفيش وصول نهائياً. `settings` و`accounts` كتابة أدمن بس. `pos_data/auth` مقفول تماماً.
+- **الدخول المحلي القديم** (`_legacyLogin` في `05-utils.js`) شغال **كـ fallback أوفلاين بس** — جلسة من غير Firebase token، القواعد بتمنعها من أي وصول سحابي.
+- **قيد معروف**: الأدمن مش بيقدر يغيّر باسورد مستخدم تاني (محتاج Admin SDK) — المستخدم بيغيّر باسورده بنفسه من الإعدادات، أو الأدمن يحذف الحساب وينشئ واحد جديد باسم مختلف.
+
+### ⚠️ خطوات تفعيل الأمان (مطلوبة مرة واحدة — بالترتيب ده بالظبط)
+النشر بالترتيب الغلط هيقفل كل الأجهزة:
+1. Firebase Console → Authentication → Sign-in method → فعّل **Email/Password**.
+2. Authentication → Users → **Add user**: `shekovichy@gmail.com` + باسورد قوي (ده حساب الـ owner).
+3. انشر العميل الجديد على main واتأكد إن دخول الـ owner شغال وإنشاء حسابات الموظفين من "إدارة المستخدمين" شغال.
+4. **بعدها بس** انشر `firestore.rules` الجديدة (اختبرها في Rules Playground الأول — شوف قسم Firestore Rules تحت). من اللحظة دي العملاء المجهولين القدام هيتقفلوا — وده الهدف.
+
 ## ⚠️ لا تقرأ أبداً
 - `index.html` — مُولَّد تلقائياً بـ build.py (حجمه 500 KB+)
 - `src/js/app.js` — placeholder فقط، الكود الحقيقي في الملفات المرقمة
