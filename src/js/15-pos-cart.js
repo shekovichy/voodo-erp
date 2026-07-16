@@ -29,7 +29,10 @@ function changeQty(code, d) {
 function removeFromCart(code) { cart = cart.filter(x => x.code !== code); renderCart(); }
 
 function clearCart() {
-  if (cart.length && !confirm('مسح الفاتورة؟')) return;
+  if (!cart.length) { _clearCartConfirmed(); return; }
+  showConfirmModal('مسح الفاتورة؟', _clearCartConfirmed);
+}
+function _clearCartConfirmed() {
   cart = [];
   cart._adminDiscount = 0;
   cart._adminDiscountNote = '';

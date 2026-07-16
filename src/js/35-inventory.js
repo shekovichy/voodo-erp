@@ -120,11 +120,12 @@ function saveProduct() {
 }
 
 function deleteProduct(code) {
-  if (!confirm('حذف هذا المنتج؟')) return;
-  const prod = getInv().find(x => x.code === code);
-  setInv(getInv().filter(x => x.code !== code));
-  if (prod) addAuditLog('inv.delete', `حذف: ${prod.name} (${prod.code})`, null);
-  renderInventory();
+  showConfirmModal('حذف هذا المنتج؟', function() {
+    const prod = getInv().find(x => x.code === code);
+    setInv(getInv().filter(x => x.code !== code));
+    if (prod) addAuditLog('inv.delete', `حذف: ${prod.name} (${prod.code})`, null);
+    renderInventory();
+  });
 }
 
 function importExcel(e) {

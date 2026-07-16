@@ -3616,11 +3616,11 @@ function loadDemoAndEnter() {
 
   // ── 7. CRM CUSTOMERS ─────────────────────────
   const customers = [
-    { id:'C001', name:'أحمد محمود الشريف',  phone:'01001111111', email:'ahmed@email.com',   points:450,  totalSpent:18500, visits:7,  createdAt: new Date(now-90*86400000).toISOString() },
-    { id:'C002', name:'منى عبدالله حسن',    phone:'01112222222', email:'mona@email.com',    points:280,  totalSpent:11200, visits:4,  createdAt: new Date(now-60*86400000).toISOString() },
-    { id:'C003', name:'كريم سامي فؤاد',     phone:'01223333333', email:'karim@email.com',   points:620,  totalSpent:24800, visits:10, createdAt: new Date(now-120*86400000).toISOString() },
-    { id:'C004', name:'هبة محمد النجار',    phone:'01034444444', email:'heba@email.com',    points:150,  totalSpent:6000,  visits:2,  createdAt: new Date(now-30*86400000).toISOString() },
-    { id:'C005', name:'طارق علي إبراهيم',   phone:'01155555555', email:'tarek@email.com',   points:890,  totalSpent:35600, visits:15, createdAt: new Date(now-180*86400000).toISOString() },
+    { id:'C001', name:'أحمد محمود الشريف',  phone:'01001111111', email:'ahmed@email.com',   loyaltyPoints:450,  totalSpent:18500, visits:7,  createdAt: new Date(now-90*86400000).toISOString() },
+    { id:'C002', name:'منى عبدالله حسن',    phone:'01112222222', email:'mona@email.com',    loyaltyPoints:280,  totalSpent:11200, visits:4,  createdAt: new Date(now-60*86400000).toISOString() },
+    { id:'C003', name:'كريم سامي فؤاد',     phone:'01223333333', email:'karim@email.com',   loyaltyPoints:620,  totalSpent:24800, visits:10, createdAt: new Date(now-120*86400000).toISOString() },
+    { id:'C004', name:'هبة محمد النجار',    phone:'01034444444', email:'heba@email.com',    loyaltyPoints:150,  totalSpent:6000,  visits:2,  createdAt: new Date(now-30*86400000).toISOString() },
+    { id:'C005', name:'طارق علي إبراهيم',   phone:'01155555555', email:'tarek@email.com',   loyaltyPoints:890,  totalSpent:35600, visits:15, createdAt: new Date(now-180*86400000).toISOString() },
   ];
   DB.s('pos_customers', customers);
 
@@ -3654,7 +3654,7 @@ function _showDemoBanner() {
   bar.id = 'demoBanner';
   bar.innerHTML = `
     <span>⚡ وضع الديمو — البيانات تجريبية</span>
-    <a href="#" onclick="if(confirm('مسح كل بيانات الديمو والبدء من جديد؟')){localStorage.clear();location.reload();}return false;"
+    <a href="#" onclick="resetDemoData();return false;"
        style="color:#fbbf24;margin-right:16px;font-weight:700;text-decoration:underline;">مسح الديمو</a>
   `;
   bar.style.cssText = `
@@ -3668,6 +3668,13 @@ function _showDemoBanner() {
   document.body.prepend(bar);
   // Push content down
   document.body.style.paddingTop = '35px';
+}
+
+function resetDemoData() {
+  showConfirmModal('مسح كل بيانات الديمو والبدء من جديد؟', function() {
+    localStorage.clear();
+    location.reload();
+  });
 }
 
 // ══════════════════════════════════════════════
@@ -4124,15 +4131,16 @@ setTimeout(() => checkAutoBackup(false), 5000);
 
 
 function logout() {
-  if (!confirm('هل تريد تسجيل الخروج؟')) return;
-  currentUser = null; isBranchManager = false; cart = [];
-  document.getElementById('loginPage').classList.remove('hidden');
-  document.getElementById('cashierView').classList.add('hidden');
-  document.getElementById('managerView').classList.add('hidden');
-  window._whMode = false;
-  document.body.classList.remove('warehouse-mode');
-  document.getElementById('loginUser').value = '';
-  document.getElementById('loginPass').value = '';
+  showConfirmModal('هل تريد تسجيل الخروج؟', function() {
+    currentUser = null; isBranchManager = false; cart = [];
+    document.getElementById('loginPage').classList.remove('hidden');
+    document.getElementById('cashierView').classList.add('hidden');
+    document.getElementById('managerView').classList.add('hidden');
+    window._whMode = false;
+    document.body.classList.remove('warehouse-mode');
+    document.getElementById('loginUser').value = '';
+    document.getElementById('loginPass').value = '';
+  });
 }
 
 // ── DARK MODE ────────────────────────────────
@@ -4537,7 +4545,10 @@ function changeQty(code, d) {
 function removeFromCart(code) { cart = cart.filter(x => x.code !== code); renderCart(); }
 
 function clearCart() {
-  if (cart.length && !confirm('مسح الفاتورة؟')) return;
+  if (!cart.length) { _clearCartConfirmed(); return; }
+  showConfirmModal('مسح الفاتورة؟', _clearCartConfirmed);
+}
+function _clearCartConfirmed() {
   cart = [];
   cart._adminDiscount = 0;
   cart._adminDiscountNote = '';
@@ -4689,6 +4700,7 @@ function completeSale() {
   const salesperson = document.getElementById('paymentSalesperson')?.value || '';
   window._lastSalesperson = salesperson; // remember for next invoice
   const _saleCustomerId = document.getElementById('selectedCustomerId')?.value || '';
+  const _saleCustomer   = _saleCustomerId ? getCustomers().find(c => c.id === _saleCustomerId) : null;
   const sale = {
     id: Date.now(),
     date: new Date().toISOString(),
@@ -4698,7 +4710,14 @@ function completeSale() {
     sub, disc, total, paid, change, payMethod,
     appliedPromos: cart._appliedPromos || [],
     branchId: currentBranch,
-    branchName: getBranchName(currentBranch)
+    branchName: getBranchName(currentBranch),
+    // Link the sale to the selected customer so loyalty points, the customer
+    // profile purchase history, and phone-based return search all work. These
+    // were previously missing, so sale.customerId was always undefined (loyalty
+    // never awarded) and the customer profile filter never matched any sale.
+    customerId:    _saleCustomerId || '',
+    customerName:  _saleCustomer ? _saleCustomer.name : '',
+    customerPhone: _saleCustomer ? (_saleCustomer.phone || '') : ''
   };
   addSale(sale);
   if (sale.customerId) awardLoyaltyPoints(sale.customerId, sale.total);
@@ -5204,11 +5223,12 @@ function saveProduct() {
 }
 
 function deleteProduct(code) {
-  if (!confirm('حذف هذا المنتج؟')) return;
-  const prod = getInv().find(x => x.code === code);
-  setInv(getInv().filter(x => x.code !== code));
-  if (prod) addAuditLog('inv.delete', `حذف: ${prod.name} (${prod.code})`, null);
-  renderInventory();
+  showConfirmModal('حذف هذا المنتج؟', function() {
+    const prod = getInv().find(x => x.code === code);
+    setInv(getInv().filter(x => x.code !== code));
+    if (prod) addAuditLog('inv.delete', `حذف: ${prod.name} (${prod.code})`, null);
+    renderInventory();
+  });
 }
 
 function importExcel(e) {
@@ -6166,10 +6186,11 @@ function deleteUserAccount(id) {
   const accounts = getAccounts();
   const acc = accounts.find(a => a.id === id);
   if (!acc) return;
-  if (!confirm(`حذف المستخدم "${acc.username}"؟`)) return;
-  setAccounts(accounts.filter(a => a.id !== id));
-  renderUserAccountsSettings();
-  addAuditLog('user.delete', `تم حذف مستخدم: ${acc.username}`, currentBranch);
+  showConfirmModal(`حذف المستخدم "${acc.username}"؟`, function() {
+    setAccounts(accounts.filter(a => a.id !== id));
+    renderUserAccountsSettings();
+    addAuditLog('user.delete', `تم حذف مستخدم: ${acc.username}`, currentBranch);
+  });
 }
 
 function changePass(role) {
@@ -6261,14 +6282,19 @@ function removeSeller(idx) {
 }
 
 function resetSales() {
-  if (!confirm('حذف كل المبيعات نهائياً؟')) return;
-  setSales([]);
-  showMsg('sSettingsMsg','تم حذف سجل المبيعات','warning');
+  showConfirmModal('حذف كل المبيعات نهائياً؟', function() {
+    setSales([]);
+    showMsg('sSettingsMsg','تم حذف سجل المبيعات','warning');
+  });
 }
 
 function resetAll() {
-  if (!confirm('حذف كل البيانات (المخزون + المبيعات)؟')) return;
-  if (!confirm('تأكيد أخير — هذا لا يمكن التراجع عنه')) return;
+  showConfirmModal('حذف كل البيانات (المخزون + المبيعات)؟', function() {
+    showConfirmModal('تأكيد أخير — هذا لا يمكن التراجع عنه', _resetAllConfirmed);
+  });
+}
+
+function _resetAllConfirmed() {
   ['inv','sales','pos_suspended','threshold','pos_transfers']
     .concat(BRANCH_IDS.map(b=>`pos_inv_${b}`))
     .forEach(k => localStorage.removeItem(k));
@@ -6338,7 +6364,7 @@ function initFirebase() {
 
   if (!FIREBASE_CONFIG.projectId) {
     _suspendCache   = DB.g('pos_suspended', []);
-    _invCache       = DB.g('inv', []);
+    BRANCH_IDS.forEach(b => { _invCacheByBranch[b] = DB.g(`pos_inv_${b}`, b === 'b1' ? DB.g('inv', []) : []); });
     _salesCache     = DB.g('sales', []);
     _customersCache = DB.g('pos_customers', []);
     _settingsCache  = { threshold: DB.g('threshold', 5) };
@@ -6699,9 +6725,10 @@ function activateSuspended(id) {
 }
 
 function deleteSuspended(id) {
-  if (!confirm('حذف هذه الفاتورة المعلقة؟')) return;
-  setSuspended(getSuspended().filter(b => b.id !== id));
-  renderSuspendedPage();
+  showConfirmModal('حذف هذه الفاتورة المعلقة؟', function() {
+    setSuspended(getSuspended().filter(b => b.id !== id));
+    renderSuspendedPage();
+  });
 }
 
 function openAdminDiscount(id) {
@@ -7505,9 +7532,10 @@ function savePromo() {
 }
 
 function deletePromo(id) {
-  if (!confirm('حذف هذا العرض؟')) return;
-  setPromos(getPromos().filter(p => p.id !== id));
-  renderPromosPage();
+  showConfirmModal('حذف هذا العرض؟', function() {
+    setPromos(getPromos().filter(p => p.id !== id));
+    renderPromosPage();
+  });
 }
 
 function togglePromoActive(id) {
@@ -7772,9 +7800,10 @@ function saveCustomer() {
 }
 
 function deleteCustomer(id) {
-  if (!confirm('حذف هذا العميل؟')) return;
-  setCustomers(getCustomers().filter(c => c.id !== id));
-  renderCustomers();
+  showConfirmModal('حذف هذا العميل؟', function() {
+    setCustomers(getCustomers().filter(c => c.id !== id));
+    renderCustomers();
+  });
 }
 
 function openCustomerProfile(id) {
@@ -7966,12 +7995,16 @@ function processReturn() {
   });
 }
 function _processReturnConfirmed(sale, reason, returnItems, returnTotal) {
-  // Restock
-  const inv = getInv();
+  // Restock into the ORIGINAL sale's branch, not whatever branch the admin is
+  // currently viewing — otherwise returning a b1 invoice while viewing b2 would
+  // credit the wrong branch's stock.
+  const branchId = sale.branchId || currentBranch;
+  const inv = getInv(branchId);
   returnItems.forEach(ri => { const p = inv.find(x=>x.code===ri.code); if (p) p.qty += Math.abs(ri.qty); });
-  setInv(inv);
+  setInv(inv, branchId);
 
-  // Save return sale
+  // Save return sale — carry over branch and customer so it shows up in the
+  // right branch's reports and the customer's history.
   const returnSale = {
     id:             Date.now(),
     date:           new Date().toISOString(),
@@ -7980,6 +8013,11 @@ function _processReturnConfirmed(sale, reason, returnItems, returnTotal) {
     returnReason:   reason || 'غير محدد',
     cashier:        currentUser === 'admin' ? 'مدير' : 'كاشير',
     salesperson:    sale.salesperson || '',
+    branchId,
+    branchName:     sale.branchName || getBranchName(branchId),
+    customerId:     sale.customerId || '',
+    customerName:   sale.customerName || '',
+    customerPhone:  sale.customerPhone || sale.phone || '',
     items:          returnItems,
     sub:            -returnTotal,
     disc:           0,
@@ -8109,10 +8147,11 @@ function saveExpense() {
 }
 
 function deleteExpense(id) {
-  if (!confirm('حذف هذا المصروف؟')) return;
-  setExpenses(getExpenses().filter(e => e.id !== id));
-  renderExpensesPage();
-  buildDashboard();
+  showConfirmModal('حذف هذا المصروف؟', function() {
+    setExpenses(getExpenses().filter(e => e.id !== id));
+    renderExpensesPage();
+    buildDashboard();
+  });
 }
 
 function renderExpensesPage() {
@@ -9574,7 +9613,15 @@ function renderApprovedCartsList() {
 function resumeApprovedCart(id) {
   var req = getApprovals().find(function(r){ return r.id === id; });
   if (!req) return;
-  if (cart.length && !confirm('سيتم استبدال الفاتورة الحالية. هل تريد المتابعة؟')) return;
+  if (cart.length) {
+    showConfirmModal('سيتم استبدال الفاتورة الحالية. هل تريد المتابعة؟', function(){ _resumeApprovedCartConfirmed(id); });
+  } else {
+    _resumeApprovedCartConfirmed(id);
+  }
+}
+function _resumeApprovedCartConfirmed(id) {
+  var req = getApprovals().find(function(r){ return r.id === id; });
+  if (!req) return;
   cart = req.items.map(function(i){ return Object.assign({},i); });
   renderCart();
   document.getElementById('approvedCartsModal').classList.add('hidden');

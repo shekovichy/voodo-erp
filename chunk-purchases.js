@@ -68,9 +68,10 @@ function saveSupplier() {
 }
 
 function deleteSupplier(id) {
-  if (!confirm('حذف هذا المورد نهائياً؟')) return;
-  setSuppliers(getSuppliers().filter(s => s.id !== id));
-  renderSuppliersPage();
+  showConfirmModal('حذف هذا المورد نهائياً؟', function() {
+    setSuppliers(getSuppliers().filter(s => s.id !== id));
+    renderSuppliersPage();
+  });
 }
 
 function renderSuppliersPage() {
@@ -402,9 +403,10 @@ function saveSupplierPayment() {
 }
 
 function deletePO(id) {
-  if (!confirm('حذف أمر الشراء هذا؟')) return;
-  setPurchases(getPurchases().filter(p => p.id !== id));
-  renderPurchasesPage();
+  showConfirmModal('حذف أمر الشراء هذا؟', function() {
+    setPurchases(getPurchases().filter(p => p.id !== id));
+    renderPurchasesPage();
+  });
 }
 
 function switchPurchaseTab(tab) {

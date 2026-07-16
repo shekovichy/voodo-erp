@@ -136,10 +136,11 @@ function deleteUserAccount(id) {
   const accounts = getAccounts();
   const acc = accounts.find(a => a.id === id);
   if (!acc) return;
-  if (!confirm(`حذف المستخدم "${acc.username}"؟`)) return;
-  setAccounts(accounts.filter(a => a.id !== id));
-  renderUserAccountsSettings();
-  addAuditLog('user.delete', `تم حذف مستخدم: ${acc.username}`, currentBranch);
+  showConfirmModal(`حذف المستخدم "${acc.username}"؟`, function() {
+    setAccounts(accounts.filter(a => a.id !== id));
+    renderUserAccountsSettings();
+    addAuditLog('user.delete', `تم حذف مستخدم: ${acc.username}`, currentBranch);
+  });
 }
 
 function changePass(role) {
@@ -231,14 +232,19 @@ function removeSeller(idx) {
 }
 
 function resetSales() {
-  if (!confirm('حذف كل المبيعات نهائياً؟')) return;
-  setSales([]);
-  showMsg('sSettingsMsg','تم حذف سجل المبيعات','warning');
+  showConfirmModal('حذف كل المبيعات نهائياً؟', function() {
+    setSales([]);
+    showMsg('sSettingsMsg','تم حذف سجل المبيعات','warning');
+  });
 }
 
 function resetAll() {
-  if (!confirm('حذف كل البيانات (المخزون + المبيعات)؟')) return;
-  if (!confirm('تأكيد أخير — هذا لا يمكن التراجع عنه')) return;
+  showConfirmModal('حذف كل البيانات (المخزون + المبيعات)؟', function() {
+    showConfirmModal('تأكيد أخير — هذا لا يمكن التراجع عنه', _resetAllConfirmed);
+  });
+}
+
+function _resetAllConfirmed() {
   ['inv','sales','pos_suspended','threshold','pos_transfers']
     .concat(BRANCH_IDS.map(b=>`pos_inv_${b}`))
     .forEach(k => localStorage.removeItem(k));

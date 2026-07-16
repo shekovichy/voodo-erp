@@ -56,6 +56,7 @@ function completeSale() {
   const salesperson = document.getElementById('paymentSalesperson')?.value || '';
   window._lastSalesperson = salesperson; // remember for next invoice
   const _saleCustomerId = document.getElementById('selectedCustomerId')?.value || '';
+  const _saleCustomer   = _saleCustomerId ? getCustomers().find(c => c.id === _saleCustomerId) : null;
   const sale = {
     id: Date.now(),
     date: new Date().toISOString(),
@@ -65,7 +66,14 @@ function completeSale() {
     sub, disc, total, paid, change, payMethod,
     appliedPromos: cart._appliedPromos || [],
     branchId: currentBranch,
-    branchName: getBranchName(currentBranch)
+    branchName: getBranchName(currentBranch),
+    // Link the sale to the selected customer so loyalty points, the customer
+    // profile purchase history, and phone-based return search all work. These
+    // were previously missing, so sale.customerId was always undefined (loyalty
+    // never awarded) and the customer profile filter never matched any sale.
+    customerId:    _saleCustomerId || '',
+    customerName:  _saleCustomer ? _saleCustomer.name : '',
+    customerPhone: _saleCustomer ? (_saleCustomer.phone || '') : ''
   };
   addSale(sale);
   if (sale.customerId) awardLoyaltyPoints(sale.customerId, sale.total);

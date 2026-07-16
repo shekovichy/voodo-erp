@@ -97,9 +97,10 @@ function saveCustomer() {
 }
 
 function deleteCustomer(id) {
-  if (!confirm('حذف هذا العميل؟')) return;
-  setCustomers(getCustomers().filter(c => c.id !== id));
-  renderCustomers();
+  showConfirmModal('حذف هذا العميل؟', function() {
+    setCustomers(getCustomers().filter(c => c.id !== id));
+    renderCustomers();
+  });
 }
 
 function openCustomerProfile(id) {

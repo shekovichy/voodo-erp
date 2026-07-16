@@ -141,9 +141,10 @@ function savePromo() {
 }
 
 function deletePromo(id) {
-  if (!confirm('حذف هذا العرض؟')) return;
-  setPromos(getPromos().filter(p => p.id !== id));
-  renderPromosPage();
+  showConfirmModal('حذف هذا العرض؟', function() {
+    setPromos(getPromos().filter(p => p.id !== id));
+    renderPromosPage();
+  });
 }
 
 function togglePromoActive(id) {

@@ -211,10 +211,11 @@ function deletePivotFavorite() {
   if (!id) { showToast('⚠️ اختر تقرير محفوظ للحذف'); return; }
   const fav = getPivotFavorites().find(f => f.id === id);
   if (!fav) return;
-  if (!confirm(`حذف "${fav.name}" من المفضّلة؟`)) return;
-  setPivotFavorites(getPivotFavorites().filter(f => f.id !== id));
-  renderPivotFavorites();
-  showToast('🗑️ تم الحذف');
+  showConfirmModal(`حذف "${fav.name}" من المفضّلة؟`, function() {
+    setPivotFavorites(getPivotFavorites().filter(f => f.id !== id));
+    renderPivotFavorites();
+    showToast('🗑️ تم الحذف');
+  });
 }
 
 // ── FREE PERIOD COMPARISON ──────────────────────────────────────

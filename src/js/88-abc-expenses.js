@@ -71,10 +71,11 @@ function saveExpense() {
 }
 
 function deleteExpense(id) {
-  if (!confirm('حذف هذا المصروف؟')) return;
-  setExpenses(getExpenses().filter(e => e.id !== id));
-  renderExpensesPage();
-  buildDashboard();
+  showConfirmModal('حذف هذا المصروف؟', function() {
+    setExpenses(getExpenses().filter(e => e.id !== id));
+    renderExpensesPage();
+    buildDashboard();
+  });
 }
 
 function renderExpensesPage() {

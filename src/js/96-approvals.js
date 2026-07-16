@@ -194,7 +194,15 @@ function renderApprovedCartsList() {
 function resumeApprovedCart(id) {
   var req = getApprovals().find(function(r){ return r.id === id; });
   if (!req) return;
-  if (cart.length && !confirm('سيتم استبدال الفاتورة الحالية. هل تريد المتابعة؟')) return;
+  if (cart.length) {
+    showConfirmModal('سيتم استبدال الفاتورة الحالية. هل تريد المتابعة؟', function(){ _resumeApprovedCartConfirmed(id); });
+  } else {
+    _resumeApprovedCartConfirmed(id);
+  }
+}
+function _resumeApprovedCartConfirmed(id) {
+  var req = getApprovals().find(function(r){ return r.id === id; });
+  if (!req) return;
   cart = req.items.map(function(i){ return Object.assign({},i); });
   renderCart();
   document.getElementById('approvedCartsModal').classList.add('hidden');

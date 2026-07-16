@@ -45,7 +45,7 @@ function initFirebase() {
 
   if (!FIREBASE_CONFIG.projectId) {
     _suspendCache   = DB.g('pos_suspended', []);
-    _invCache       = DB.g('inv', []);
+    BRANCH_IDS.forEach(b => { _invCacheByBranch[b] = DB.g(`pos_inv_${b}`, b === 'b1' ? DB.g('inv', []) : []); });
     _salesCache     = DB.g('sales', []);
     _customersCache = DB.g('pos_customers', []);
     _settingsCache  = { threshold: DB.g('threshold', 5) };
@@ -406,9 +406,10 @@ function activateSuspended(id) {
 }
 
 function deleteSuspended(id) {
-  if (!confirm('حذف هذه الفاتورة المعلقة؟')) return;
-  setSuspended(getSuspended().filter(b => b.id !== id));
-  renderSuspendedPage();
+  showConfirmModal('حذف هذه الفاتورة المعلقة؟', function() {
+    setSuspended(getSuspended().filter(b => b.id !== id));
+    renderSuspendedPage();
+  });
 }
 
 function openAdminDiscount(id) {

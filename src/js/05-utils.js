@@ -452,15 +452,16 @@ setTimeout(() => checkAutoBackup(false), 5000);
 
 
 function logout() {
-  if (!confirm('هل تريد تسجيل الخروج؟')) return;
-  currentUser = null; isBranchManager = false; cart = [];
-  document.getElementById('loginPage').classList.remove('hidden');
-  document.getElementById('cashierView').classList.add('hidden');
-  document.getElementById('managerView').classList.add('hidden');
-  window._whMode = false;
-  document.body.classList.remove('warehouse-mode');
-  document.getElementById('loginUser').value = '';
-  document.getElementById('loginPass').value = '';
+  showConfirmModal('هل تريد تسجيل الخروج؟', function() {
+    currentUser = null; isBranchManager = false; cart = [];
+    document.getElementById('loginPage').classList.remove('hidden');
+    document.getElementById('cashierView').classList.add('hidden');
+    document.getElementById('managerView').classList.add('hidden');
+    window._whMode = false;
+    document.body.classList.remove('warehouse-mode');
+    document.getElementById('loginUser').value = '';
+    document.getElementById('loginPass').value = '';
+  });
 }
 
 // ── DARK MODE ────────────────────────────────

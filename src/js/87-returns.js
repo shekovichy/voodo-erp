@@ -54,12 +54,16 @@ function processReturn() {
   });
 }
 function _processReturnConfirmed(sale, reason, returnItems, returnTotal) {
-  // Restock
-  const inv = getInv();
+  // Restock into the ORIGINAL sale's branch, not whatever branch the admin is
+  // currently viewing — otherwise returning a b1 invoice while viewing b2 would
+  // credit the wrong branch's stock.
+  const branchId = sale.branchId || currentBranch;
+  const inv = getInv(branchId);
   returnItems.forEach(ri => { const p = inv.find(x=>x.code===ri.code); if (p) p.qty += Math.abs(ri.qty); });
-  setInv(inv);
+  setInv(inv, branchId);
 
-  // Save return sale
+  // Save return sale — carry over branch and customer so it shows up in the
+  // right branch's reports and the customer's history.
   const returnSale = {
     id:             Date.now(),
     date:           new Date().toISOString(),
@@ -68,6 +72,11 @@ function _processReturnConfirmed(sale, reason, returnItems, returnTotal) {
     returnReason:   reason || 'غير محدد',
     cashier:        currentUser === 'admin' ? 'مدير' : 'كاشير',
     salesperson:    sale.salesperson || '',
+    branchId,
+    branchName:     sale.branchName || getBranchName(branchId),
+    customerId:     sale.customerId || '',
+    customerName:   sale.customerName || '',
+    customerPhone:  sale.customerPhone || sale.phone || '',
     items:          returnItems,
     sub:            -returnTotal,
     disc:           0,

@@ -140,11 +140,11 @@ function loadDemoAndEnter() {
 
   // ── 7. CRM CUSTOMERS ─────────────────────────
   const customers = [
-    { id:'C001', name:'أحمد محمود الشريف',  phone:'01001111111', email:'ahmed@email.com',   points:450,  totalSpent:18500, visits:7,  createdAt: new Date(now-90*86400000).toISOString() },
-    { id:'C002', name:'منى عبدالله حسن',    phone:'01112222222', email:'mona@email.com',    points:280,  totalSpent:11200, visits:4,  createdAt: new Date(now-60*86400000).toISOString() },
-    { id:'C003', name:'كريم سامي فؤاد',     phone:'01223333333', email:'karim@email.com',   points:620,  totalSpent:24800, visits:10, createdAt: new Date(now-120*86400000).toISOString() },
-    { id:'C004', name:'هبة محمد النجار',    phone:'01034444444', email:'heba@email.com',    points:150,  totalSpent:6000,  visits:2,  createdAt: new Date(now-30*86400000).toISOString() },
-    { id:'C005', name:'طارق علي إبراهيم',   phone:'01155555555', email:'tarek@email.com',   points:890,  totalSpent:35600, visits:15, createdAt: new Date(now-180*86400000).toISOString() },
+    { id:'C001', name:'أحمد محمود الشريف',  phone:'01001111111', email:'ahmed@email.com',   loyaltyPoints:450,  totalSpent:18500, visits:7,  createdAt: new Date(now-90*86400000).toISOString() },
+    { id:'C002', name:'منى عبدالله حسن',    phone:'01112222222', email:'mona@email.com',    loyaltyPoints:280,  totalSpent:11200, visits:4,  createdAt: new Date(now-60*86400000).toISOString() },
+    { id:'C003', name:'كريم سامي فؤاد',     phone:'01223333333', email:'karim@email.com',   loyaltyPoints:620,  totalSpent:24800, visits:10, createdAt: new Date(now-120*86400000).toISOString() },
+    { id:'C004', name:'هبة محمد النجار',    phone:'01034444444', email:'heba@email.com',    loyaltyPoints:150,  totalSpent:6000,  visits:2,  createdAt: new Date(now-30*86400000).toISOString() },
+    { id:'C005', name:'طارق علي إبراهيم',   phone:'01155555555', email:'tarek@email.com',   loyaltyPoints:890,  totalSpent:35600, visits:15, createdAt: new Date(now-180*86400000).toISOString() },
   ];
   DB.s('pos_customers', customers);
 
@@ -178,7 +178,7 @@ function _showDemoBanner() {
   bar.id = 'demoBanner';
   bar.innerHTML = `
     <span>⚡ وضع الديمو — البيانات تجريبية</span>
-    <a href="#" onclick="if(confirm('مسح كل بيانات الديمو والبدء من جديد؟')){localStorage.clear();location.reload();}return false;"
+    <a href="#" onclick="resetDemoData();return false;"
        style="color:#fbbf24;margin-right:16px;font-weight:700;text-decoration:underline;">مسح الديمو</a>
   `;
   bar.style.cssText = `
@@ -192,4 +192,11 @@ function _showDemoBanner() {
   document.body.prepend(bar);
   // Push content down
   document.body.style.paddingTop = '35px';
+}
+
+function resetDemoData() {
+  showConfirmModal('مسح كل بيانات الديمو والبدء من جديد؟', function() {
+    localStorage.clear();
+    location.reload();
+  });
 }

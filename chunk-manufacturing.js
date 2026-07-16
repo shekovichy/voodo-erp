@@ -129,10 +129,11 @@ function saveRawMaterial() {
 }
 
 function deleteRawMat(id) {
-  if(!confirm('هل تريد حذف هذه الخامة؟')) return;
-  DB.s('pos_mfg_rawMats', DB.g('pos_mfg_rawMats',[]).filter(x=>x.id!=id));
-  renderRawMaterials();
-  _mToast('تم الحذف','success');
+  showConfirmModal('هل تريد حذف هذه الخامة؟', function() {
+    DB.s('pos_mfg_rawMats', DB.g('pos_mfg_rawMats',[]).filter(x=>x.id!=id));
+    renderRawMaterials();
+    _mToast('تم الحذف','success');
+  });
 }
 
 // ============================================================
@@ -209,10 +210,11 @@ function saveLine() {
 }
 
 function deleteLine(id) {
-  if(!confirm('هل تريد حذف خط الإنتاج؟')) return;
-  DB.s('pos_mfg_lines', DB.g('pos_mfg_lines',[]).filter(x=>x.id!=id));
-  renderLines();
-  _mToast('تم الحذف','success');
+  showConfirmModal('هل تريد حذف خط الإنتاج؟', function() {
+    DB.s('pos_mfg_lines', DB.g('pos_mfg_lines',[]).filter(x=>x.id!=id));
+    renderLines();
+    _mToast('تم الحذف','success');
+  });
 }
 
 // helpers: populate selects
@@ -321,10 +323,11 @@ function saveProdOrder() {
 }
 
 function deleteProdOrder(id) {
-  if(!confirm('حذف أمر الإنتاج؟')) return;
-  DB.s('pos_mfg_orders', DB.g('pos_mfg_orders',[]).filter(x=>x.id!=id));
-  renderProductionOrders();
-  _mToast('تم الحذف','success');
+  showConfirmModal('حذف أمر الإنتاج؟', function() {
+    DB.s('pos_mfg_orders', DB.g('pos_mfg_orders',[]).filter(x=>x.id!=id));
+    renderProductionOrders();
+    _mToast('تم الحذف','success');
+  });
 }
 
 // ============================================================
@@ -419,10 +422,11 @@ function saveQualityCheck() {
 }
 
 function deleteQC(id) {
-  if(!confirm('حذف هذا الفحص؟')) return;
-  DB.s('pos_mfg_quality', DB.g('pos_mfg_quality',[]).filter(x=>x.id!=id));
-  renderQualityChecks();
-  _mToast('تم الحذف','success');
+  showConfirmModal('حذف هذا الفحص؟', function() {
+    DB.s('pos_mfg_quality', DB.g('pos_mfg_quality',[]).filter(x=>x.id!=id));
+    renderQualityChecks();
+    _mToast('تم الحذف','success');
+  });
 }
 
 // ============================================================
