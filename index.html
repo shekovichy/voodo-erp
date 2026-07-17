@@ -6782,46 +6782,59 @@ function initFirebase() {
         renderSellersSettings();
       }, err => console.error('Firestore settings error:', err));
 
-    // Suppliers listener
+    // Suppliers listener — renderSuppliersPage/renderPurchasesPage live in
+    // 75-purchases.js (a lazy chunk). Two bugs fixed here together:
+    // (1) Passing the bare identifier straight to visRefresh() as an
+    //     argument is NOT lazy: JS resolves it to a value the moment this
+    //     line executes, regardless of any guard visRefresh checks
+    //     internally — so if the chunk never loaded, merely reaching this
+    //     line threw an uncaught ReferenceError and killed the rest of this
+    //     snapshot callback. Wrapping in an arrow function defers the
+    //     lookup until visRefresh actually decides to call it.
+    // (2) That guard must check 'page-purchases' (the real top-level page
+    //     _showPageImpl toggles 'hidden' on), NOT 'page-suppliers' — that's
+    //     an inner sub-tab whose own 'hidden' class is only ever touched by
+    //     the purchases chunk's OWN tab-switcher (see switchPurchasesTab-
+    //     style code in 75-purchases.js), which hasn't run before the chunk
+    //     loads. The static template gives it no 'hidden' class at all, so
+    //     until the chunk loads and switches tabs at least once, visRefresh
+    //     saw it as "visible" and called the (still undefined) render
+    //     function on every listener update — regardless of what page was
+    //     actually on screen.
     _db.collection('pos_data').doc('suppliers')
       .onSnapshot(snap => {
         _suppliersCache = snap.exists ? (snap.data().list || []) : DB.g('pos_suppliers', []);
-        visRefresh('page-suppliers', renderSuppliersPage);
-        visRefresh('page-purchases', renderPurchasesPage);
+        visRefresh('page-purchases', () => renderSuppliersPage());
+        visRefresh('page-purchases', () => renderPurchasesPage());
       }, err => { _suppliersCache = DB.g('pos_suppliers', []); });
 
     // Purchase Orders listener
     _db.collection('pos_data').doc('purchases')
       .onSnapshot(snap => {
         _purchaseCache = snap.exists ? (snap.data().list || []) : DB.g('pos_purchases', []);
-        visRefresh('page-purchases', renderPurchasesPage);
+        visRefresh('page-purchases', () => renderPurchasesPage());
       }, err => { _purchaseCache = DB.g('pos_purchases', []); });
 
-    // Supplier payments listener (AP) — renderSuppliersPage lives in
-    // 75-purchases.js (a lazy chunk); visRefresh only calls it once
-    // page-suppliers is visible, which can't happen before the chunk loads.
+    // Supplier payments listener (AP) — see the lazy-chunk note above
+    // (checks 'page-purchases', not 'page-suppliers', for the same reason).
     _db.collection('pos_data').doc('supplier_payments')
       .onSnapshot(snap => {
         _supplierPaymentsCache = snap.exists ? (snap.data().list || []) : DB.g('pos_supplier_payments', []);
-        visRefresh('page-suppliers', renderSuppliersPage);
+        visRefresh('page-purchases', () => renderSuppliersPage());
       }, err => { _supplierPaymentsCache = DB.g('pos_supplier_payments', []); });
 
-    // Helpdesk tickets listener — renderHelpdeskPage lives in 110-helpdesk.js (a
-    // lazy chunk); visRefresh only calls it once page-helpdesk is visible, which
-    // can't happen before the chunk has loaded (see showPage()).
+    // Helpdesk tickets listener — see the lazy-chunk note above.
     _db.collection('pos_data').doc('helpdesk')
       .onSnapshot(snap => {
         _helpdeskCache = snap.exists ? (snap.data().list || []) : DB.g('pos_helpdesk', []);
-        visRefresh('page-helpdesk', renderHelpdeskPage);
+        visRefresh('page-helpdesk', () => renderHelpdeskPage());
       }, err => { _helpdeskCache = DB.g('pos_helpdesk', []); });
 
-    // Pivot-analyzer favorites listener — renderPivotFavorites lives in
-    // 115-pivot-reports.js (a lazy chunk); visRefresh only calls it once
-    // page-customized is visible, which can't happen before the chunk has loaded.
+    // Pivot-analyzer favorites listener — see the lazy-chunk note above.
     _db.collection('pos_data').doc('pivot_favorites')
       .onSnapshot(snap => {
         _pivotFavoritesCache = snap.exists ? (snap.data().list || []) : DB.g('pos_pivot_favorites', []);
-        visRefresh('page-customized', renderPivotFavorites);
+        visRefresh('page-customized', () => renderPivotFavorites());
       }, err => { _pivotFavoritesCache = DB.g('pos_pivot_favorites', []); });
 
     // HR listener
