@@ -37,24 +37,30 @@ service cloud.firestore {
     function isOwner() {
       return signedIn() && request.auth.token.email == 'shekovichy@gmail.com';
     }
-    function hasRole() {
+    // `db` is passed explicitly (not read from the outer match's {database}
+    // capture) — Firestore Rules functions have their own local scope, and
+    // relying on an enclosing path variable inside a helper function is a
+    // known Rules Playground/engine gotcha ("Function not found: exists").
+    // Passing it as a parameter is the pattern Firebase's own docs recommend
+    // for exactly this reason.
+    function hasRole(db) {
       return isOwner()
-        || (signedIn() && exists(/databases/$(database)/documents/roles/$(request.auth.uid)));
+        || (signedIn() && exists(/databases/$(db)/documents/roles/$(request.auth.uid)));
     }
-    function isAdmin() {
+    function isAdmin(db) {
       return isOwner()
         || (signedIn()
-            && exists(/databases/$(database)/documents/roles/$(request.auth.uid))
-            && get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin');
+            && exists(/databases/$(db)/documents/roles/$(request.auth.uid))
+            && get(/databases/$(db)/documents/roles/$(request.auth.uid)).data.role == 'admin');
     }
 
     // ── ROLES — the permission source of truth ────────────────────
     // Users may read their own role (the app resolves it at login);
     // only admins may list or modify roles.
     match /roles/{uid} {
-      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow list: if isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin(database));
+      allow list: if isAdmin(database);
+      allow create, update, delete: if isAdmin(database);
     }
 
     // ── POS DATA ──────────────────────────────────────────────────
@@ -65,14 +71,14 @@ service cloud.firestore {
     // is writable by any user WITH a role, because cashier flows
     // legitimately write them (stock deduction, suspend, audit log).
     match /pos_data/{doc} {
-      allow read: if hasRole() && doc != 'auth';
+      allow read: if hasRole(database) && doc != 'auth';
       allow write: if doc != 'auth'
-                   && (isAdmin() || (hasRole() && !(doc in ['settings', 'accounts'])));
+                   && (isAdmin(database) || (hasRole(database) && !(doc in ['settings', 'accounts'])));
     }
 
     // ── SALES (monthly docs, e.g. pos_sales/2026-07) ──────────────
     match /pos_sales/{document=**} {
-      allow read, write: if hasRole();
+      allow read, write: if hasRole(database);
     }
 
     // ── Deny everything else ──────────────────────────────────────
