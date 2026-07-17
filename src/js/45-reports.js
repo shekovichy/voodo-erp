@@ -70,7 +70,7 @@ function buildSalesReport() {
       }
     });
   }
-  const branchFilter  = rbf?.value || 'all';
+  const branchFilter  = lockBranchFilter('rptBranchFilter');
   const sellerFilter  = document.getElementById('rptSalesSellerFilter')?.value || '';
   const { from, to }  = getDateRange(period, 'rptSalesFrom', 'rptSalesTo');
   let sales = getSales().filter(s => !s.isReturn && (()=>{ const d=new Date(s.date); return d>=from&&d<=to; })());

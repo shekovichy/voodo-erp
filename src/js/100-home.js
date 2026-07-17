@@ -223,18 +223,17 @@ function closeHomeFolder() {
   };
 })();
 
-// Reports page: restrict sections visible to branch users
+// Reports page: restrict sections visible to branch users. Branch-locking
+// rptBranchFilter itself now happens synchronously inside buildSalesReport()
+// via lockBranchFilter() (05-utils.js) — doing it here via setTimeout was too
+// late and let a branch cashier briefly see another branch's data (or none)
+// on first render; see lockBranchFilter()'s comment for the full story.
 function applyBranchReportsFilter() {
   var isAdmin = (currentUser === 'admin');
   ['rpt-inventory', 'rpt-profit', 'rpt-kpi', 'rpt-returns'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.style.display = isAdmin ? '' : 'none';
   });
-  var bf = document.getElementById('rptBranchFilter');
-  if (bf) {
-    bf.disabled = !isAdmin;
-    if (!isAdmin) bf.value = currentBranch;
-  }
 }
 
 // Unified showPage wrapper: badges + home icons + branch reports filter

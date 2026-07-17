@@ -16,6 +16,33 @@ const visRefresh = (pageId, fn) => {
   if (el && !el.classList.contains('hidden')) fn();
 };
 
+// Locks a branch-filter <select> to the current user's OWN branch for
+// non-admins (disables it and forces its value), returning the branch id
+// (or 'all') the caller should filter by. MUST be called synchronously
+// inside the render function itself, right after the <select>'s options
+// are populated and before its value is read — locking it afterward (e.g.
+// from a setTimeout in the showPage wrapper, as applyBranchReportsFilter()
+// used to) only fixes the dropdown's visual state; the report/list had
+// already rendered once with whatever branch was PREVIOUSLY selected on
+// that page instance. That let a branch cashier briefly see another
+// branch's sales (or none at all, if a different branch was last picked)
+// on first render of "سجل المبيعات" and the reports "المبيعات" tab.
+function lockBranchFilter(selectId) {
+  const el = document.getElementById(selectId);
+  if (!el) return 'all';
+  if (currentUser === 'admin') {
+    // Explicitly re-enable — the SPA never reloads the DOM between
+    // sessions, so a filter left disabled by a PREVIOUS branch-cashier
+    // session on the same device (e.g. an admin testing a cashier login)
+    // would otherwise stay stuck disabled after switching back to admin.
+    el.disabled = false;
+  } else {
+    el.disabled = true;
+    el.value = currentBranch;
+  }
+  return el.value || 'all';
+}
+
 // Escape free-text values before interpolating into innerHTML — any field a
 // user can type (names, notes, reasons...) must go through this, since
 // Firestore currently accepts writes from any anonymous client (see

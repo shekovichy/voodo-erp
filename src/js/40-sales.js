@@ -25,7 +25,7 @@ function renderSales() {
       var o = document.createElement('option'); o.value=b; o.textContent=(bnames[b]||BRANCH_DEFAULTS[b]); sbf.appendChild(o);
     });
   }
-  var selBranch = sbf ? sbf.value : 'all';
+  var selBranch = lockBranchFilter('salesBranchFilter');
   const from = document.getElementById('salesFrom').value;
   const to   = document.getElementById('salesTo').value;
   let sales  = getSales();
