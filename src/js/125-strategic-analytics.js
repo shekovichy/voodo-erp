@@ -19,26 +19,30 @@ function renderAnalyticsPage() {
   if (!root.dataset.built) {
     root.dataset.built = '1';
     root.innerHTML = `
-      <div class="tabs" style="margin-bottom:14px;">
+      <div class="tabs" style="margin-bottom:14px;flex-wrap:wrap;">
         <div class="tab active" id="saTab-discounts" onclick="switchAnalyticsTab('discounts',this)">🏷️ الخصومات</div>
         <div class="tab" id="saTab-stock" onclick="switchAnalyticsTab('stock',this)">📦 المخزون (عمر وتقييم)</div>
         <div class="tab" id="saTab-ledger" onclick="switchAnalyticsTab('ledger',this)">📖 دفتر حركة الصنف</div>
         <div class="tab" id="saTab-customers" onclick="switchAnalyticsTab('customers',this)">👥 تحليل العملاء</div>
         <div class="tab" id="saTab-vendors" onclick="switchAnalyticsTab('vendors',this)">🚚 أداء الموردين</div>
         <div class="tab" id="saTab-forecast" onclick="switchAnalyticsTab('forecast',this)">📉 توقع نفاد المخزون</div>
+        <div class="tab" id="saTab-budget" onclick="switchAnalyticsTab('budget',this)">🎯 الميزانية مقابل الفعلي</div>
+        <div class="tab" id="saTab-sessions" onclick="switchAnalyticsTab('sessions',this)">🧑‍💰 ورديات الكاشير</div>
       </div>
       <div id="sa-pane-discounts"></div>
       <div id="sa-pane-stock" class="hidden"></div>
       <div id="sa-pane-ledger" class="hidden"></div>
       <div id="sa-pane-customers" class="hidden"></div>
       <div id="sa-pane-vendors" class="hidden"></div>
-      <div id="sa-pane-forecast" class="hidden"></div>`;
+      <div id="sa-pane-forecast" class="hidden"></div>
+      <div id="sa-pane-budget" class="hidden"></div>
+      <div id="sa-pane-sessions" class="hidden"></div>`;
   }
   buildDiscountAnalysis();
 }
 
 function switchAnalyticsTab(tab, el) {
-  ['discounts','stock','ledger','customers','vendors','forecast'].forEach(t => {
+  ['discounts','stock','ledger','customers','vendors','forecast','budget','sessions'].forEach(t => {
     document.getElementById('sa-pane-'+t)?.classList.toggle('hidden', t !== tab);
     document.getElementById('saTab-'+t)?.classList.toggle('active', t === tab);
   });
@@ -48,6 +52,8 @@ function switchAnalyticsTab(tab, el) {
   if (tab === 'customers') buildCustomerAnalytics();
   if (tab === 'vendors')   buildVendorPerformance();
   if (tab === 'forecast')  buildForecastedStock();
+  if (tab === 'budget')    buildBudgetVsActual();
+  if (tab === 'sessions')  buildSessionReport();
 }
 
 // Shared branch-select builder used by every tab below (mirrors the
@@ -547,4 +553,226 @@ function buildForecastedStock() {
       <td style="font-weight:700;color:${urgent?'var(--danger)':soon?'#d97706':'var(--text-muted)'};">${Math.round(p.daysLeft)} يوم</td>
     </tr>`;
   }).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:20px;">لا توجد بيانات مبيعات كافية لهذه الفترة لعمل توقع</td></tr>';
+}
+
+// ════════════════════════════════════════════════════
+// 7) BUDGET vs ACTUAL — الميزانية مقابل الفعلي
+// ════════════════════════════════════════════════════
+// Company-level monthly budget: a revenue target + a spending cap per expense
+// category (keys = EXP_CATS from 88-abc-expenses.js). Actuals come from the
+// same sources the dashboard/accounting already use: net sales revenue and
+// recorded expenses. Admin-only (budgets are admin-write in firestore.rules).
+let _saBudgetMonth = new Date().toISOString().slice(0, 7);
+
+function buildBudgetVsActual() {
+  const pane = document.getElementById('sa-pane-budget');
+  if (!pane.dataset.built) {
+    pane.dataset.built = '1';
+    pane.innerHTML = `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">
+        <label style="font-size:13px;font-weight:600;">الشهر:</label>
+        <input type="month" id="saBudgetMonth" class="form-control" style="width:auto;" onchange="_saBudgetMonthChanged()" />
+        <button class="btn btn-primary btn-sm" onclick="openBudgetEditor()">✏️ تعديل ميزانية هذا الشهر</button>
+      </div>
+      <div class="stats-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px;" id="saBudgetKPIs"></div>
+      <div class="card" id="saBudgetEditorCard" style="display:none;margin-bottom:16px;">
+        <div style="font-weight:700;margin-bottom:10px;">✏️ ميزانية <span id="saBudgetEditorMonth"></span></div>
+        <div class="form-group" style="max-width:280px;">
+          <label>🎯 هدف الإيرادات (الشهر كله)</label>
+          <input type="number" id="saBudgetRevenue" class="form-control" min="0" placeholder="0" />
+        </div>
+        <div style="font-weight:600;margin:10px 0 6px;font-size:13px;">حدود المصاريف حسب البند:</div>
+        <div id="saBudgetCatInputs" class="grid-2" style="gap:10px;"></div>
+        <div style="margin-top:12px;display:flex;gap:8px;">
+          <button class="btn btn-success btn-sm" onclick="saveBudget()">💾 حفظ الميزانية</button>
+          <button class="btn btn-gray btn-sm" onclick="document.getElementById('saBudgetEditorCard').style.display='none'">إلغاء</button>
+        </div>
+        <div id="saBudgetMsg" style="margin-top:8px;"></div>
+      </div>
+      <div class="card">
+        <div style="font-weight:700;margin-bottom:10px;">📊 المقارنة</div>
+        <div class="table-wrap">
+        <table><thead><tr><th>البند</th><th>الميزانية</th><th>الفعلي</th><th>الفرق</th><th>نسبة الاستهلاك</th></tr></thead>
+          <tbody id="saBudgetBody"></tbody></table>
+        </div>
+      </div>`;
+    document.getElementById('saBudgetMonth').value = _saBudgetMonth;
+  }
+
+  const month = _saBudgetMonth;
+  const budget = getBudgets().find(b => b.month === month) || { month, revenueTarget: 0, categories: {} };
+
+  // Actuals
+  const actualRevenue = getSales()
+    .filter(s => (s.date||'').slice(0,7) === month)
+    .reduce((s,x) => s + x.total, 0); // returns are negative → nets automatically
+  const actualByCat = {};
+  getExpenses().filter(e => e.month === month).forEach(e => {
+    actualByCat[e.category] = (actualByCat[e.category] || 0) + e.amount;
+  });
+  const budgetedExpTotal = Object.values(budget.categories || {}).reduce((s,v) => s + (+v||0), 0);
+  const actualExpTotal = Object.values(actualByCat).reduce((s,v) => s + v, 0);
+
+  // KPIs: revenue vs target, expenses vs budget, net profit target vs actual
+  const revPct = budget.revenueTarget > 0 ? (actualRevenue / budget.revenueTarget * 100) : 0;
+  const budgetProfit = (budget.revenueTarget || 0) - budgetedExpTotal;
+  const actualProfit = actualRevenue - actualExpTotal;
+  document.getElementById('saBudgetKPIs').innerHTML = [
+    { label:'الإيراد: فعلي / هدف', val: fmt(actualRevenue)+' / '+fmt(budget.revenueTarget||0), sub: revPct.toFixed(0)+'% من الهدف', bg:'#dcfce7', tc:'#15803d' },
+    { label:'المصاريف: فعلي / ميزانية', val: fmt(actualExpTotal)+' / '+fmt(budgetedExpTotal), sub: budgetedExpTotal>0?(actualExpTotal/budgetedExpTotal*100).toFixed(0)+'% من الميزانية':'—', bg:'#fee2e2', tc:'#b91c1c' },
+    { label:'صافي الربح: فعلي / مخطط', val: fmt(actualProfit)+' / '+fmt(budgetProfit), sub: actualProfit>=budgetProfit?'✅ في المستوى':'⚠️ أقل من المخطط', bg:'#eff6ff', tc:'#1d4ed8' },
+  ].map(k => `<div style="background:${k.bg};border-radius:10px;padding:14px;text-align:center;">
+    <div style="font-size:15px;font-weight:800;color:${k.tc};">${k.val}</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">${k.label}</div>
+    <div style="font-size:11px;font-weight:700;color:${k.tc};margin-top:2px;">${k.sub}</div>
+  </div>`).join('');
+
+  // Comparison rows: revenue (higher-is-better) then each expense category
+  const rows = [];
+  rows.push(_saBudgetRow('🎯 الإيرادات', budget.revenueTarget || 0, actualRevenue, true));
+  Object.keys(EXP_CATS).forEach(cat => {
+    const b = +(budget.categories?.[cat] || 0);
+    const a = actualByCat[cat] || 0;
+    if (b === 0 && a === 0) return; // hide untouched categories
+    rows.push(_saBudgetRow((EXP_ICONS[cat]||'') + ' ' + EXP_CATS[cat], b, a, false));
+  });
+  document.getElementById('saBudgetBody').innerHTML = rows.length
+    ? rows.join('')
+    : '<tr><td colspan="5" class="text-center text-muted" style="padding:20px;">لا توجد ميزانية أو مصاريف لهذا الشهر — اضغط "تعديل ميزانية"</td></tr>';
+}
+
+// One comparison row. isRevenue flips the "good/bad" colour logic: for revenue
+// exceeding target is good (green); for an expense, exceeding budget is bad (red).
+function _saBudgetRow(label, budgeted, actual, isRevenue) {
+  const diff = isRevenue ? (actual - budgeted) : (budgeted - actual); // positive = good in both cases
+  const pct = budgeted > 0 ? (actual / budgeted * 100) : (actual > 0 ? null : 0);
+  const good = diff >= 0;
+  const diffColor = good ? 'var(--success)' : 'var(--danger)';
+  const pctLabel = pct === null ? 'خارج الميزانية' : pct.toFixed(0) + '%';
+  const pctColor = pct === null ? 'var(--danger)' : (!isRevenue && pct > 100) ? 'var(--danger)' : (isRevenue && pct >= 100) ? 'var(--success)' : '#d97706';
+  return `<tr>
+    <td style="font-weight:600;">${label}</td>
+    <td>${fmt(budgeted)} ج</td>
+    <td style="font-weight:700;">${fmt(actual)} ج</td>
+    <td style="color:${diffColor};font-weight:700;">${diff>=0?'+':''}${fmt(diff)} ج</td>
+    <td style="color:${pctColor};font-weight:700;">${pctLabel}</td>
+  </tr>`;
+}
+
+function _saBudgetMonthChanged() {
+  _saBudgetMonth = document.getElementById('saBudgetMonth').value || new Date().toISOString().slice(0,7);
+  document.getElementById('saBudgetEditorCard').style.display = 'none';
+  buildBudgetVsActual();
+}
+
+function openBudgetEditor() {
+  const month = _saBudgetMonth;
+  const budget = getBudgets().find(b => b.month === month) || { revenueTarget: 0, categories: {} };
+  document.getElementById('saBudgetEditorMonth').textContent = month;
+  document.getElementById('saBudgetRevenue').value = budget.revenueTarget || '';
+  document.getElementById('saBudgetMsg').innerHTML = '';
+  document.getElementById('saBudgetCatInputs').innerHTML = Object.keys(EXP_CATS).map(cat => `
+    <div class="form-group">
+      <label>${EXP_ICONS[cat]||''} ${EXP_CATS[cat]}</label>
+      <input type="number" id="saBudgetCat_${cat}" class="form-control" min="0" placeholder="0" value="${budget.categories?.[cat] || ''}" />
+    </div>`).join('');
+  document.getElementById('saBudgetEditorCard').style.display = '';
+}
+
+function saveBudget() {
+  if (currentUser !== 'admin') { document.getElementById('saBudgetMsg').innerHTML = '<span style="color:var(--danger);font-size:12px;">الميزانية للأدمن فقط</span>'; return; }
+  const month = _saBudgetMonth;
+  const categories = {};
+  Object.keys(EXP_CATS).forEach(cat => {
+    const v = parseFloat(document.getElementById('saBudgetCat_' + cat).value) || 0;
+    if (v > 0) categories[cat] = v;
+  });
+  const rec = { month, revenueTarget: parseFloat(document.getElementById('saBudgetRevenue').value) || 0, categories, updatedAt: Date.now() };
+  const list = getBudgets().filter(b => b.month !== month);
+  list.push(rec);
+  setBudgets(list);
+  addAuditLog('budget.save', `حفظ ميزانية شهر ${month} — هدف إيراد ${fmt(rec.revenueTarget)} ج`, null);
+  document.getElementById('saBudgetEditorCard').style.display = 'none';
+  buildBudgetVsActual();
+  showToast('💾 تم حفظ ميزانية ' + month);
+}
+
+// ════════════════════════════════════════════════════
+// 8) POS CASH SESSION REPORT — تقرير ورديات الكاشير
+// ════════════════════════════════════════════════════
+// Reconciliation report for cashier shifts opened/closed from the POS (see
+// session functions in 20-pos-payment.js). Shows opening float, cash sales
+// during the shift, expected drawer cash, counted cash, and the variance —
+// the core loss-prevention number.
+function buildSessionReport() {
+  const pane = document.getElementById('sa-pane-sessions');
+  if (!pane.dataset.built) {
+    pane.dataset.built = '1';
+    pane.innerHTML = `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">
+        <select id="saSessBranch" class="form-control" style="width:auto;" onchange="buildSessionReport()"></select>
+      </div>
+      <div class="stats-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px;" id="saSessKPIs"></div>
+      <div class="card">
+        <div style="font-weight:700;margin-bottom:4px;">🧑‍💰 ورديات الكاشير — تسوية الدرج</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
+          "المتوقع في الدرج" = رصيد الافتتاح + مبيعات الكاش خلال الوردية − المرتجعات الكاش. "الفرق" = المعدود − المتوقع (بالسالب يعني عجز، بالموجب يعني زيادة).
+        </div>
+        <div class="table-wrap">
+        <table><thead><tr><th>الوردية</th><th>الكاشير</th><th>الفرع</th><th>الافتتاح</th><th>مبيعات كاش</th><th>المتوقع</th><th>المعدود</th><th>الفرق</th><th>الحالة</th></tr></thead>
+          <tbody id="saSessBody"></tbody></table>
+        </div>
+      </div>`;
+  }
+  _saBranchOptions('saSessBranch');
+  const branchFilter = lockBranchFilter('saSessBranch');
+  let sessions = getSessions().slice().sort((a,b) => (b.openedAt||0) - (a.openedAt||0));
+  if (branchFilter !== 'all') sessions = sessions.filter(s => s.branchId === branchFilter);
+
+  const closed = sessions.filter(s => s.status === 'closed');
+  const totalVariance = closed.reduce((s,x) => s + (x.variance || 0), 0);
+  const shortCount = closed.filter(s => (s.variance || 0) < 0).length;
+  const openCount = sessions.filter(s => s.status === 'open').length;
+
+  document.getElementById('saSessKPIs').innerHTML = [
+    { label:'ورديات مفتوحة الآن', val: openCount, bg:'#fef9c3', tc:'#92400e' },
+    { label:'ورديات مقفولة', val: closed.length, bg:'#eff6ff', tc:'#1d4ed8' },
+    { label:'صافي فروقات الدرج', val: fmt(totalVariance)+' ج', bg: totalVariance<0?'#fee2e2':'#dcfce7', tc: totalVariance<0?'#b91c1c':'#15803d' },
+    { label:'ورديات بها عجز', val: shortCount, bg:'#fee2e2', tc:'#b91c1c' },
+  ].map(k => `<div style="background:${k.bg};border-radius:10px;padding:14px;text-align:center;">
+    <div style="font-size:20px;font-weight:800;color:${k.tc};">${k.val}</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">${k.label}</div>
+  </div>`).join('');
+
+  document.getElementById('saSessBody').innerHTML = sessions.length ? sessions.map(s => {
+    const open = s.status === 'open';
+    const cashSales = _saSessionCashSales(s);
+    const expected = (s.openingCash || 0) + cashSales;
+    const variance = open ? null : (s.variance != null ? s.variance : ((s.closingCashCounted || 0) - expected));
+    const vColor = variance == null ? 'var(--text-muted)' : variance < 0 ? 'var(--danger)' : variance > 0 ? '#d97706' : 'var(--success)';
+    return `<tr style="${open?'background:#fffbeb;':''}">
+      <td style="font-size:12px;white-space:nowrap;">${new Date(s.openedAt).toLocaleString('ar-EG')}</td>
+      <td>${escHtml(s.cashier||'-')}</td>
+      <td style="font-size:12px;">${escHtml(getBranchName(s.branchId))}</td>
+      <td>${fmt(s.openingCash||0)}</td>
+      <td>${fmt(cashSales)}</td>
+      <td style="font-weight:600;">${fmt(expected)}</td>
+      <td>${open ? '—' : fmt(s.closingCashCounted||0)}</td>
+      <td style="font-weight:700;color:${vColor};">${variance==null?'—':(variance>=0?'+':'')+fmt(variance)}</td>
+      <td>${open ? '<span class="badge badge-warning">مفتوحة</span>' : '<span class="badge badge-success">مقفولة</span>'}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="9" class="text-center text-muted" style="padding:20px;">لا توجد ورديات مسجّلة</td></tr>';
+}
+
+// Cash sales within a session's window: same branch, payMethod cash, between
+// open and close (or now, if still open). Returns net of cash returns.
+function _saSessionCashSales(session) {
+  const from = session.openedAt || 0;
+  const to = session.closedAt || Date.now();
+  return getSales().filter(s =>
+    s.branchId === session.branchId &&
+    (s.payMethod === 'cash' || s.payMethod === 'return') &&
+    new Date(s.date).getTime() >= from &&
+    new Date(s.date).getTime() <= to
+  ).reduce((sum, s) => sum + (s.isReturn ? -Math.abs(s.total) : s.total), 0);
 }

@@ -58,6 +58,8 @@ let _auditCache         = [];                        // audit log entries (last 
 let _helpdeskCache      = [];                        // support tickets
 let _supplierPaymentsCache = [];                     // payments recorded against supplier balances (AP)
 let _pivotFavoritesCache = [];                       // saved pivot-analyzer report configs
+let _budgetsCache       = [];                        // monthly company budgets (revenue target + expense budget per category)
+let _sessionsCache      = [];                        // POS cash sessions (shift open/close + variance)
 
 // Helper: current branch display name
 function getBranchName(b) { return ((_settingsCache.branches) || BRANCH_DEFAULTS)[b] || b; }
@@ -197,6 +199,26 @@ function setAccounts(v) {
   _db.collection('pos_data').doc('accounts')
      .set({ list: v, updatedAt: Date.now() })
      .catch(e => console.error('Firestore setAccounts:', e));
+}
+
+// MONTHLY BUDGETS — one record per month: { month:'YYYY-MM',
+// revenueTarget, categories:{ rent, salaries, ... } (keys = EXP_CATS) }.
+// Synced through Firestore (pos_data/budgets), admin-write-only via rules.
+const getBudgets = () => _budgetsCache;
+function setBudgets(list) {
+  _budgetsCache = list;
+  DB.s('pos_budgets', list);
+  try { _fbReady && _db.collection('pos_data').doc('budgets').set({ list, updatedAt: Date.now() }); } catch(e) {}
+}
+
+// POS CASH SESSIONS (shifts) — { id, branchId, cashier, openedAt, openingCash,
+// closedAt, closingCashCounted, status:'open'|'closed', expectedCash, variance }.
+// Synced through Firestore (pos_data/sessions).
+const getSessions = () => _sessionsCache;
+function setSessions(list) {
+  _sessionsCache = list;
+  DB.s('pos_sessions', list);
+  try { _fbReady && _db.collection('pos_data').doc('sessions').set({ list, updatedAt: Date.now() }); } catch(e) {}
 }
 
 // SETTINGS

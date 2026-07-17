@@ -138,6 +138,7 @@
         </div>
       </div>
       <div style="font-size:11px; color:var(--text-muted); margin-top:4px;" id="cartClock"></div>
+      <div id="sessionIndicator" style="margin-top:6px;"></div>
     </div>
     <div class="cart-items" id="cartItems">
       <div class="cart-empty">أضف منتجات للفاتورة</div>
@@ -163,6 +164,7 @@
         <button class="btn btn-gray btn-sm" onclick="clearCart()" style="grid-column:1/-1;">🗑️ مسح الفاتورة</button>
         <button class="btn btn-outline btn-sm" onclick="openCashierReport()" style="grid-column:1/-1;font-size:12px;">📊 تقرير مبيعاتي</button>
         <button class="btn btn-outline btn-sm" onclick="openCashierReturn()" style="grid-column:1/-1;font-size:12px;color:var(--danger);border-color:var(--danger);">🔄 مرتجعات</button>
+        <button class="btn btn-outline btn-sm" id="sessionBtn" onclick="toggleSession()" style="grid-column:1/-1;font-size:12px;color:#4338ca;border-color:#c7d2fe;background:#eef2ff;">🧑‍💰 فتح وردية</button>
       </div>
     </div>
   </div>
@@ -1582,6 +1584,10 @@
         <div class="stat-value" id="rpt-material-cost">0 ج.م</div>
       </div>
     </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div style="font-weight:700;margin-bottom:8px;">💰 انحراف التكلفة — المخطط (BOM) مقابل الفعلي</div>
+      <div id="mfgCostVariance"></div>
+    </div>
     <div class="table-wrap">
       <table class="data-table">
         <thead>
@@ -1592,6 +1598,8 @@
             <th>السليم</th>
             <th>المعيب</th>
             <th>الكفاءة</th>
+            <th>التكلفة الفعلية</th>
+            <th>انحراف التكلفة</th>
           </tr>
         </thead>
         <tbody id="mfgRptBody"></tbody>
@@ -1763,6 +1771,16 @@
       <div class="form-group">
         <label>الخامات المستخدمة (BOM)</label>
         <textarea class="form-control" id="poBOM" rows="2" placeholder="مثال: قطن خام 10كجم، صبغة 2لتر"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>التكلفة المخططة (BOM) — إجمالي الأمر</label>
+          <input class="form-control" type="number" id="poPlannedCost" placeholder="0" min="0" step="any">
+        </div>
+        <div class="form-group">
+          <label>التكلفة الفعلية (عند الإنهاء)</label>
+          <input class="form-control" type="number" id="poActualCost" placeholder="0" min="0" step="any">
+        </div>
       </div>
       <div class="form-group">
         <label>ملاحظات</label>
@@ -3209,6 +3227,39 @@
       <button class="btn btn-gray btn-sm" onclick="document.getElementById('approvedCartsModal').classList.add('hidden')">✕ إغلاق</button>
     </div>
     <div id="approvedCartsList"></div>
+  </div>
+</div>
+
+<!-- ══ POS SESSION OPEN MODAL ══ -->
+<div id="sessionOpenModal" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="max-width:400px;width:92%;">
+    <div class="modal-header"><h3>🧑‍💰 فتح وردية جديدة</h3>
+      <button onclick="document.getElementById('sessionOpenModal').classList.add('hidden')" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button></div>
+    <div style="padding:16px;">
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">اكتب المبلغ اللي في الدرج دلوقتي (رصيد الافتتاح / العُهدة) قبل ما تبدأ البيع.</p>
+      <div class="form-group">
+        <label>💵 رصيد الافتتاح</label>
+        <input type="number" id="sessionOpeningCash" class="form-control" min="0" step="any" placeholder="0" />
+      </div>
+      <button class="btn btn-primary" style="width:100%;margin-top:8px;" onclick="confirmOpenSession()">✅ فتح الوردية</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ POS SESSION CLOSE MODAL ══ -->
+<div id="sessionCloseModal" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="max-width:440px;width:92%;">
+    <div class="modal-header"><h3>🔒 قفل الوردية وتسوية الدرج</h3>
+      <button onclick="document.getElementById('sessionCloseModal').classList.add('hidden')" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button></div>
+    <div style="padding:16px;">
+      <div id="sessionCloseSummary" style="background:var(--bg-secondary);border-radius:10px;padding:12px;margin-bottom:12px;font-size:13px;"></div>
+      <div class="form-group">
+        <label>💵 المبلغ المعدود فعلياً في الدرج</label>
+        <input type="number" id="sessionCountedCash" class="form-control" min="0" step="any" placeholder="0" oninput="updateSessionVariancePreview()" />
+      </div>
+      <div id="sessionVariancePreview" style="font-size:14px;font-weight:700;text-align:center;margin:10px 0;"></div>
+      <button class="btn btn-danger" style="width:100%;" onclick="confirmCloseSession()">🔒 قفل الوردية</button>
+    </div>
   </div>
 </div>
 

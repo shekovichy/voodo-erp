@@ -297,6 +297,7 @@ async function _legacyLogin(user, pass) {
     updateClock();
     setInterval(updateClock, 30000);
     setTimeout(function(){ checkForApprovedCarts(); }, 1000);
+    setTimeout(function(){ try { updateSessionUI(); } catch(e){} }, 1200);
     return true;
   }
 

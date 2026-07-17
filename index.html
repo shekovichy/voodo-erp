@@ -833,6 +833,7 @@ body.warehouse-mode #cartFab {
         </div>
       </div>
       <div style="font-size:11px; color:var(--text-muted); margin-top:4px;" id="cartClock"></div>
+      <div id="sessionIndicator" style="margin-top:6px;"></div>
     </div>
     <div class="cart-items" id="cartItems">
       <div class="cart-empty">أضف منتجات للفاتورة</div>
@@ -858,6 +859,7 @@ body.warehouse-mode #cartFab {
         <button class="btn btn-gray btn-sm" onclick="clearCart()" style="grid-column:1/-1;">🗑️ مسح الفاتورة</button>
         <button class="btn btn-outline btn-sm" onclick="openCashierReport()" style="grid-column:1/-1;font-size:12px;">📊 تقرير مبيعاتي</button>
         <button class="btn btn-outline btn-sm" onclick="openCashierReturn()" style="grid-column:1/-1;font-size:12px;color:var(--danger);border-color:var(--danger);">🔄 مرتجعات</button>
+        <button class="btn btn-outline btn-sm" id="sessionBtn" onclick="toggleSession()" style="grid-column:1/-1;font-size:12px;color:#4338ca;border-color:#c7d2fe;background:#eef2ff;">🧑‍💰 فتح وردية</button>
       </div>
     </div>
   </div>
@@ -2277,6 +2279,10 @@ body.warehouse-mode #cartFab {
         <div class="stat-value" id="rpt-material-cost">0 ج.م</div>
       </div>
     </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div style="font-weight:700;margin-bottom:8px;">💰 انحراف التكلفة — المخطط (BOM) مقابل الفعلي</div>
+      <div id="mfgCostVariance"></div>
+    </div>
     <div class="table-wrap">
       <table class="data-table">
         <thead>
@@ -2287,6 +2293,8 @@ body.warehouse-mode #cartFab {
             <th>السليم</th>
             <th>المعيب</th>
             <th>الكفاءة</th>
+            <th>التكلفة الفعلية</th>
+            <th>انحراف التكلفة</th>
           </tr>
         </thead>
         <tbody id="mfgRptBody"></tbody>
@@ -2458,6 +2466,16 @@ body.warehouse-mode #cartFab {
       <div class="form-group">
         <label>الخامات المستخدمة (BOM)</label>
         <textarea class="form-control" id="poBOM" rows="2" placeholder="مثال: قطن خام 10كجم، صبغة 2لتر"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>التكلفة المخططة (BOM) — إجمالي الأمر</label>
+          <input class="form-control" type="number" id="poPlannedCost" placeholder="0" min="0" step="any">
+        </div>
+        <div class="form-group">
+          <label>التكلفة الفعلية (عند الإنهاء)</label>
+          <input class="form-control" type="number" id="poActualCost" placeholder="0" min="0" step="any">
+        </div>
       </div>
       <div class="form-group">
         <label>ملاحظات</label>
@@ -3347,6 +3365,8 @@ let _auditCache         = [];                        // audit log entries (last 
 let _helpdeskCache      = [];                        // support tickets
 let _supplierPaymentsCache = [];                     // payments recorded against supplier balances (AP)
 let _pivotFavoritesCache = [];                       // saved pivot-analyzer report configs
+let _budgetsCache       = [];                        // monthly company budgets (revenue target + expense budget per category)
+let _sessionsCache      = [];                        // POS cash sessions (shift open/close + variance)
 
 // Helper: current branch display name
 function getBranchName(b) { return ((_settingsCache.branches) || BRANCH_DEFAULTS)[b] || b; }
@@ -3486,6 +3506,26 @@ function setAccounts(v) {
   _db.collection('pos_data').doc('accounts')
      .set({ list: v, updatedAt: Date.now() })
      .catch(e => console.error('Firestore setAccounts:', e));
+}
+
+// MONTHLY BUDGETS — one record per month: { month:'YYYY-MM',
+// revenueTarget, categories:{ rent, salaries, ... } (keys = EXP_CATS) }.
+// Synced through Firestore (pos_data/budgets), admin-write-only via rules.
+const getBudgets = () => _budgetsCache;
+function setBudgets(list) {
+  _budgetsCache = list;
+  DB.s('pos_budgets', list);
+  try { _fbReady && _db.collection('pos_data').doc('budgets').set({ list, updatedAt: Date.now() }); } catch(e) {}
+}
+
+// POS CASH SESSIONS (shifts) — { id, branchId, cashier, openedAt, openingCash,
+// closedAt, closingCashCounted, status:'open'|'closed', expectedCash, variance }.
+// Synced through Firestore (pos_data/sessions).
+const getSessions = () => _sessionsCache;
+function setSessions(list) {
+  _sessionsCache = list;
+  DB.s('pos_sessions', list);
+  try { _fbReady && _db.collection('pos_data').doc('sessions').set({ list, updatedAt: Date.now() }); } catch(e) {}
 }
 
 // SETTINGS
@@ -4050,6 +4090,7 @@ async function _legacyLogin(user, pass) {
     updateClock();
     setInterval(updateClock, 30000);
     setTimeout(function(){ checkForApprovedCarts(); }, 1000);
+    setTimeout(function(){ try { updateSessionUI(); } catch(e){} }, 1200);
     return true;
   }
 
@@ -4499,6 +4540,7 @@ function switchToCashier() {
   applyMobileUI();
   renderProducts();
   updateClock();
+  try { updateSessionUI(); } catch(e) {}
   if (!_clockIntervalStarted) {
     _clockIntervalStarted = true;
     setInterval(updateClock, 30000);
@@ -4951,6 +4993,122 @@ function printReceipt() {
 function closeModal(id) {
   const el = document.getElementById(id);
   if (el) el.classList.add('hidden');
+}
+
+// ══════════════════════════════════════════════
+// POS CASH SESSIONS (shifts) — open/close + drawer reconciliation.
+// A session belongs to one cashier at one branch. Cash sales during the
+// session's time window make up the expected drawer total; the cashier
+// counts the drawer at close and the variance is recorded for the manager's
+// session report (see buildSessionReport in the analytics chunk).
+// ══════════════════════════════════════════════
+function getCurrentSession() {
+  return getSessions().find(s =>
+    s.status === 'open' && s.branchId === currentBranch &&
+    s.cashier === (currentUsername || (currentUser === 'admin' ? 'مدير' : 'كاشير')));
+}
+
+// Net cash in the drawer generated by sales during the session window
+// (cash sales minus cash returns). Shared shape with the analytics report.
+function sessionCashSales(session) {
+  const from = session.openedAt || 0;
+  const to   = session.closedAt || Date.now();
+  return getSales().filter(s =>
+    s.branchId === session.branchId &&
+    (s.payMethod === 'cash' || s.payMethod === 'return') &&
+    new Date(s.date).getTime() >= from &&
+    new Date(s.date).getTime() <= to
+  ).reduce((sum, s) => sum + (s.isReturn ? -Math.abs(s.total) : s.total), 0);
+}
+
+function updateSessionUI() {
+  const btn = document.getElementById('sessionBtn');
+  const ind = document.getElementById('sessionIndicator');
+  const sess = getCurrentSession();
+  if (btn) {
+    btn.textContent = sess ? '🔒 قفل الوردية' : '🧑‍💰 فتح وردية';
+    btn.style.background = sess ? '#fef2f2' : '#eef2ff';
+    btn.style.color      = sess ? '#b91c1c' : '#4338ca';
+    btn.style.borderColor= sess ? '#fecaca' : '#c7d2fe';
+  }
+  if (ind) {
+    ind.innerHTML = sess
+      ? `<span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">🟢 وردية مفتوحة — افتتاح ${fmt(sess.openingCash||0)} ج</span>`
+      : `<span style="background:#fef9c3;color:#92400e;padding:2px 8px;border-radius:10px;font-size:11px;">⚪ لا توجد وردية مفتوحة</span>`;
+  }
+}
+
+function toggleSession() {
+  if (getCurrentSession()) openCloseSessionModal();
+  else openSessionModal();
+}
+
+function openSessionModal() {
+  document.getElementById('sessionOpeningCash').value = '';
+  document.getElementById('sessionOpenModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('sessionOpeningCash').focus(), 100);
+}
+
+function confirmOpenSession() {
+  const opening = parseFloat(document.getElementById('sessionOpeningCash').value) || 0;
+  const sess = {
+    id: 'sess_' + Date.now(),
+    branchId: currentBranch,
+    cashier: currentUsername || (currentUser === 'admin' ? 'مدير' : 'كاشير'),
+    openedAt: Date.now(),
+    openingCash: opening,
+    status: 'open',
+  };
+  setSessions([...getSessions(), sess]);
+  addAuditLog('session.open', `فتح وردية — افتتاح ${fmt(opening)} ج`, currentBranch);
+  document.getElementById('sessionOpenModal').classList.add('hidden');
+  updateSessionUI();
+  showToast('🟢 تم فتح الوردية');
+}
+
+function openCloseSessionModal() {
+  const sess = getCurrentSession();
+  if (!sess) { showToast('لا توجد وردية مفتوحة'); return; }
+  const cashSales = sessionCashSales(sess);
+  const expected = (sess.openingCash || 0) + cashSales;
+  document.getElementById('sessionCloseSummary').innerHTML = `
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>رصيد الافتتاح</span><strong>${fmt(sess.openingCash||0)} ج</strong></div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>مبيعات الكاش (صافي المرتجعات)</span><strong>${fmt(cashSales)} ج</strong></div>
+    <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:4px;margin-top:4px;"><span>المتوقع في الدرج</span><strong style="color:var(--primary);">${fmt(expected)} ج</strong></div>`;
+  document.getElementById('sessionCountedCash').value = '';
+  document.getElementById('sessionVariancePreview').innerHTML = '';
+  document.getElementById('sessionCloseModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('sessionCountedCash').focus(), 100);
+}
+
+function updateSessionVariancePreview() {
+  const sess = getCurrentSession(); if (!sess) return;
+  const expected = (sess.openingCash || 0) + sessionCashSales(sess);
+  const counted = parseFloat(document.getElementById('sessionCountedCash').value);
+  const el = document.getElementById('sessionVariancePreview');
+  if (isNaN(counted)) { el.innerHTML = ''; return; }
+  const variance = counted - expected;
+  const color = variance < 0 ? 'var(--danger)' : variance > 0 ? '#d97706' : 'var(--success)';
+  const label = variance < 0 ? 'عجز' : variance > 0 ? 'زيادة' : 'مظبوط ✅';
+  el.innerHTML = `<span style="color:${color};">الفرق: ${variance>=0?'+':''}${fmt(variance)} ج — ${label}</span>`;
+}
+
+function confirmCloseSession() {
+  const sess = getCurrentSession(); if (!sess) { showToast('لا توجد وردية مفتوحة'); return; }
+  const counted = parseFloat(document.getElementById('sessionCountedCash').value);
+  if (isNaN(counted)) { showToast('اكتب المبلغ المعدود'); return; }
+  const closedAt = Date.now();
+  const cashSales = sessionCashSales({ ...sess, closedAt });
+  const expected = (sess.openingCash || 0) + cashSales;
+  const variance = counted - expected;
+  const list = getSessions().map(s => s.id === sess.id
+    ? { ...s, status: 'closed', closedAt, closingCashCounted: counted, cashSales, expectedCash: expected, variance }
+    : s);
+  setSessions(list);
+  addAuditLog('session.close', `قفل وردية — متوقع ${fmt(expected)} / معدود ${fmt(counted)} / فرق ${variance>=0?'+':''}${fmt(variance)} ج`, sess.branchId);
+  document.getElementById('sessionCloseModal').classList.add('hidden');
+  updateSessionUI();
+  showToast(variance === 0 ? '✅ تم قفل الوردية — الدرج مظبوط' : `🔒 تم قفل الوردية — الفرق ${variance>=0?'+':''}${fmt(variance)} ج`);
 }
 
 
@@ -6843,6 +7001,30 @@ function initFirebase() {
         _hrCache = snap.exists ? (snap.data().list || []) : DB.g('pos_hr', []);
         visRefresh('page-hr', renderHRPage);
       }, err => { _hrCache = DB.g('pos_hr', []); });
+
+    // Budgets listener — renderAnalyticsPage's Budget tab lives in the lazy
+    // analytics chunk, so guard against it not being loaded (see note above).
+    _db.collection('pos_data').doc('budgets')
+      .onSnapshot(snap => {
+        _budgetsCache = snap.exists ? (snap.data().list || []) : DB.g('pos_budgets', []);
+        if (!snap.exists && _budgetsCache.length) {
+          _db.collection('pos_data').doc('budgets').set({ list: _budgetsCache, updatedAt: Date.now() });
+        }
+        visRefresh('page-analytics', () => { if (typeof buildBudgetVsActual === 'function') buildBudgetVsActual(); });
+      }, err => { _budgetsCache = DB.g('pos_budgets', []); });
+
+    // POS cash sessions listener — cashier "shifts" (open/close + variance).
+    // The cashier UI reads _sessionsCache directly; the report tab is in the
+    // lazy analytics chunk (guarded).
+    _db.collection('pos_data').doc('sessions')
+      .onSnapshot(snap => {
+        _sessionsCache = snap.exists ? (snap.data().list || []) : DB.g('pos_sessions', []);
+        if (!snap.exists && _sessionsCache.length) {
+          _db.collection('pos_data').doc('sessions').set({ list: _sessionsCache, updatedAt: Date.now() });
+        }
+        if (typeof updateSessionUI === 'function') { try { updateSessionUI(); } catch(e) {} }
+        visRefresh('page-analytics', () => { if (typeof buildSessionReport === 'function') buildSessionReport(); });
+      }, err => { _sessionsCache = DB.g('pos_sessions', []); });
 
     // Expenses listener
     _db.collection('pos_data').doc('expenses')
@@ -11003,6 +11185,39 @@ function switchHRTab(tab) {
       <button class="btn btn-gray btn-sm" onclick="document.getElementById('approvedCartsModal').classList.add('hidden')">✕ إغلاق</button>
     </div>
     <div id="approvedCartsList"></div>
+  </div>
+</div>
+
+<!-- ══ POS SESSION OPEN MODAL ══ -->
+<div id="sessionOpenModal" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="max-width:400px;width:92%;">
+    <div class="modal-header"><h3>🧑‍💰 فتح وردية جديدة</h3>
+      <button onclick="document.getElementById('sessionOpenModal').classList.add('hidden')" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button></div>
+    <div style="padding:16px;">
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">اكتب المبلغ اللي في الدرج دلوقتي (رصيد الافتتاح / العُهدة) قبل ما تبدأ البيع.</p>
+      <div class="form-group">
+        <label>💵 رصيد الافتتاح</label>
+        <input type="number" id="sessionOpeningCash" class="form-control" min="0" step="any" placeholder="0" />
+      </div>
+      <button class="btn btn-primary" style="width:100%;margin-top:8px;" onclick="confirmOpenSession()">✅ فتح الوردية</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ POS SESSION CLOSE MODAL ══ -->
+<div id="sessionCloseModal" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="max-width:440px;width:92%;">
+    <div class="modal-header"><h3>🔒 قفل الوردية وتسوية الدرج</h3>
+      <button onclick="document.getElementById('sessionCloseModal').classList.add('hidden')" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button></div>
+    <div style="padding:16px;">
+      <div id="sessionCloseSummary" style="background:var(--bg-secondary);border-radius:10px;padding:12px;margin-bottom:12px;font-size:13px;"></div>
+      <div class="form-group">
+        <label>💵 المبلغ المعدود فعلياً في الدرج</label>
+        <input type="number" id="sessionCountedCash" class="form-control" min="0" step="any" placeholder="0" oninput="updateSessionVariancePreview()" />
+      </div>
+      <div id="sessionVariancePreview" style="font-size:14px;font-weight:700;text-align:center;margin:10px 0;"></div>
+      <button class="btn btn-danger" style="width:100%;" onclick="confirmCloseSession()">🔒 قفل الوردية</button>
+    </div>
   </div>
 </div>
 

@@ -71,6 +71,7 @@ function switchToCashier() {
   applyMobileUI();
   renderProducts();
   updateClock();
+  try { updateSessionUI(); } catch(e) {}
   if (!_clockIntervalStarted) {
     _clockIntervalStarted = true;
     setInterval(updateClock, 30000);

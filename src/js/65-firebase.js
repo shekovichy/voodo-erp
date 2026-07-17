@@ -293,6 +293,30 @@ function initFirebase() {
         visRefresh('page-hr', renderHRPage);
       }, err => { _hrCache = DB.g('pos_hr', []); });
 
+    // Budgets listener — renderAnalyticsPage's Budget tab lives in the lazy
+    // analytics chunk, so guard against it not being loaded (see note above).
+    _db.collection('pos_data').doc('budgets')
+      .onSnapshot(snap => {
+        _budgetsCache = snap.exists ? (snap.data().list || []) : DB.g('pos_budgets', []);
+        if (!snap.exists && _budgetsCache.length) {
+          _db.collection('pos_data').doc('budgets').set({ list: _budgetsCache, updatedAt: Date.now() });
+        }
+        visRefresh('page-analytics', () => { if (typeof buildBudgetVsActual === 'function') buildBudgetVsActual(); });
+      }, err => { _budgetsCache = DB.g('pos_budgets', []); });
+
+    // POS cash sessions listener — cashier "shifts" (open/close + variance).
+    // The cashier UI reads _sessionsCache directly; the report tab is in the
+    // lazy analytics chunk (guarded).
+    _db.collection('pos_data').doc('sessions')
+      .onSnapshot(snap => {
+        _sessionsCache = snap.exists ? (snap.data().list || []) : DB.g('pos_sessions', []);
+        if (!snap.exists && _sessionsCache.length) {
+          _db.collection('pos_data').doc('sessions').set({ list: _sessionsCache, updatedAt: Date.now() });
+        }
+        if (typeof updateSessionUI === 'function') { try { updateSessionUI(); } catch(e) {} }
+        visRefresh('page-analytics', () => { if (typeof buildSessionReport === 'function') buildSessionReport(); });
+      }, err => { _sessionsCache = DB.g('pos_sessions', []); });
+
     // Expenses listener
     _db.collection('pos_data').doc('expenses')
       .onSnapshot(snap => {

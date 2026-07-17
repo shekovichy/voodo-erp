@@ -16,7 +16,11 @@ function _mEsc(s) {
 }
 function _mOpenModal(id) { const e=_mEl(id); if(e) e.classList.remove('hidden'); }
 function _mToast(msg,type) {
-  if (typeof showMsg==='function') { showMsg(msg,type); return; }
+  // Use the floating showToast(msg) — NOT showMsg(id,msg,type), whose first
+  // arg is an element id. Passing the message text as that id made
+  // getElementById return null and threw on every mfg save/delete (the data
+  // still saved, since DB.s runs before the toast, so it went unnoticed).
+  if (typeof showToast==='function') { showToast(msg); return; }
   const d=document.createElement('div');
   d.textContent=msg;
   d.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);'
@@ -288,6 +292,8 @@ function openProdOrderModal(id) {
   _mSetV('poGood',      o?.good      ||'');
   _mSetV('poDefect',    o?.defect    ||'');
   _mSetV('poBOM',       o?.bom       ||'');
+  _mSetV('poPlannedCost', o?.plannedCost ||'');
+  _mSetV('poActualCost',  o?.actualCost  ||'');
   _mSetV('poNotes',     o?.notes     ||'');
   _mSetV('poEditId',    id||'');
   _mOpenModal('prodOrderModal');
@@ -311,6 +317,8 @@ function saveProdOrder() {
     good:+(_mVal('poGood')||0),
     defect:+(_mVal('poDefect')||0),
     bom:_mVal('poBOM').trim(),
+    plannedCost:+(_mVal('poPlannedCost')||0),
+    actualCost:+(_mVal('poActualCost')||0),
     notes:_mVal('poNotes').trim(),
     createdAt:ex?.createdAt||Date.now()
   };
@@ -450,28 +458,58 @@ function renderMfgReports() {
   _mSet('rpt-total-defect',   totalDefect.toLocaleString('ar-EG'));
   _mSet('rpt-efficiency',     totalReq>0?((totalProd/totalReq)*100).toFixed(1)+'%':'0%');
   _mSet('rpt-waste-rate',     totalProd>0?((totalDefect/totalProd)*100).toFixed(1)+'%':'0%');
-  _mSet('rpt-material-cost',  '—');
+  // Actual material cost total (was a hardcoded '—' placeholder)
+  const totalActualCost = filtered.reduce((s,o)=>s+(+(o.actualCost||0)),0);
+  _mSet('rpt-material-cost', totalActualCost>0 ? totalActualCost.toLocaleString('ar-EG')+' ج.م' : '—');
+
   const byLine={};
   filtered.forEach(o=>{
     const k=o.lineId||'unknown';
-    if(!byLine[k]) byLine[k]={orders:0,qty:0,good:0,defect:0};
+    if(!byLine[k]) byLine[k]={orders:0,qty:0,good:0,defect:0,planned:0,actual:0};
     byLine[k].orders++; byLine[k].qty+=+(o.qty||0);
     byLine[k].good+=+(o.good||0); byLine[k].defect+=+(o.defect||0);
+    byLine[k].planned+=+(o.plannedCost||0); byLine[k].actual+=+(o.actualCost||0);
   });
+
+  // ── Planned vs Actual cost variance (BOM vs actual) ──
+  // Only orders that carry BOTH a planned and an actual cost are meaningful
+  // for a variance; totals below sum every order's planned/actual regardless
+  // (missing values count as 0), and the "—" guard hides variance where an
+  // order was never costed.
+  const totalPlanned = filtered.reduce((s,o)=>s+(+(o.plannedCost||0)),0);
+  const totalCostVariance = totalActualCost - totalPlanned;
+  const cvEl = _mEl('mfgCostVariance');
+  if (cvEl) {
+    if (totalPlanned === 0 && totalActualCost === 0) {
+      cvEl.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0;">لم يتم إدخال تكاليف مخططة/فعلية على أوامر الإنتاج بعد — أضفها من نافذة أمر الإنتاج لعرض انحراف التكلفة.</div>';
+    } else {
+      const over = totalCostVariance > 0;
+      cvEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+        <div style="background:var(--bg-secondary);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:11px;color:var(--text-muted);">التكلفة المخططة</div><div style="font-size:16px;font-weight:700;">${totalPlanned.toLocaleString('ar-EG')} ج</div></div>
+        <div style="background:var(--bg-secondary);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:11px;color:var(--text-muted);">التكلفة الفعلية</div><div style="font-size:16px;font-weight:700;">${totalActualCost.toLocaleString('ar-EG')} ج</div></div>
+        <div style="background:${over?'#fee2e2':'#dcfce7'};border-radius:8px;padding:10px;text-align:center;"><div style="font-size:11px;color:var(--text-muted);">الانحراف</div><div style="font-size:16px;font-weight:800;color:${over?'#b91c1c':'#15803d'};">${totalCostVariance>=0?'+':''}${totalCostVariance.toLocaleString('ar-EG')} ج</div></div>
+      </div>`;
+    }
+  }
+
   const tbody=_mEl('mfgRptBody'); if(!tbody) return;
   const entries=Object.entries(byLine);
-  if(!entries.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px">لا توجد بيانات في هذه الفترة</td></tr>';return;}
+  if(!entries.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:24px">لا توجد بيانات في هذه الفترة</td></tr>';return;}
   tbody.innerHTML=entries.map(([lid,d])=>{
     const ln=lines.find(l=>l.id==lid);
     const prod=d.good+d.defect;
     const eff=d.qty>0?((prod/d.qty)*100).toFixed(1):'0';
+    const variance=d.actual-d.planned;
+    const hasCost=d.planned>0||d.actual>0;
     return `<tr>
       <td><strong>${_mEsc(ln?.name||lid)}</strong></td>
       <td>${d.orders}</td>
       <td>${d.qty.toLocaleString('ar-EG')}</td>
       <td style="color:var(--success)">${d.good.toLocaleString('ar-EG')}</td>
       <td style="color:var(--danger)">${d.defect.toLocaleString('ar-EG')}</td>
-      <td>${eff}%</td></tr>`;
+      <td>${eff}%</td>
+      <td>${hasCost?(d.actual.toLocaleString('ar-EG')+' ج'):'—'}</td>
+      <td style="color:${variance>0?'var(--danger)':'var(--success)'};font-weight:600;">${hasCost?((variance>=0?'+':'')+variance.toLocaleString('ar-EG')+' ج'):'—'}</td></tr>`;
   }).join('');
 }
 

@@ -83,7 +83,7 @@ service cloud.firestore {
          get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin') ||
         (signedIn() &&
          exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
-         !(doc in ['settings', 'accounts']))
+         !(doc in ['settings', 'accounts', 'budgets']))
       );
     }
 
