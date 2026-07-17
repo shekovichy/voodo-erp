@@ -171,7 +171,7 @@ function addAuditLog(action, details, branchId, changes) {
     id: 'a_' + Date.now(),
     action,
     details,
-    user: currentUser || 'system',
+    user: currentUsername || currentUser || 'system',
     branchId: branchId || currentBranch,
     timestamp: Date.now(),
     changes: (changes && changes.length) ? changes : null

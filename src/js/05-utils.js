@@ -253,12 +253,14 @@ async function _legacyLogin(user, pass) {
 
   if (user === 'admin' && users.admin && await checkPass(pass, users.admin)) {
     await upgradePassIfNeeded(pass, users.admin, 'admin');
+    currentUsername = user;
     _enterAdminSession('تسجيل دخول (محلي): admin');
     return true;
   }
 
   if (user === 'cashier' && users.cashier && pass === users.cashier) {
     currentUser = 'cashier';
+    currentUsername = user;
     isBranchManager = false;
     document.getElementById('loginPage').classList.add('hidden');
     document.getElementById('cashierView').classList.remove('hidden');
@@ -273,6 +275,7 @@ async function _legacyLogin(user, pass) {
 
   for (const acc of getAccounts()) {
     if ((acc.username || '').toLowerCase() === user && await checkPass(pass, acc.password)) {
+      currentUsername = user;
       if (acc.type === 'admin') _enterAdminSession(`تسجيل دخول (محلي): ${user}`);
       else _enterBranchSession(acc.branchId, acc.role, user);
       return true;
@@ -284,6 +287,7 @@ async function _legacyLogin(user, pass) {
     if (branchUsers[b] &&
         user === (branchUsers[b].username || '').toLowerCase() &&
         await checkPass(pass, branchUsers[b].password)) {
+      currentUsername = user;
       _enterBranchSession(b, branchUsers[b].role, user);
       return true;
     }
@@ -385,6 +389,28 @@ function exportReportPDF(sectionId, title) {
 }
 
 
+// ── BACKUP SNAPSHOT (shared by local export + Google Drive) ─────────
+// One place that knows what a complete backup contains, reading from the
+// live in-memory caches (the source of truth once Firestore listeners run).
+function _buildFullBackup() {
+  const invByBranch = {};
+  BRANCH_IDS.forEach(b => { invByBranch[b] = getInv(b); });
+  return {
+    version:     3,
+    exportedAt:  new Date().toISOString(),
+    invByBranch,
+    sales:       getSales(),
+    customers:   getCustomers(),
+    suppliers:   _suppliersCache,
+    purchases:   _purchaseCache,
+    transfers:   getTransfers(),
+    expenses:    getExpenses(),
+    hr:          _hrCache,
+    settings:    _settingsCache,
+    suspended:   getSuspended(),
+  };
+}
+
 // ── GOOGLE DRIVE BACKUP ─────────────────────────────────────
 const GDRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 let _gdriveToken = null;
@@ -443,13 +469,11 @@ function connectGoogleDrive() {
 
 async function backupToGoogleDrive(silent) {
   if (!_gdriveToken) { if (!silent) showToast('⚠️ ارتبط بـ Google Drive أولاً'); return false; }
-  const backup = {
-    version:2, date:new Date().toISOString(), branch:currentBranch,
-    inv:DB.g('pos_inv_'+currentBranch,[]), sales:DB.g('pos_sales',[]),
-    customers:DB.g('pos_customers',[]), expenses:DB.g('pos_expenses',[]),
-    sellers:DB.g('pos_sellers',[]), branchNames:DB.g('pos_branch_names',{}),
-    purchases:DB.g('pos_purchases',[]), suppliers:DB.g('pos_suppliers',[]),
-  };
+  // Built from the LIVE caches, not localStorage keys. The old version read
+  // keys that were never written under those names ('pos_sales', 'pos_sellers',
+  // 'pos_branch_names'...) so the uploaded backup was mostly empty arrays —
+  // it looked like a backup but restored nothing.
+  const backup = _buildFullBackup();
   const fileName = 'VoodoERP_Backup_' + new Date().toISOString().slice(0,10) + '.json';
   const blob = new Blob([JSON.stringify(backup,null,2)], {type:'application/json'});
   try {
@@ -490,7 +514,7 @@ setTimeout(() => checkAutoBackup(false), 5000);
 
 function logout() {
   showConfirmModal('هل تريد تسجيل الخروج؟', function() {
-    currentUser = null; isBranchManager = false; cart = [];
+    currentUser = null; currentUsername = null; isBranchManager = false; cart = [];
     // End the real Firebase session too, and drop the cached role so the
     // auth bootstrap doesn't auto-resume on the next page load.
     localStorage.removeItem('pos_role_cache');

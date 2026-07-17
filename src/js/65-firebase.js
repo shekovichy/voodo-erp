@@ -60,6 +60,7 @@ async function resolveRoleAndEnter(fbUser) {
 }
 
 function _enterSessionByRole(rec) {
+  currentUsername = rec.username || null;
   if (rec.role === 'admin') {
     _enterAdminSession(`تسجيل دخول: ${rec.username}`);
   } else {
@@ -418,7 +419,7 @@ function confirmSuspend() {
   const bill = {
     id:        'S' + Date.now().toString(36).toUpperCase().slice(-6),
     created:   new Date().toISOString(),
-    cashier:   currentUser === 'admin' ? 'مدير' : 'كاشير',
+    cashier:   currentUsername || (currentUser === 'admin' ? 'مدير' : 'كاشير'),
     note,
     items:     cart.map(i => ({...i})),
     sub,

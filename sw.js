@@ -1,34 +1,28 @@
-// VOODO ERP — Service Worker v5
-const CACHE_NAME = 'voodo-erp-v5';
-const OFFLINE_URL = '/';
+// VOODO ERP — Service Worker v6
+// All URLs are RELATIVE to the SW's own location so the same file works
+// both at a domain root (Vercel: /) and under a subpath (GitHub Pages:
+// /voodo-erp/). v5 used absolute '/...' paths, which silently broke
+// caching — and therefore offline mode — on GitHub Pages.
+const CACHE_NAME = 'voodo-erp-v6';
 
 // Lazy-loaded admin pages (see LAZY_CHUNKS in build.py) — precached so they
 // still work offline after the first successful load, same as everything
 // else, even though they're no longer inlined into index.html.
 const LAZY_CHUNKS = [
-  '/chunk-accounting.js',
-  '/chunk-warehouse.js',
-  '/chunk-manufacturing.js',
-  '/chunk-purchases.js',
-  '/chunk-helpdesk.js',
-  '/chunk-pivot.js',
-  '/chunk-migration.js'
+  'chunk-accounting.js',
+  'chunk-warehouse.js',
+  'chunk-manufacturing.js',
+  'chunk-purchases.js',
+  'chunk-helpdesk.js',
+  'chunk-pivot.js',
+  'chunk-migration.js'
 ];
 
-// Files to cache for offline use
-const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  ...LAZY_CHUNKS,
-  'https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700;800&display=swap',
-  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
-];
-
-// Install — cache essential files
+// Install — cache essential files (resolved relative to the SW scope)
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(['/index.html', ...LAZY_CHUNKS]).catch(() => {});
+      return cache.addAll(['index.html', ...LAZY_CHUNKS]).catch(() => {});
     }).then(() => self.skipWaiting())
   );
 });
@@ -52,11 +46,15 @@ self.addEventListener('fetch', event => {
       url.hostname.includes('googleapis') ||
       url.hostname.includes('gstatic')) return;
 
+  // Identify app-shell requests by their FILE NAME, not an absolute path,
+  // so '/index.html' and '/voodo-erp/index.html' are both recognized.
+  const file = url.pathname.split('/').pop();
+  const isShell = file === '' || file === 'index.html' || LAZY_CHUNKS.includes(file);
+
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        // Cache successful responses for the app shell
-        if (response.ok && (url.pathname === '/' || url.pathname === '/index.html' || LAZY_CHUNKS.includes(url.pathname))) {
+        if (response.ok && isShell) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         }
@@ -65,7 +63,7 @@ self.addEventListener('fetch', event => {
       .catch(() => {
         // Offline — return cached version
         return caches.match(event.request)
-          .then(cached => cached || caches.match('/index.html'));
+          .then(cached => cached || caches.match('index.html'));
       })
   );
 });

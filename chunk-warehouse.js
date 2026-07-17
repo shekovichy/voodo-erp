@@ -197,7 +197,7 @@ function confirmWhTransfer() {
     toName:   branches[to]   || BRANCH_DEFAULTS[to],
     items: _whTrItems.map(function(i){ return Object.assign({},i); }),
     note: note, status: 'completed',
-    by: currentUser === 'admin' ? 'مدير' : 'كاشير'
+    by: currentUsername || (currentUser === 'admin' ? 'مدير' : 'كاشير')
   };
   var list = getTransfers(); list.unshift(record); setTransfers(list);
 

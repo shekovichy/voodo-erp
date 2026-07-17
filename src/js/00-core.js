@@ -240,6 +240,11 @@ function setSalespeople(arr) {
 // STATE
 // ══════════════════════════════════════════════
 let currentUser = null;
+// The actual username of whoever is logged in (from the Firebase role doc,
+// a legacy local account, or the demo). Recorded on sales/returns/transfers/
+// audit entries for real accountability — currentUser only distinguishes
+// admin vs cashier, which is useless once several people share a role.
+let currentUsername = null;
 // A branch manager is still currentUser==='cashier' (keeps every existing
 // admin-vs-cashier check working unchanged) with this extra flag layering
 // on a couple of additional, branch-scoped, read-only pages — see doLogin()

@@ -136,7 +136,7 @@ function _processCashierReturnConfirmed(sale, reason, returnItems, returnTotal) 
     isReturn:       true,
     originalSaleId: sale.id,
     returnReason:   reason || 'غير محدد',
-    cashier:        currentUser === 'admin' ? 'مدير' : 'كاشير',
+    cashier:        currentUsername || (currentUser === 'admin' ? 'مدير' : 'كاشير'),
     salesperson:    sale.salesperson || '',
     branchId:       sale.branchId || currentBranch,
     branchName:     sale.branchName || getBranchName(currentBranch),

@@ -3524,6 +3524,11 @@ function setSalespeople(arr) {
 // STATE
 // ══════════════════════════════════════════════
 let currentUser = null;
+// The actual username of whoever is logged in (from the Firebase role doc,
+// a legacy local account, or the demo). Recorded on sales/returns/transfers/
+// audit entries for real accountability — currentUser only distinguishes
+// admin vs cashier, which is useless once several people share a role.
+let currentUsername = null;
 // A branch manager is still currentUser==='cashier' (keeps every existing
 // admin-vs-cashier check working unchanged) with this extra flag layering
 // on a couple of additional, branch-scoped, read-only pages — see doLogin()
@@ -3995,12 +4000,14 @@ async function _legacyLogin(user, pass) {
 
   if (user === 'admin' && users.admin && await checkPass(pass, users.admin)) {
     await upgradePassIfNeeded(pass, users.admin, 'admin');
+    currentUsername = user;
     _enterAdminSession('تسجيل دخول (محلي): admin');
     return true;
   }
 
   if (user === 'cashier' && users.cashier && pass === users.cashier) {
     currentUser = 'cashier';
+    currentUsername = user;
     isBranchManager = false;
     document.getElementById('loginPage').classList.add('hidden');
     document.getElementById('cashierView').classList.remove('hidden');
@@ -4015,6 +4022,7 @@ async function _legacyLogin(user, pass) {
 
   for (const acc of getAccounts()) {
     if ((acc.username || '').toLowerCase() === user && await checkPass(pass, acc.password)) {
+      currentUsername = user;
       if (acc.type === 'admin') _enterAdminSession(`تسجيل دخول (محلي): ${user}`);
       else _enterBranchSession(acc.branchId, acc.role, user);
       return true;
@@ -4026,6 +4034,7 @@ async function _legacyLogin(user, pass) {
     if (branchUsers[b] &&
         user === (branchUsers[b].username || '').toLowerCase() &&
         await checkPass(pass, branchUsers[b].password)) {
+      currentUsername = user;
       _enterBranchSession(b, branchUsers[b].role, user);
       return true;
     }
@@ -4127,6 +4136,28 @@ function exportReportPDF(sectionId, title) {
 }
 
 
+// ── BACKUP SNAPSHOT (shared by local export + Google Drive) ─────────
+// One place that knows what a complete backup contains, reading from the
+// live in-memory caches (the source of truth once Firestore listeners run).
+function _buildFullBackup() {
+  const invByBranch = {};
+  BRANCH_IDS.forEach(b => { invByBranch[b] = getInv(b); });
+  return {
+    version:     3,
+    exportedAt:  new Date().toISOString(),
+    invByBranch,
+    sales:       getSales(),
+    customers:   getCustomers(),
+    suppliers:   _suppliersCache,
+    purchases:   _purchaseCache,
+    transfers:   getTransfers(),
+    expenses:    getExpenses(),
+    hr:          _hrCache,
+    settings:    _settingsCache,
+    suspended:   getSuspended(),
+  };
+}
+
 // ── GOOGLE DRIVE BACKUP ─────────────────────────────────────
 const GDRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 let _gdriveToken = null;
@@ -4185,13 +4216,11 @@ function connectGoogleDrive() {
 
 async function backupToGoogleDrive(silent) {
   if (!_gdriveToken) { if (!silent) showToast('⚠️ ارتبط بـ Google Drive أولاً'); return false; }
-  const backup = {
-    version:2, date:new Date().toISOString(), branch:currentBranch,
-    inv:DB.g('pos_inv_'+currentBranch,[]), sales:DB.g('pos_sales',[]),
-    customers:DB.g('pos_customers',[]), expenses:DB.g('pos_expenses',[]),
-    sellers:DB.g('pos_sellers',[]), branchNames:DB.g('pos_branch_names',{}),
-    purchases:DB.g('pos_purchases',[]), suppliers:DB.g('pos_suppliers',[]),
-  };
+  // Built from the LIVE caches, not localStorage keys. The old version read
+  // keys that were never written under those names ('pos_sales', 'pos_sellers',
+  // 'pos_branch_names'...) so the uploaded backup was mostly empty arrays —
+  // it looked like a backup but restored nothing.
+  const backup = _buildFullBackup();
   const fileName = 'VoodoERP_Backup_' + new Date().toISOString().slice(0,10) + '.json';
   const blob = new Blob([JSON.stringify(backup,null,2)], {type:'application/json'});
   try {
@@ -4232,7 +4261,7 @@ setTimeout(() => checkAutoBackup(false), 5000);
 
 function logout() {
   showConfirmModal('هل تريد تسجيل الخروج؟', function() {
-    currentUser = null; isBranchManager = false; cart = [];
+    currentUser = null; currentUsername = null; isBranchManager = false; cart = [];
     // End the real Firebase session too, and drop the cached role so the
     // auth bootstrap doesn't auto-resume on the next page load.
     localStorage.removeItem('pos_role_cache');
@@ -4807,7 +4836,7 @@ function completeSale() {
   const sale = {
     id: Date.now(),
     date: new Date().toISOString(),
-    cashier: currentUser === 'admin' ? 'مدير' : 'كاشير',
+    cashier: currentUsername || (currentUser === 'admin' ? 'مدير' : 'كاشير'),
     salesperson,
     items: cart.map(i => ({...i})),
     sub, disc, total, paid, change, payMethod,
@@ -5022,8 +5051,16 @@ function buildDashboard() {
   applyBranchDashboardFilter();
   const branchFilter = dbf?.value || 'all';
 
-  const allSales = getSales().filter(s => !s.isReturn);
-  const sales = branchFilter === 'all' ? allSales : allSales.filter(s => s.branchId === branchFilter);
+  const allSales   = getSales().filter(s => !s.isReturn);
+  const allReturns = getSales().filter(s => s.isReturn);
+  const sales   = branchFilter === 'all' ? allSales   : allSales.filter(s => s.branchId === branchFilter);
+  // Returns carry NEGATIVE totals and negative item quantities, so simply
+  // concatenating them into the arrays used for revenue/profit sums nets
+  // them out automatically. They're kept out of invoice counts (a return is
+  // not an invoice). Previously the dashboard ignored returns entirely, so a
+  // fully-returned sale still showed as revenue forever — overstating both
+  // revenue and profit vs. the accounting page, which does net them.
+  const returns = branchFilter === 'all' ? allReturns : allReturns.filter(s => s.branchId === branchFilter);
   const inv   = branchFilter === 'all'
     ? Object.values(_invCacheByBranch).flat()
     : getInv(branchFilter);
@@ -5046,6 +5083,12 @@ function buildDashboard() {
   const rangeSales  = sales.filter(s => { const d = new Date(s.date); return d >= rangeStart && d <= now; });
   const monthSales  = sales.filter(s => s.date.startsWith(thisMonth));
   const prevMonthSales = sales.filter(s => s.date.startsWith(prevMonth));
+  // Net-of-returns arrays for money figures (see the `returns` comment above)
+  const todayNet     = [...todaySales,     ...returns.filter(s => new Date(s.date).toDateString() === today)];
+  const rangeNet     = [...rangeSales,     ...returns.filter(s => { const d = new Date(s.date); return d >= rangeStart && d <= now; })];
+  const monthNet     = [...monthSales,     ...returns.filter(s => s.date.startsWith(thisMonth))];
+  const prevMonthNet = [...prevMonthSales, ...returns.filter(s => s.date.startsWith(prevMonth))];
+  const netAll       = [...sales, ...returns];
 
   const low  = inv.filter(p => p.qty > 0  && p.qty <= thresh);
   const out  = inv.filter(p => p.qty <= 0);
@@ -5056,14 +5099,15 @@ function buildDashboard() {
     labelEl.textContent = `${rangeStart.toLocaleDateString('ar-EG',{day:'numeric',month:'short'})} — ${now.toLocaleDateString('ar-EG',{day:'numeric',month:'short',year:'numeric'})}`;
   }
 
-  // Profit for range period
-  const rangeProfit = calcProfit(rangeSales, inv);
-  const monthProfit = calcProfit(monthSales, inv);
-  const prevMonthProfit = calcProfit(prevMonthSales, inv);
+  // Profit for range period — net of returns (returned items carry negative
+  // qty, so calcProfit over the combined array subtracts their profit)
+  const rangeProfit = calcProfit(rangeNet, inv);
+  const monthProfit = calcProfit(monthNet, inv);
+  const prevMonthProfit = calcProfit(prevMonthNet, inv);
 
-  animateNumber(document.getElementById('sd-today'),    todaySales.reduce((s,x) => s+x.total,0), { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('sd-today'),    todayNet.reduce((s,x) => s+x.total,0), { format: fmt, suffix: ' ج' });
   document.getElementById('sd-today-c').textContent   = todaySales.length + ' فاتورة';
-  animateNumber(document.getElementById('sd-month'),    rangeSales.reduce((s,x) => s+x.total,0), { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('sd-month'),    rangeNet.reduce((s,x) => s+x.total,0), { format: fmt, suffix: ' ج' });
   document.getElementById('sd-month-c').textContent   = rangeSales.length + ' فاتورة';
   animateNumber(document.getElementById('sd-profit'),   rangeProfit, { format: fmt, suffix: ' ج' });
   animateNumber(document.getElementById('sd-products'), inv.length);
@@ -5071,9 +5115,9 @@ function buildDashboard() {
   animateNumber(document.getElementById('sd-out'),      out.length);
   updateLowStockBell();
 
-  // ── Month vs Prev Month comparison cards ──
-  const thisRev  = monthSales.reduce((s,x) => s+x.total, 0);
-  const prevRev  = prevMonthSales.reduce((s,x) => s+x.total, 0);
+  // ── Month vs Prev Month comparison cards ── (revenue net of returns)
+  const thisRev  = monthNet.reduce((s,x) => s+x.total, 0);
+  const prevRev  = prevMonthNet.reduce((s,x) => s+x.total, 0);
   const thisOrders = monthSales.length;
   const prevOrders = prevMonthSales.length;
   const thisATV  = thisOrders > 0 ? thisRev / thisOrders : 0;
@@ -5104,7 +5148,7 @@ function buildDashboard() {
 
   // ── Weekly chart (last 7 days) ──
   const days = Array.from({length:7}, (_,i) => { const d=new Date(); d.setDate(d.getDate()-6+i); return d; });
-  const weeklyData = days.map(d => sales.filter(s=>new Date(s.date).toDateString()===d.toDateString()).reduce((s,x)=>s+x.total,0));
+  const weeklyData = days.map(d => netAll.filter(s=>new Date(s.date).toDateString()===d.toDateString()).reduce((s,x)=>s+x.total,0));
   if (chartWeekly) chartWeekly.destroy();
   chartWeekly = new Chart(document.getElementById('chartWeekly'), {
     type:'bar',
@@ -5130,7 +5174,7 @@ function buildDashboard() {
     const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
     return { key: d.toISOString().slice(0,7), label: d.toLocaleDateString('ar-EG',{month:'short',year:'2-digit'}) };
   });
-  const trendData = trendMonths.map(m => sales.filter(s=>s.date.startsWith(m.key)).reduce((s,x)=>s+x.total,0));
+  const trendData = trendMonths.map(m => netAll.filter(s=>s.date.startsWith(m.key)).reduce((s,x)=>s+x.total,0));
   if (chartTrend) chartTrend.destroy();
   chartTrend = new Chart(document.getElementById('chartTrend'), {
     type:'line',
@@ -5144,7 +5188,7 @@ function buildDashboard() {
   // ── Branch comparison horizontal bar chart ──
   const branches = getBranches();
   const branchLabels = BRANCH_IDS.map(b => branches[b]||BRANCH_DEFAULTS[b]||b);
-  const branchRevs   = BRANCH_IDS.map(b => allSales.filter(s=>s.date.startsWith(thisMonth)&&s.branchId===b).reduce((s,x)=>s+x.total,0));
+  const branchRevs   = BRANCH_IDS.map(b => [...allSales, ...allReturns].filter(s=>s.date.startsWith(thisMonth)&&s.branchId===b).reduce((s,x)=>s+x.total,0));
   // Cycles if there are more branches than base colors (admin-added branches beyond the original 5)
   const branchPalette = ['#1a5faf','#F47920','#d97706','#7c3aed','#059669','#dc2626','#0891b2','#be185d'];
   const branchColors  = BRANCH_IDS.map((b,i) => branchPalette[i % branchPalette.length]);
@@ -5167,7 +5211,7 @@ function buildDashboard() {
   const monthRevenue = thisRev;
   const marginPct    = thisMargin;
   const invValue     = inv.reduce((s,i)=>s+(i.cost||0)*(i.qty||0),0);
-  const cogs = monthSales.reduce((acc,s)=>acc+s.items.reduce((a,i)=>{
+  const cogs = monthNet.reduce((acc,s)=>acc+s.items.reduce((a,i)=>{
     const c = i.cost>0?i.cost:(inv.find(x=>x.code===i.code)?.cost||0);
     return a + c*i.qty; },0),0);
   const turnover = invValue > 0 ? (cogs / invValue) : 0;
@@ -6101,14 +6145,10 @@ function buildHeatmap(sales) {
 // #18 BACKUP
 // ══════════════════════════════════════════════
 function exportBackup() {
-  const backup = {
-    version:    2,
-    exportedAt: new Date().toISOString(),
-    inv:        getInv(),
-    sales:      getSales(),
-    settings:   _settingsCache,
-    suspended:  _suspendCache
-  };
+  // Full snapshot (all branches + customers/suppliers/purchases/...) — the
+  // old version exported only the CURRENT branch's inventory, so a restore
+  // silently dropped every other branch. See _buildFullBackup() in 05-utils.js.
+  const backup = _buildFullBackup();
   const json = JSON.stringify(backup, null, 2);
   const blob = new Blob([json], {type:'application/json'});
   const url  = URL.createObjectURL(blob);
@@ -6133,12 +6173,24 @@ function _importBackupConfirmed(file) {
   reader.onload = ev => {
     try {
       const data = JSON.parse(ev.target.result);
-      if (!data.version || !data.inv) { throw new Error('ملف غير صالح'); }
-      if (data.inv)       setInv(data.inv);
+      if (!data.version || (!data.inv && !data.invByBranch)) { throw new Error('ملف غير صالح'); }
+      let invCount = 0;
+      if (data.invByBranch) {
+        // v3 format — per-branch inventory
+        Object.keys(data.invByBranch).forEach(b => {
+          if (BRANCH_IDS.includes(b)) { setInv(data.invByBranch[b], b); invCount += (data.invByBranch[b] || []).length; }
+        });
+      } else if (data.inv) {
+        // v2 format — single (current-branch) inventory
+        setInv(data.inv);
+        invCount = data.inv.length;
+      }
       if (data.sales)     { _salesCache = data.sales; if (!_fbReady) DB.s('sales', data.sales); }
+      if (data.customers) setCustomers(data.customers);
+      if (data.transfers) setTransfers(data.transfers);
       if (data.settings)  { _settingsCache = data.settings; saveSettingsCache(); }
       if (data.suspended) setSuspended(data.suspended);
-      showMsg('sBackupMsg', 'تم الاستعادة — ' + (data.inv?.length||0) + ' منتج · ' + (data.sales?.length||0) + ' فاتورة');
+      showMsg('sBackupMsg', 'تم الاستعادة — ' + invCount + ' منتج · ' + (data.sales?.length||0) + ' فاتورة');
       buildDashboard();
     } catch(err) {
       showMsg('sBackupMsg', 'خطأ في قراءة الملف: ' + err.message, 'danger');
@@ -6525,6 +6577,7 @@ async function resolveRoleAndEnter(fbUser) {
 }
 
 function _enterSessionByRole(rec) {
+  currentUsername = rec.username || null;
   if (rec.role === 'admin') {
     _enterAdminSession(`تسجيل دخول: ${rec.username}`);
   } else {
@@ -6883,7 +6936,7 @@ function confirmSuspend() {
   const bill = {
     id:        'S' + Date.now().toString(36).toUpperCase().slice(-6),
     created:   new Date().toISOString(),
-    cashier:   currentUser === 'admin' ? 'مدير' : 'كاشير',
+    cashier:   currentUsername || (currentUser === 'admin' ? 'مدير' : 'كاشير'),
     note,
     items:     cart.map(i => ({...i})),
     sub,
@@ -7478,7 +7531,7 @@ function confirmTransfer() {
     items: _trItems.map(i=>({...i})),
     note,
     status: 'completed',
-    by: currentUser === 'admin' ? 'مدير' : 'كاشير'
+    by: currentUsername || (currentUser === 'admin' ? 'مدير' : 'كاشير')
   };
   const list = getTransfers();
   list.unshift(record);
@@ -8284,7 +8337,7 @@ function _processReturnConfirmed(sale, reason, returnItems, returnTotal) {
     isReturn:       true,
     originalSaleId: sale.id,
     returnReason:   reason || 'غير محدد',
-    cashier:        currentUser === 'admin' ? 'مدير' : 'كاشير',
+    cashier:        currentUsername || (currentUser === 'admin' ? 'مدير' : 'كاشير'),
     salesperson:    sale.salesperson || '',
     branchId,
     branchName:     sale.branchName || getBranchName(branchId),
@@ -8520,7 +8573,7 @@ function addAuditLog(action, details, branchId, changes) {
     id: 'a_' + Date.now(),
     action,
     details,
-    user: currentUser || 'system',
+    user: currentUsername || currentUser || 'system',
     branchId: branchId || currentBranch,
     timestamp: Date.now(),
     changes: (changes && changes.length) ? changes : null
@@ -8801,7 +8854,7 @@ function _processCashierReturnConfirmed(sale, reason, returnItems, returnTotal) 
     isReturn:       true,
     originalSaleId: sale.id,
     returnReason:   reason || 'غير محدد',
-    cashier:        currentUser === 'admin' ? 'مدير' : 'كاشير',
+    cashier:        currentUsername || (currentUser === 'admin' ? 'مدير' : 'كاشير'),
     salesperson:    sale.salesperson || '',
     branchId:       sale.branchId || currentBranch,
     branchName:     sale.branchName || getBranchName(currentBranch),
@@ -9738,7 +9791,10 @@ function sendForApproval() {
     var request = {
       id: Date.now(),
       date: new Date().toISOString(),
-      cashier: currentUser || 'كاشير',
+      // Real username when available; the match in checkForApprovedCarts()
+      // compares against the same expression, so old records (generic
+      // 'cashier') and new ones both keep working.
+      cashier: currentUsername || currentUser || 'كاشير',
       branchId: currentBranch,
       branchName: (getBranches()[currentBranch] || BRANCH_DEFAULTS[currentBranch]),
       items: cart.map(function(i){ return Object.assign({}, i); }),
@@ -9838,7 +9894,7 @@ var _notifiedApprovals = DB.g('pos_notified_approvals', []);
 function checkForApprovedCarts() {
   if (currentUser === 'admin') return;
   var approved = getApprovals().filter(function(r){
-    return r.status === 'approved' && r.cashier === currentUser && !_notifiedApprovals.includes(r.id);
+    return r.status === 'approved' && (r.cashier === currentUsername || r.cashier === currentUser) && !_notifiedApprovals.includes(r.id);
   });
   if (!approved.length) return;
   approved.forEach(function(r){ _notifiedApprovals.push(r.id); });
@@ -9858,7 +9914,7 @@ function openApprovedCarts() {
 
 function renderApprovedCartsList() {
   var myApproved = getApprovals().filter(function(r){
-    return r.status === 'approved' && (currentUser === 'admin' || r.cashier === currentUser);
+    return r.status === 'approved' && (currentUser === 'admin' || r.cashier === currentUsername || r.cashier === currentUser);
   });
   var el = document.getElementById('approvedCartsList');
   if (!myApproved.length) {
@@ -10267,9 +10323,7 @@ function switchHRTab(tab) {
 
 
 
-// app.js split into feature modules (00-core.js … 105-manufacturing.js)
-// Backup: app.js.bak
-
+// app.js split into feature modules (00-core.js … 120-data-migration.js)
 
 </script>
 
@@ -11058,7 +11112,7 @@ function switchHRTab(tab) {
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
+    navigator.serviceWorker.register('sw.js')
       .then(reg => console.log('SW registered:', reg.scope))
       .catch(err => console.warn('SW registration failed:', err));
   });

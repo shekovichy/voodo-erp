@@ -44,7 +44,10 @@ function sendForApproval() {
     var request = {
       id: Date.now(),
       date: new Date().toISOString(),
-      cashier: currentUser || 'كاشير',
+      // Real username when available; the match in checkForApprovedCarts()
+      // compares against the same expression, so old records (generic
+      // 'cashier') and new ones both keep working.
+      cashier: currentUsername || currentUser || 'كاشير',
       branchId: currentBranch,
       branchName: (getBranches()[currentBranch] || BRANCH_DEFAULTS[currentBranch]),
       items: cart.map(function(i){ return Object.assign({}, i); }),
@@ -144,7 +147,7 @@ var _notifiedApprovals = DB.g('pos_notified_approvals', []);
 function checkForApprovedCarts() {
   if (currentUser === 'admin') return;
   var approved = getApprovals().filter(function(r){
-    return r.status === 'approved' && r.cashier === currentUser && !_notifiedApprovals.includes(r.id);
+    return r.status === 'approved' && (r.cashier === currentUsername || r.cashier === currentUser) && !_notifiedApprovals.includes(r.id);
   });
   if (!approved.length) return;
   approved.forEach(function(r){ _notifiedApprovals.push(r.id); });
@@ -164,7 +167,7 @@ function openApprovedCarts() {
 
 function renderApprovedCartsList() {
   var myApproved = getApprovals().filter(function(r){
-    return r.status === 'approved' && (currentUser === 'admin' || r.cashier === currentUser);
+    return r.status === 'approved' && (currentUser === 'admin' || r.cashier === currentUsername || r.cashier === currentUser);
   });
   var el = document.getElementById('approvedCartsList');
   if (!myApproved.length) {

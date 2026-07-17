@@ -65,8 +65,16 @@ function buildDashboard() {
   applyBranchDashboardFilter();
   const branchFilter = dbf?.value || 'all';
 
-  const allSales = getSales().filter(s => !s.isReturn);
-  const sales = branchFilter === 'all' ? allSales : allSales.filter(s => s.branchId === branchFilter);
+  const allSales   = getSales().filter(s => !s.isReturn);
+  const allReturns = getSales().filter(s => s.isReturn);
+  const sales   = branchFilter === 'all' ? allSales   : allSales.filter(s => s.branchId === branchFilter);
+  // Returns carry NEGATIVE totals and negative item quantities, so simply
+  // concatenating them into the arrays used for revenue/profit sums nets
+  // them out automatically. They're kept out of invoice counts (a return is
+  // not an invoice). Previously the dashboard ignored returns entirely, so a
+  // fully-returned sale still showed as revenue forever — overstating both
+  // revenue and profit vs. the accounting page, which does net them.
+  const returns = branchFilter === 'all' ? allReturns : allReturns.filter(s => s.branchId === branchFilter);
   const inv   = branchFilter === 'all'
     ? Object.values(_invCacheByBranch).flat()
     : getInv(branchFilter);
@@ -89,6 +97,12 @@ function buildDashboard() {
   const rangeSales  = sales.filter(s => { const d = new Date(s.date); return d >= rangeStart && d <= now; });
   const monthSales  = sales.filter(s => s.date.startsWith(thisMonth));
   const prevMonthSales = sales.filter(s => s.date.startsWith(prevMonth));
+  // Net-of-returns arrays for money figures (see the `returns` comment above)
+  const todayNet     = [...todaySales,     ...returns.filter(s => new Date(s.date).toDateString() === today)];
+  const rangeNet     = [...rangeSales,     ...returns.filter(s => { const d = new Date(s.date); return d >= rangeStart && d <= now; })];
+  const monthNet     = [...monthSales,     ...returns.filter(s => s.date.startsWith(thisMonth))];
+  const prevMonthNet = [...prevMonthSales, ...returns.filter(s => s.date.startsWith(prevMonth))];
+  const netAll       = [...sales, ...returns];
 
   const low  = inv.filter(p => p.qty > 0  && p.qty <= thresh);
   const out  = inv.filter(p => p.qty <= 0);
@@ -99,14 +113,15 @@ function buildDashboard() {
     labelEl.textContent = `${rangeStart.toLocaleDateString('ar-EG',{day:'numeric',month:'short'})} — ${now.toLocaleDateString('ar-EG',{day:'numeric',month:'short',year:'numeric'})}`;
   }
 
-  // Profit for range period
-  const rangeProfit = calcProfit(rangeSales, inv);
-  const monthProfit = calcProfit(monthSales, inv);
-  const prevMonthProfit = calcProfit(prevMonthSales, inv);
+  // Profit for range period — net of returns (returned items carry negative
+  // qty, so calcProfit over the combined array subtracts their profit)
+  const rangeProfit = calcProfit(rangeNet, inv);
+  const monthProfit = calcProfit(monthNet, inv);
+  const prevMonthProfit = calcProfit(prevMonthNet, inv);
 
-  animateNumber(document.getElementById('sd-today'),    todaySales.reduce((s,x) => s+x.total,0), { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('sd-today'),    todayNet.reduce((s,x) => s+x.total,0), { format: fmt, suffix: ' ج' });
   document.getElementById('sd-today-c').textContent   = todaySales.length + ' فاتورة';
-  animateNumber(document.getElementById('sd-month'),    rangeSales.reduce((s,x) => s+x.total,0), { format: fmt, suffix: ' ج' });
+  animateNumber(document.getElementById('sd-month'),    rangeNet.reduce((s,x) => s+x.total,0), { format: fmt, suffix: ' ج' });
   document.getElementById('sd-month-c').textContent   = rangeSales.length + ' فاتورة';
   animateNumber(document.getElementById('sd-profit'),   rangeProfit, { format: fmt, suffix: ' ج' });
   animateNumber(document.getElementById('sd-products'), inv.length);
@@ -114,9 +129,9 @@ function buildDashboard() {
   animateNumber(document.getElementById('sd-out'),      out.length);
   updateLowStockBell();
 
-  // ── Month vs Prev Month comparison cards ──
-  const thisRev  = monthSales.reduce((s,x) => s+x.total, 0);
-  const prevRev  = prevMonthSales.reduce((s,x) => s+x.total, 0);
+  // ── Month vs Prev Month comparison cards ── (revenue net of returns)
+  const thisRev  = monthNet.reduce((s,x) => s+x.total, 0);
+  const prevRev  = prevMonthNet.reduce((s,x) => s+x.total, 0);
   const thisOrders = monthSales.length;
   const prevOrders = prevMonthSales.length;
   const thisATV  = thisOrders > 0 ? thisRev / thisOrders : 0;
@@ -147,7 +162,7 @@ function buildDashboard() {
 
   // ── Weekly chart (last 7 days) ──
   const days = Array.from({length:7}, (_,i) => { const d=new Date(); d.setDate(d.getDate()-6+i); return d; });
-  const weeklyData = days.map(d => sales.filter(s=>new Date(s.date).toDateString()===d.toDateString()).reduce((s,x)=>s+x.total,0));
+  const weeklyData = days.map(d => netAll.filter(s=>new Date(s.date).toDateString()===d.toDateString()).reduce((s,x)=>s+x.total,0));
   if (chartWeekly) chartWeekly.destroy();
   chartWeekly = new Chart(document.getElementById('chartWeekly'), {
     type:'bar',
@@ -173,7 +188,7 @@ function buildDashboard() {
     const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
     return { key: d.toISOString().slice(0,7), label: d.toLocaleDateString('ar-EG',{month:'short',year:'2-digit'}) };
   });
-  const trendData = trendMonths.map(m => sales.filter(s=>s.date.startsWith(m.key)).reduce((s,x)=>s+x.total,0));
+  const trendData = trendMonths.map(m => netAll.filter(s=>s.date.startsWith(m.key)).reduce((s,x)=>s+x.total,0));
   if (chartTrend) chartTrend.destroy();
   chartTrend = new Chart(document.getElementById('chartTrend'), {
     type:'line',
@@ -187,7 +202,7 @@ function buildDashboard() {
   // ── Branch comparison horizontal bar chart ──
   const branches = getBranches();
   const branchLabels = BRANCH_IDS.map(b => branches[b]||BRANCH_DEFAULTS[b]||b);
-  const branchRevs   = BRANCH_IDS.map(b => allSales.filter(s=>s.date.startsWith(thisMonth)&&s.branchId===b).reduce((s,x)=>s+x.total,0));
+  const branchRevs   = BRANCH_IDS.map(b => [...allSales, ...allReturns].filter(s=>s.date.startsWith(thisMonth)&&s.branchId===b).reduce((s,x)=>s+x.total,0));
   // Cycles if there are more branches than base colors (admin-added branches beyond the original 5)
   const branchPalette = ['#1a5faf','#F47920','#d97706','#7c3aed','#059669','#dc2626','#0891b2','#be185d'];
   const branchColors  = BRANCH_IDS.map((b,i) => branchPalette[i % branchPalette.length]);
@@ -210,7 +225,7 @@ function buildDashboard() {
   const monthRevenue = thisRev;
   const marginPct    = thisMargin;
   const invValue     = inv.reduce((s,i)=>s+(i.cost||0)*(i.qty||0),0);
-  const cogs = monthSales.reduce((acc,s)=>acc+s.items.reduce((a,i)=>{
+  const cogs = monthNet.reduce((acc,s)=>acc+s.items.reduce((a,i)=>{
     const c = i.cost>0?i.cost:(inv.find(x=>x.code===i.code)?.cost||0);
     return a + c*i.qty; },0),0);
   const turnover = invValue > 0 ? (cogs / invValue) : 0;

@@ -213,7 +213,7 @@ function confirmTransfer() {
     items: _trItems.map(i=>({...i})),
     note,
     status: 'completed',
-    by: currentUser === 'admin' ? 'مدير' : 'كاشير'
+    by: currentUsername || (currentUser === 'admin' ? 'مدير' : 'كاشير')
   };
   const list = getTransfers();
   list.unshift(record);

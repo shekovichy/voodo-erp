@@ -142,14 +142,10 @@ function buildHeatmap(sales) {
 // #18 BACKUP
 // ══════════════════════════════════════════════
 function exportBackup() {
-  const backup = {
-    version:    2,
-    exportedAt: new Date().toISOString(),
-    inv:        getInv(),
-    sales:      getSales(),
-    settings:   _settingsCache,
-    suspended:  _suspendCache
-  };
+  // Full snapshot (all branches + customers/suppliers/purchases/...) — the
+  // old version exported only the CURRENT branch's inventory, so a restore
+  // silently dropped every other branch. See _buildFullBackup() in 05-utils.js.
+  const backup = _buildFullBackup();
   const json = JSON.stringify(backup, null, 2);
   const blob = new Blob([json], {type:'application/json'});
   const url  = URL.createObjectURL(blob);
@@ -174,12 +170,24 @@ function _importBackupConfirmed(file) {
   reader.onload = ev => {
     try {
       const data = JSON.parse(ev.target.result);
-      if (!data.version || !data.inv) { throw new Error('ملف غير صالح'); }
-      if (data.inv)       setInv(data.inv);
+      if (!data.version || (!data.inv && !data.invByBranch)) { throw new Error('ملف غير صالح'); }
+      let invCount = 0;
+      if (data.invByBranch) {
+        // v3 format — per-branch inventory
+        Object.keys(data.invByBranch).forEach(b => {
+          if (BRANCH_IDS.includes(b)) { setInv(data.invByBranch[b], b); invCount += (data.invByBranch[b] || []).length; }
+        });
+      } else if (data.inv) {
+        // v2 format — single (current-branch) inventory
+        setInv(data.inv);
+        invCount = data.inv.length;
+      }
       if (data.sales)     { _salesCache = data.sales; if (!_fbReady) DB.s('sales', data.sales); }
+      if (data.customers) setCustomers(data.customers);
+      if (data.transfers) setTransfers(data.transfers);
       if (data.settings)  { _settingsCache = data.settings; saveSettingsCache(); }
       if (data.suspended) setSuspended(data.suspended);
-      showMsg('sBackupMsg', 'تم الاستعادة — ' + (data.inv?.length||0) + ' منتج · ' + (data.sales?.length||0) + ' فاتورة');
+      showMsg('sBackupMsg', 'تم الاستعادة — ' + invCount + ' منتج · ' + (data.sales?.length||0) + ' فاتورة');
       buildDashboard();
     } catch(err) {
       showMsg('sBackupMsg', 'خطأ في قراءة الملف: ' + err.message, 'danger');

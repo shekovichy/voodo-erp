@@ -59,7 +59,7 @@ function completeSale() {
   const sale = {
     id: Date.now(),
     date: new Date().toISOString(),
-    cashier: currentUser === 'admin' ? 'مدير' : 'كاشير',
+    cashier: currentUsername || (currentUser === 'admin' ? 'مدير' : 'كاشير'),
     salesperson,
     items: cart.map(i => ({...i})),
     sub, disc, total, paid, change, payMethod,
