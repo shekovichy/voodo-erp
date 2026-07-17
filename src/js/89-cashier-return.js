@@ -140,6 +140,7 @@ function _processCashierReturnConfirmed(sale, reason, returnItems, returnTotal) 
     salesperson:    sale.salesperson || '',
     branchId:       sale.branchId || currentBranch,
     branchName:     sale.branchName || getBranchName(currentBranch),
+    customerId:     sale.customerId || '',
     customerName:   sale.customerName || '',
     customerPhone:  sale.customerPhone || sale.phone || '',
     items:          returnItems,
@@ -151,6 +152,7 @@ function _processCashierReturnConfirmed(sale, reason, returnItems, returnTotal) 
     payMethod:      'return'
   };
   addSale(returnSale);
+  updateCustomerAfterReturn(returnSale.customerId, returnTotal);
   _crLastReturn = returnSale;
   addAuditLog('return', `مرتجع من فاتورة #${String(sale.id).slice(-6)} — ${fmt(returnTotal)} ج`, currentBranch);
   document.getElementById('cashierReturnItemsModal').classList.add('hidden');

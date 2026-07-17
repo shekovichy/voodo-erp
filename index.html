@@ -2675,6 +2675,11 @@ body.warehouse-mode #cartFab {
         </div>
       </div>
 
+      <!-- ══ STRATEGIC ANALYTICS ══ -->
+      <div id="page-analytics" class="hidden">
+        <div id="analyticsRoot"></div>
+      </div>
+
       <!-- ── SETTINGS ── -->
       <div id="page-settings" class="hidden">
         <div class="grid-2">
@@ -3304,6 +3309,7 @@ const _CHUNK_FILES = {
   helpdesk:      'chunk-helpdesk.js',
   pivot:         'chunk-pivot.js',
   migration:     'chunk-migration.js',
+  analytics:     'chunk-analytics.js',
 };
 const _loadedChunks = new Set();
 function _loadChunk(page, cb) {
@@ -4555,6 +4561,7 @@ const HOME_FOLDERS = {
   reports: { name: '📊 التقارير والتحليلات', icons: [
     { page:'reports',    label:'التقارير',       grad:'#38bdf8,#0369a1', svg:'<path d="M8 36L18 24l8 6 8-12 6 6" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="6" y="6" width="36" height="36" rx="4" stroke="white" stroke-width="2.5"/>' },
     { page:'customized', label:'تقارير مخصصة',   grad:'#f472b6,#be185d', svg:'<circle cx="21" cy="21" r="12" stroke="white" stroke-width="2.5"/><path d="M30 30l10 10" stroke="white" stroke-width="3.5" stroke-linecap="round"/><path d="M17 21h8M21 17v8" stroke="white" stroke-width="2.5" stroke-linecap="round"/>' },
+    { page:'analytics',  label:'تحليلات استراتيجية', grad:'#6366f1,#4338ca', svg:'<path d="M8 40V22M18 40V14M28 40V26M38 40V10" stroke="white" stroke-width="4" stroke-linecap="round"/><path d="M8 16l10-8 10 6 10-10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' },
   ]},
   system: { name: '⚙️ النظام والإدارة', icons: [
     { page:'audit',    label:'سجل التغييرات', grad:'#94a3b8,#334155', svg:'<rect x="10" y="6" width="28" height="36" rx="3" stroke="white" stroke-width="2.5"/><path d="M16 16h16M16 22h16M16 28h8" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M30 32l2 2 4-4" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' },
@@ -4967,14 +4974,14 @@ function showPage(page) {
 
 function _showPageImpl(page) {
   if (window._whMode && !['warehouse','transfers'].includes(page)) return;
-  ['home','dashboard','inventory','sales','suspended','reports','customized','warehouse','settings','customers','promos','transfers','purchases','hr','expenses','audit','accounting','manufacturing','helpdesk','migration'].forEach(p => {
+  ['home','dashboard','inventory','sales','suspended','reports','customized','warehouse','settings','customers','promos','transfers','purchases','hr','expenses','audit','accounting','manufacturing','helpdesk','migration','analytics'].forEach(p => {
     document.getElementById('page-'+p)?.classList.add('hidden');
   });
   document.getElementById('page-'+page).classList.remove('hidden');
   var content = document.querySelector('.main-content');
   if (content) content.classList.toggle('home-mode', page === 'home');
   if (page === 'home') { updateHomeClock(); updateSuspendedBadge(); }
-  const titles ={ dashboard:'الرئيسية', inventory:'إدارة المخزون', sales:'سجل المبيعات', suspended:'فواتير معلقة', reports:'التقارير', customized:'تقارير مخصصة', home:'الرئيسية', warehouse:'المخزن الرئيسي', settings:'الإعدادات', customers:'العملاء', purchases:'المشتريات', hr:'الموارد البشرية', expenses:'المصاريف', audit:'سجل التغييرات', accounting:'المحاسبة الرسمية', helpdesk:'الدعم الفني', migration:'استيراد بيانات قديمة' };
+  const titles ={ dashboard:'الرئيسية', inventory:'إدارة المخزون', sales:'سجل المبيعات', suspended:'فواتير معلقة', reports:'التقارير', customized:'تقارير مخصصة', home:'الرئيسية', warehouse:'المخزن الرئيسي', settings:'الإعدادات', customers:'العملاء', purchases:'المشتريات', hr:'الموارد البشرية', expenses:'المصاريف', audit:'سجل التغييرات', accounting:'المحاسبة الرسمية', helpdesk:'الدعم الفني', migration:'استيراد بيانات قديمة', analytics:'التحليلات الاستراتيجية' };
   document.getElementById('pageTitle').textContent = titles[page] || '';
   if (page === 'dashboard')  buildDashboard();
   if (page === 'inventory')  renderInventory();
@@ -5007,6 +5014,7 @@ function _showPageImpl(page) {
   if (page === 'audit')      renderAuditPage();
   if (page === 'helpdesk')   renderHelpdeskPage();
   if (page === 'migration')  switchMigTab('sales');
+  if (page === 'analytics')  renderAnalyticsPage();
 }
 
 
@@ -8292,6 +8300,18 @@ function updateCustomerAfterSale(customerId, amount) {
   setCustomers(list);
 }
 
+// A return against a linked customer must give back the spend it credited,
+// otherwise totalSpent (and anything derived from it — VIP tier, CLV, RFM
+// monetary score) stays inflated forever after a return. Only totalSpent is
+// adjusted; a return isn't counted as a new "visit".
+function updateCustomerAfterReturn(customerId, amount) {
+  if (!customerId) return;
+  const list = getCustomers();
+  const c    = list.find(x => x.id === customerId); if (!c) return;
+  c.totalSpent = Math.max(0, (c.totalSpent||0) - amount);
+  setCustomers(list);
+}
+
 
 // ══════════════════════════════════════════════
 // #2 RETURNS
@@ -8379,6 +8399,7 @@ function _processReturnConfirmed(sale, reason, returnItems, returnTotal) {
     payMethod:      'return'
   };
   addSale(returnSale);
+  updateCustomerAfterReturn(returnSale.customerId, returnTotal);
 
   document.getElementById('returnModal').classList.add('hidden');
   document.getElementById('saleDetailModal').classList.add('hidden');
@@ -8884,6 +8905,7 @@ function _processCashierReturnConfirmed(sale, reason, returnItems, returnTotal) 
     salesperson:    sale.salesperson || '',
     branchId:       sale.branchId || currentBranch,
     branchName:     sale.branchName || getBranchName(currentBranch),
+    customerId:     sale.customerId || '',
     customerName:   sale.customerName || '',
     customerPhone:  sale.customerPhone || sale.phone || '',
     items:          returnItems,
@@ -8895,6 +8917,7 @@ function _processCashierReturnConfirmed(sale, reason, returnItems, returnTotal) 
     payMethod:      'return'
   };
   addSale(returnSale);
+  updateCustomerAfterReturn(returnSale.customerId, returnTotal);
   _crLastReturn = returnSale;
   addAuditLog('return', `مرتجع من فاتورة #${String(sale.id).slice(-6)} — ${fmt(returnTotal)} ج`, currentBranch);
   document.getElementById('cashierReturnItemsModal').classList.add('hidden');

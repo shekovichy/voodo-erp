@@ -18,14 +18,14 @@ function showPage(page) {
 
 function _showPageImpl(page) {
   if (window._whMode && !['warehouse','transfers'].includes(page)) return;
-  ['home','dashboard','inventory','sales','suspended','reports','customized','warehouse','settings','customers','promos','transfers','purchases','hr','expenses','audit','accounting','manufacturing','helpdesk','migration'].forEach(p => {
+  ['home','dashboard','inventory','sales','suspended','reports','customized','warehouse','settings','customers','promos','transfers','purchases','hr','expenses','audit','accounting','manufacturing','helpdesk','migration','analytics'].forEach(p => {
     document.getElementById('page-'+p)?.classList.add('hidden');
   });
   document.getElementById('page-'+page).classList.remove('hidden');
   var content = document.querySelector('.main-content');
   if (content) content.classList.toggle('home-mode', page === 'home');
   if (page === 'home') { updateHomeClock(); updateSuspendedBadge(); }
-  const titles ={ dashboard:'الرئيسية', inventory:'إدارة المخزون', sales:'سجل المبيعات', suspended:'فواتير معلقة', reports:'التقارير', customized:'تقارير مخصصة', home:'الرئيسية', warehouse:'المخزن الرئيسي', settings:'الإعدادات', customers:'العملاء', purchases:'المشتريات', hr:'الموارد البشرية', expenses:'المصاريف', audit:'سجل التغييرات', accounting:'المحاسبة الرسمية', helpdesk:'الدعم الفني', migration:'استيراد بيانات قديمة' };
+  const titles ={ dashboard:'الرئيسية', inventory:'إدارة المخزون', sales:'سجل المبيعات', suspended:'فواتير معلقة', reports:'التقارير', customized:'تقارير مخصصة', home:'الرئيسية', warehouse:'المخزن الرئيسي', settings:'الإعدادات', customers:'العملاء', purchases:'المشتريات', hr:'الموارد البشرية', expenses:'المصاريف', audit:'سجل التغييرات', accounting:'المحاسبة الرسمية', helpdesk:'الدعم الفني', migration:'استيراد بيانات قديمة', analytics:'التحليلات الاستراتيجية' };
   document.getElementById('pageTitle').textContent = titles[page] || '';
   if (page === 'dashboard')  buildDashboard();
   if (page === 'inventory')  renderInventory();
@@ -58,5 +58,6 @@ function _showPageImpl(page) {
   if (page === 'audit')      renderAuditPage();
   if (page === 'helpdesk')   renderHelpdeskPage();
   if (page === 'migration')  switchMigTab('sales');
+  if (page === 'analytics')  renderAnalyticsPage();
 }
 

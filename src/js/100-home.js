@@ -133,6 +133,7 @@ const HOME_FOLDERS = {
   reports: { name: '📊 التقارير والتحليلات', icons: [
     { page:'reports',    label:'التقارير',       grad:'#38bdf8,#0369a1', svg:'<path d="M8 36L18 24l8 6 8-12 6 6" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="6" y="6" width="36" height="36" rx="4" stroke="white" stroke-width="2.5"/>' },
     { page:'customized', label:'تقارير مخصصة',   grad:'#f472b6,#be185d', svg:'<circle cx="21" cy="21" r="12" stroke="white" stroke-width="2.5"/><path d="M30 30l10 10" stroke="white" stroke-width="3.5" stroke-linecap="round"/><path d="M17 21h8M21 17v8" stroke="white" stroke-width="2.5" stroke-linecap="round"/>' },
+    { page:'analytics',  label:'تحليلات استراتيجية', grad:'#6366f1,#4338ca', svg:'<path d="M8 40V22M18 40V14M28 40V26M38 40V10" stroke="white" stroke-width="4" stroke-linecap="round"/><path d="M8 16l10-8 10 6 10-10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' },
   ]},
   system: { name: '⚙️ النظام والإدارة', icons: [
     { page:'audit',    label:'سجل التغييرات', grad:'#94a3b8,#334155', svg:'<rect x="10" y="6" width="28" height="36" rx="3" stroke="white" stroke-width="2.5"/><path d="M16 16h16M16 22h16M16 28h8" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M30 32l2 2 4-4" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' },

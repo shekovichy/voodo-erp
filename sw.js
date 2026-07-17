@@ -15,7 +15,8 @@ const LAZY_CHUNKS = [
   'chunk-purchases.js',
   'chunk-helpdesk.js',
   'chunk-pivot.js',
-  'chunk-migration.js'
+  'chunk-migration.js',
+  'chunk-analytics.js'
 ];
 
 // Install — cache essential files (resolved relative to the SW scope)

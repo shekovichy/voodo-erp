@@ -84,6 +84,7 @@ function _processReturnConfirmed(sale, reason, returnItems, returnTotal) {
     payMethod:      'return'
   };
   addSale(returnSale);
+  updateCustomerAfterReturn(returnSale.customerId, returnTotal);
 
   document.getElementById('returnModal').classList.add('hidden');
   document.getElementById('saleDetailModal').classList.add('hidden');

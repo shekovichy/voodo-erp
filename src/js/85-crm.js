@@ -235,3 +235,15 @@ function updateCustomerAfterSale(customerId, amount) {
   setCustomers(list);
 }
 
+// A return against a linked customer must give back the spend it credited,
+// otherwise totalSpent (and anything derived from it — VIP tier, CLV, RFM
+// monetary score) stays inflated forever after a return. Only totalSpent is
+// adjusted; a return isn't counted as a new "visit".
+function updateCustomerAfterReturn(customerId, amount) {
+  if (!customerId) return;
+  const list = getCustomers();
+  const c    = list.find(x => x.id === customerId); if (!c) return;
+  c.totalSpent = Math.max(0, (c.totalSpent||0) - amount);
+  setCustomers(list);
+}
+

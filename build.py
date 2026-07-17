@@ -36,6 +36,7 @@ LAZY_CHUNKS = {
     '110-helpdesk.js':      'chunk-helpdesk.js',
     '115-pivot-reports.js': 'chunk-pivot.js',
     '120-data-migration.js': 'chunk-migration.js',
+    '125-strategic-analytics.js': 'chunk-analytics.js',
 }
 
 
