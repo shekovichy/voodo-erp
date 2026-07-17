@@ -1,5 +1,8 @@
 # VOODO ERP — CLAUDE.md
 
+## 📋 قايمة الفيتشرز
+**[`FEATURES.md`](FEATURES.md) فيها قايمة كاملة بكل فيتشر في السيستم** (اسم + سطر وصف). ⚠️ **أي فيتشر جديد يتضاف للكود — لازم يتضاف سطر ليه في `FEATURES.md` في نفس الـ commit.**
+
 ## 🔐 الأمان والأدوار (v2 — Firebase Auth حقيقي)
 النظام اتنقل من الباسوردات المحلية (localStorage) لـ **Firebase Authentication** (email/password) + مجموعة `roles/{uid}` في Firestore:
 - **الدخول**: اليوزرنيم بيتحول لإيميل داخلي (`branch1@voodo-pos.local`) — شوف `usernameToEmail()` في `65-firebase.js`. الإيميل `shekovichy@gmail.com` هو الـ **owner** — أدمن دايماً حتى من غير role doc (hardcoded في الكود وفي `firestore.rules`).
