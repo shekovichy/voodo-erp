@@ -92,22 +92,6 @@
       <div id="loginError" class="alert alert-danger hidden">اسم المستخدم أو كلمة المرور غلط</div>
       <button class="btn btn-primary btn-full btn-lg" onclick="doLogin()">تسجيل الدخول</button>
 
-      <!-- DEMO BUTTON -->
-      <div style="margin-top:12px;text-align:center;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-          <div style="flex:1;height:1px;background:var(--border);"></div>
-          <span style="color:var(--text-muted);font-size:12px;">أو</span>
-          <div style="flex:1;height:1px;background:var(--border);"></div>
-        </div>
-        <button class="btn btn-full"
-          onclick="loadDemoAndEnter()"
-          style="background:linear-gradient(135deg,#1e1b4b,#4338ca);color:#c7d2fe;border:1px solid rgba(99,102,241,.4);font-weight:700;font-size:14px;padding:12px;border-radius:10px;cursor:pointer;transition:opacity .2s;"
-          onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
-          <span id="demoBtnText">⚡ جرّب الديمو — بدون تسجيل</span>
-        </button>
-        <p style="color:var(--text-muted);font-size:11px;margin-top:8px;">داتا تجريبية جاهزة • كل الميزات مفتوحة</p>
-      </div>
-
     </div>
   </div>
 </div>
@@ -2052,6 +2036,11 @@
               <button class="btn btn-primary" onclick="addSeller()">➕ إضافة</button>
             </div>
             <div id="sSellersMsg" class="mt-16"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">🧹 تنظيف بيانات الديمو المتسربة</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">لو بيانات الديمو (فروع/بائعين/منتجات تجريبية) اتخلطت مع بياناتك الحقيقية — الأداة دي بتلاقيها وتوريهالك <strong>قبل</strong> ما تمسح، وماتمسحش غير اللي عليه بصمة ديمو مؤكدة (أكواد منتجات P001–P020، عملاء الديمو، الفواتير التجريبية).</p>
+            <button class="btn btn-warning btn-sm" onclick="previewDemoCleanup()">🔍 فحص بيانات الديمو</button>
           </div>
           <div class="card">
             <div class="card-title">🗑️ إعادة تعيين البيانات</div>
