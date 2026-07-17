@@ -25,6 +25,15 @@ rules_version = '2';
 //   user management screen. No role doc → no access at all. The owner
 //   email is admin regardless of any role doc (bootstrap, and safety
 //   net if roles get corrupted).
+//
+// NOTE on structure: exists()/get() calls are inlined directly into each
+// `allow` line instead of wrapped in a shared function. Wrapping them in a
+// function (even with `database` passed as an explicit parameter) made the
+// Rules Playground simulator fail with "Function not found error: [exists]"
+// as soon as the call was actually reached (confirmed 2026-07-17 — it only
+// LOOKED like it worked in cases where isOwner()/signedIn() short-circuited
+// before exists() ran). Inlining is more verbose but is the pattern known
+// to work reliably in this console.
 // ═══════════════════════════════════════════════════════════════════
 
 service cloud.firestore {
@@ -37,30 +46,22 @@ service cloud.firestore {
     function isOwner() {
       return signedIn() && request.auth.token.email == 'shekovichy@gmail.com';
     }
-    // `db` is passed explicitly (not read from the outer match's {database}
-    // capture) — Firestore Rules functions have their own local scope, and
-    // relying on an enclosing path variable inside a helper function is a
-    // known Rules Playground/engine gotcha ("Function not found: exists").
-    // Passing it as a parameter is the pattern Firebase's own docs recommend
-    // for exactly this reason.
-    function hasRole(db) {
-      return isOwner()
-        || (signedIn() && exists(/databases/$(db)/documents/roles/$(request.auth.uid)));
-    }
-    function isAdmin(db) {
-      return isOwner()
-        || (signedIn()
-            && exists(/databases/$(db)/documents/roles/$(request.auth.uid))
-            && get(/databases/$(db)/documents/roles/$(request.auth.uid)).data.role == 'admin');
-    }
 
     // ── ROLES — the permission source of truth ────────────────────
     // Users may read their own role (the app resolves it at login);
     // only admins may list or modify roles.
     match /roles/{uid} {
-      allow get: if signedIn() && (request.auth.uid == uid || isAdmin(database));
-      allow list: if isAdmin(database);
-      allow create, update, delete: if isAdmin(database);
+      allow get: if signedIn() && (
+        request.auth.uid == uid ||
+        isOwner() ||
+        (exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin')
+      );
+      allow list, create, update, delete: if isOwner() || (
+        signedIn() &&
+        exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin'
+      );
     }
 
     // ── POS DATA ──────────────────────────────────────────────────
@@ -71,14 +72,26 @@ service cloud.firestore {
     // is writable by any user WITH a role, because cashier flows
     // legitimately write them (stock deduction, suspend, audit log).
     match /pos_data/{doc} {
-      allow read: if hasRole(database) && doc != 'auth';
-      allow write: if doc != 'auth'
-                   && (isAdmin(database) || (hasRole(database) && !(doc in ['settings', 'accounts'])));
+      allow read: if doc != 'auth' && (
+        isOwner() ||
+        (signedIn() && exists(/databases/$(database)/documents/roles/$(request.auth.uid)))
+      );
+      allow write: if doc != 'auth' && (
+        isOwner() ||
+        (signedIn() &&
+         exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin') ||
+        (signedIn() &&
+         exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
+         !(doc in ['settings', 'accounts']))
+      );
     }
 
     // ── SALES (monthly docs, e.g. pos_sales/2026-07) ──────────────
     match /pos_sales/{document=**} {
-      allow read, write: if hasRole(database);
+      allow read, write: if isOwner() || (
+        signedIn() && exists(/databases/$(database)/documents/roles/$(request.auth.uid))
+      );
     }
 
     // ── Deny everything else ──────────────────────────────────────
