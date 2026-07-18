@@ -7382,61 +7382,89 @@ function initFirebase() {
         visRefresh('page-customers', renderCustomers);
       }, err => { _customersCache = DB.g('pos_customers', []); });
 
-    // ⚠️ NOT YET LIVE — see the long comment above addSale() in 00-core.js.
-    // This subscribes to the NEW pos_sales/{month}/branches/{branchId}
-    // structure (real per-branch isolation — see firestore.rules), not the
-    // old flat pos_sales/{month} doc. Admin subscribes to every branch;
-    // everyone else only to their own (which is also all the NEW rules will
-    // permit them to read). Do not merge to main / publish the matching
-    // rules until migrateSalesToBranchStructure() has been run — this
-    // listener finds nothing for any month that hasn't been migrated yet.
+    // Subscribes to pos_sales/{month}/branches/{branchId} (real per-branch
+    // isolation — see firestore.rules).
+    //
+    // ⚠️ Admin uses ONE collection-level listener per month (not one
+    // doc-level listener per branch per month) — this is a deliberate perf
+    // fix (2026-07-18): the original doc-per-branch loop gave admin
+    // BRANCH_IDS.length × 12 = ~60 concurrent listeners, which is what
+    // caused the noticeable slowdown after the sales migration went live.
+    // A bare (no .where()) collection listener is safe here specifically
+    // because the admin branch of the firestore.rules OR condition
+    // (`role == 'admin'`) never inspects resource.data — Firestore can
+    // prove that holds for every doc in the collection without a query
+    // filter, so it allows the full list. (The branchId-based OR clause,
+    // which DOES depend on resource.data, is what a non-admin's read would
+    // hit — which is why non-admin stays on the old doc-per-branch form
+    // below: a bare list for them is correctly unprovable/denied.)
     const _saMonths = [];
     for (let i = 0; i < 12; i++) {
       const d = new Date(); d.setMonth(d.getMonth() - i);
       _saMonths.push(d.toISOString().slice(0, 7));
     }
-    const _saBranches = currentUser === 'admin' ? BRANCH_IDS : [currentBranch];
-    _saBranches.forEach(b => {
+
+    function _applySalesBranchMonth(month, b, items) {
+      _salesCache = [
+        ..._salesCache.filter(s => !(s.date.slice(0, 7) === month && (s.branchId || '') === b)),
+        ...items
+      ];
+    }
+    function _localSalesFallback(month, b) {
+      const localSalesAll = DB.g('sales', []);
+      return localSalesAll.filter(s => s.date.slice(0, 7) === month && (s.branchId || currentBranch) === b);
+    }
+    function _refreshSalesViews() {
+      visRefresh('page-sales', () => { initSalesFilter(); renderSales(); });
+      visRefresh('page-dashboard', buildDashboard);
+      visRefresh('page-reports', buildSalesReport);
+    }
+
+    if (currentUser === 'admin') {
       _saMonths.forEach(month => {
-        _db.collection('pos_sales').doc(month).collection('branches').doc(b)
-          .onSnapshot(snap => {
-            const items = snap.exists ? (snap.data().items || []) : [];
-            _salesCache = [
-              ..._salesCache.filter(s => !(s.date.slice(0, 7) === month && (s.branchId || '') === b)),
-              ...items
-            ];
-            if (!snap.exists) {
-              // Same local-fallback seeding as before, scoped to this
-              // specific branch+month now instead of the whole month.
-              const localSalesAll = DB.g('sales', []);
-              const localMonthBranch = localSalesAll.filter(s => s.date.slice(0, 7) === month && (s.branchId || currentBranch) === b);
-              if (localMonthBranch.length) {
+        _db.collection('pos_sales').doc(month).collection('branches')
+          .onSnapshot(qsnap => {
+            const seen = new Set();
+            qsnap.forEach(doc => {
+              seen.add(doc.id);
+              _applySalesBranchMonth(month, doc.id, doc.data().items || []);
+            });
+            BRANCH_IDS.filter(b => !seen.has(b)).forEach(b => {
+              const local = _localSalesFallback(month, b);
+              _applySalesBranchMonth(month, b, local);
+              if (local.length) {
                 _db.collection('pos_sales').doc(month).collection('branches').doc(b)
-                   .set({ items: firebase.firestore.FieldValue.arrayUnion(...localMonthBranch), updatedAt: Date.now(), month, branchId: b }, { merge: true });
+                   .set({ items: firebase.firestore.FieldValue.arrayUnion(...local), updatedAt: Date.now(), month, branchId: b }, { merge: true });
               }
-            }
-            visRefresh('page-sales', () => { initSalesFilter(); renderSales(); });
-            visRefresh('page-dashboard', buildDashboard);
-            visRefresh('page-reports', buildSalesReport);
+            });
+            _refreshSalesViews();
           }, err => {
-            // Fall back to the local cache on a denied/failed read — same
-            // fix as the inventory listener above (see its comment for the
-            // full story: a listener with no fallback here left this
-            // branch+month's slice of _salesCache simply unset instead of
-            // showing the last known-good local data).
-            console.error(`Firestore sales/${month}/${b} error:`, err);
-            const localSalesAll = DB.g('sales', []);
-            const localMonthBranch = localSalesAll.filter(s => s.date.slice(0, 7) === month && (s.branchId || currentBranch) === b);
-            _salesCache = [
-              ..._salesCache.filter(s => !(s.date.slice(0, 7) === month && (s.branchId || '') === b)),
-              ...localMonthBranch
-            ];
-            visRefresh('page-sales', () => { initSalesFilter(); renderSales(); });
-            visRefresh('page-dashboard', buildDashboard);
-            visRefresh('page-reports', buildSalesReport);
+            console.error(`Firestore sales/${month}/branches error:`, err);
+            BRANCH_IDS.forEach(b => _applySalesBranchMonth(month, b, _localSalesFallback(month, b)));
+            _refreshSalesViews();
           });
       });
-    });
+    } else {
+      _saMonths.forEach(month => {
+        _db.collection('pos_sales').doc(month).collection('branches').doc(currentBranch)
+          .onSnapshot(snap => {
+            const items = snap.exists ? (snap.data().items || []) : [];
+            _applySalesBranchMonth(month, currentBranch, items);
+            if (!snap.exists) {
+              const local = _localSalesFallback(month, currentBranch);
+              if (local.length) {
+                _db.collection('pos_sales').doc(month).collection('branches').doc(currentBranch)
+                   .set({ items: firebase.firestore.FieldValue.arrayUnion(...local), updatedAt: Date.now(), month, branchId: currentBranch }, { merge: true });
+              }
+            }
+            _refreshSalesViews();
+          }, err => {
+            console.error(`Firestore sales/${month}/${currentBranch} error:`, err);
+            _applySalesBranchMonth(month, currentBranch, _localSalesFallback(month, currentBranch));
+            _refreshSalesViews();
+          });
+      });
+    }
 
   } catch(e) {
     console.error('Firebase init error:', e);
