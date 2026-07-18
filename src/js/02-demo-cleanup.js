@@ -40,6 +40,14 @@ function previewDemoCleanup() {
   const demoSales = allSales.filter(_isDemoSale);
   const demoSalesValue = demoSales.reduce((s, x) => s + (x.total || 0), 0);
   const affectedMonths = [...new Set(demoSales.map(s => (s.date || '').slice(0, 7)))].filter(Boolean).sort();
+  // Sales now live at pos_sales/{month}/branches/{branchId} (see 00-core.js/
+  // addSale — branch-isolated storage, added 2026-07-17), not a flat
+  // pos_sales/{month} doc. Cleanup must rewrite the SAME per-branch
+  // documents the live listeners actually watch, or the fix only ever
+  // "sticks" in the admin's own in-memory cache until the next listener
+  // update pulls the still-dirty server copy right back.
+  const affectedMonthBranches = [...new Set(demoSales.map(s => (s.date||'').slice(0,7) + '|' + (s.branchId||currentBranch)))]
+    .filter(k => k.split('|')[0]).map(k => { const [month, branchId] = k.split('|'); return { month, branchId }; });
 
   const demoCustomers = getCustomers().filter(_isDemoCustomer);
 
@@ -50,7 +58,7 @@ function previewDemoCleanup() {
     if (found.length) { demoInvByBranch[b] = found; demoInvTotal += found.length; }
   });
 
-  _demoCleanupPlan = { demoSales, affectedMonths, demoCustomers, demoInvByBranch };
+  _demoCleanupPlan = { demoSales, affectedMonths, affectedMonthBranches, demoCustomers, demoInvByBranch };
 
   const nothing = !demoSales.length && !demoCustomers.length && !demoInvTotal;
   const branchLines = Object.keys(demoInvByBranch).map(b =>
@@ -107,15 +115,19 @@ function executeDemoCleanup() {
   const plan = _demoCleanupPlan;
   if (!plan) { showToast('اعمل فحص الأول'); return; }
 
-  // ── Sales: rewrite each affected month doc with only the NON-demo sales ──
+  // ── Sales: rewrite each affected (month, branch) doc with only the
+  // NON-demo sales for that specific branch — the actual document the live
+  // listeners watch (pos_sales/{month}/branches/{branchId}). A plain
+  // overwrite (not arrayUnion/merge) is required here since we're SHRINKING
+  // the list, not adding to it.
   const demoIds = new Set(plan.demoSales.map(s => s.id));
   _salesCache = getSales().filter(s => !demoIds.has(s.id));
   DB.s('sales', _salesCache);
   if (_fbReady) {
-    plan.affectedMonths.forEach(month => {
-      const monthItems = _salesCache.filter(s => (s.date || '').slice(0, 7) === month);
-      _db.collection('pos_sales').doc(month)
-         .set({ items: monthItems, updatedAt: Date.now() })
+    (plan.affectedMonthBranches || []).forEach(({ month, branchId }) => {
+      const items = _salesCache.filter(s => (s.date || '').slice(0, 7) === month && (s.branchId || currentBranch) === branchId);
+      _db.collection('pos_sales').doc(month).collection('branches').doc(branchId)
+         .set({ items, updatedAt: Date.now(), month, branchId })
          .catch(e => console.error('demo cleanup sales:', e));
     });
   }
