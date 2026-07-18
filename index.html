@@ -2743,6 +2743,11 @@ body.warehouse-mode #cartFab {
             <button class="btn btn-primary btn-sm" onclick="previewSalesMigration()">🔍 فحص وترحيل المبيعات</button>
           </div>
           <div class="card">
+            <div class="card-title">🔀 ترحيل المخزون لهيكل معزول لكل فرع</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">⚠️ خطوة تقنية لمرة واحدة — نفس فكرة ترحيل المبيعات فوق، بس للمخزون. متعملهاش إلا بعد التنسيق الكامل، ولازم تسبق نشر قواعد Firestore الجديدة مباشرة.</p>
+            <button class="btn btn-primary btn-sm" onclick="previewInventoryMigration()">🔍 فحص وترحيل المخزون</button>
+          </div>
+          <div class="card">
             <div class="card-title">🗑️ إعادة تعيين البيانات</div>
             <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">⚠️ سيحذف هذا كل بيانات المبيعات والمخزون نهائياً ولا يمكن التراجع</p>
             <div class="flex gap-8">
@@ -3367,6 +3372,19 @@ function getBranchName(b) { return ((_settingsCache.branches) || BRANCH_DEFAULTS
 function getBranches()    { return _settingsCache.branches || BRANCH_DEFAULTS; }
 
 // INVENTORY — branch-aware
+//
+// ⚠️ NOT YET LIVE — pos_data/inventory/branches/{branchId} write path below
+// is implemented and tested locally, but firestore.rules still only has the
+// OLD flat pos_data/inv_{branchId} rule (any role reads/writes any branch's
+// stock — see the security review dated 2026-07-17). Cutting over requires,
+// in this exact order: (1) run the one-time migration tool (Settings →
+// "🔀 ترحيل المخزون لهيكل معزول لكل فرع", 04-inventory-migration.js) while
+// the OLD rule still permits reading the old inv_{branchId} docs, (2)
+// verify inventory renders correctly for every branch, (3) publish the NEW
+// rules that require roles/{uid}.branchId to match the branchId path
+// segment — a 'wh' (warehouse) role additionally keeps write access to
+// every branch, since warehouse→branch transfers are a real cross-branch
+// workflow, not a security gap (see confirmWhTransfer in 95-warehouse.js).
 const getInv = (branch) => _invCacheByBranch[branch || currentBranch] || [];
 // ⚠️ setInv REPLACES the whole branch inventory — it's inherently last-write-
 // wins, so it must only be used for intentional full replacement (backup
@@ -3379,8 +3397,8 @@ function setInv(v, branch) {
   _invCacheByBranch[b] = v;
   DB.s(`pos_inv_${b}`, v);
   if (!_fbReady) return;
-  _db.collection('pos_data').doc(`inv_${b}`)
-     .set({ items: v, updatedAt: Date.now() })
+  _db.collection('pos_data').doc('inventory').collection('branches').doc(b)
+     .set({ items: v, updatedAt: Date.now(), branchId: b })
      .catch(e => console.error('Firestore setInv:', e));
 }
 
@@ -3415,15 +3433,15 @@ function adjustStock(deltas, branch) {
   _invCacheByBranch[b] = applyTo(_invCacheByBranch[b] || []);
   DB.s(`pos_inv_${b}`, _invCacheByBranch[b]);
   if (!_fbReady) return;
-  const ref = _db.collection('pos_data').doc(`inv_${b}`);
+  const ref = _db.collection('pos_data').doc('inventory').collection('branches').doc(b);
   _db.runTransaction(tx =>
     tx.get(ref).then(snap => {
       const items = applyTo(snap.exists ? (snap.data().items || []) : []);
-      tx.set(ref, { items, updatedAt: Date.now() });
+      tx.set(ref, { items, updatedAt: Date.now(), branchId: b });
     })
   ).catch(e => {
     console.error('Firestore adjustStock (falling back to direct write):', e);
-    ref.set({ items: _invCacheByBranch[b], updatedAt: Date.now() })
+    ref.set({ items: _invCacheByBranch[b], updatedAt: Date.now(), branchId: b })
        .catch(e2 => console.error('Firestore adjustStock fallback:', e2));
   });
 }
@@ -3888,6 +3906,111 @@ async function executeSalesMigration() {
   showMsg('sSettingsMsg', failed
     ? `⚠️ تم ترحيل ${written} مستند، وفشل ${failed} — راجع الـ Console وأعد المحاولة (آمن تكرر الترحيل)`
     : `✅ تم ترحيل ${written} مستند بنجاح. راجع تقرير المبيعات للتأكد قبل نشر القواعد الجديدة.`,
+    failed ? 'danger' : 'success');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// ONE-TIME INVENTORY MIGRATION — flat pos_data/inv_{branchId} →
+// pos_data/inventory/branches/{branchId}
+//
+// ⚠️ Run this ONLY as part of the coordinated cutover described in the
+// comment above setInv() in 00-core.js — after the new write/listener code
+// is live but BEFORE publishing the new firestore.rules. Harmless to
+// re-run (plain overwrite of the same content — each branch's inventory is
+// already a complete, standalone array, so unlike the sales migration
+// there's no splitting/grouping involved, just moving where the same
+// document lives).
+// ══════════════════════════════════════════════════════════════════════
+
+let _invMigrationPlan = null;
+
+async function previewInventoryMigration() {
+  if (currentUser !== 'admin') { showToast('الترحيل للأدمن فقط'); return; }
+  if (!_fbReady) { showToast('محتاج اتصال بالإنترنت لعمل الترحيل'); return; }
+
+  showToast('⏳ جاري فحص المخزون القديم...');
+  const plan = { byBranch: {}, totalProducts: 0, branchesWithData: [] };
+  for (const b of BRANCH_IDS) {
+    let snap;
+    try { snap = await _db.collection('pos_data').doc(`inv_${b}`).get(); }
+    catch (e) { console.error('previewInventoryMigration read:', b, e); continue; }
+    if (!snap.exists) continue;
+    const items = snap.data().items || [];
+    if (!items.length) continue;
+    plan.byBranch[b] = items;
+    plan.branchesWithData.push(b);
+    plan.totalProducts += items.length;
+  }
+
+  _invMigrationPlan = plan;
+  _renderInventoryMigrationPreview(plan);
+}
+
+function _renderInventoryMigrationPreview(plan) {
+  const branchLines = plan.branchesWithData.map(b =>
+    `<div style="font-size:12px;">• ${escHtml(getBranchName(b))}: ${plan.byBranch[b].length} منتج</div>`).join('');
+
+  const body = !plan.branchesWithData.length
+    ? '<div style="padding:16px;text-align:center;color:var(--text-muted);">مفيش بيانات في الهيكل القديم للترحيل — إما اتترحلت بالفعل أو مفيش مخزون مسجّل.</div>'
+    : `
+      <div style="padding:4px 2px 12px;">
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin-bottom:12px;">
+          <div style="font-weight:700;margin-bottom:8px;">هيتم نسخ الآتي للهيكل الجديد المعزول لكل فرع:</div>
+          <div style="font-size:13px;margin-bottom:4px;">📦 <strong>${plan.totalProducts}</strong> منتج عبر <strong>${plan.branchesWithData.length}</strong> فرع</div>
+          ${branchLines}
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);background:var(--bg-secondary);border-radius:8px;padding:10px;">
+          ⚠️ ده نسخ بس (مش نقل) — الوثائق القديمة بتفضل زي ما هي كنسخة احتياطية. آمن تكرره أكتر من مرة. <strong>متنشرش قواعد Firestore الجديدة إلا بعد ما الترحيل ده يخلص ويتأكد.</strong>
+        </div>
+      </div>`;
+
+  let modal = document.getElementById('invMigrationModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'invMigrationModal';
+    modal.className = 'modal-overlay hidden';
+    modal.onclick = (e) => { if (e.target === modal) modal.classList.add('hidden'); };
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div class="modal-box" style="max-width:520px;width:94%;">
+      <div class="modal-header">
+        <h3>🔀 ترحيل المخزون للهيكل المعزول</h3>
+        <button onclick="document.getElementById('invMigrationModal').classList.add('hidden')" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button>
+      </div>
+      <div style="max-height:60vh;overflow-y:auto;">${body}</div>
+      <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;">
+        <button class="btn btn-gray btn-sm" onclick="document.getElementById('invMigrationModal').classList.add('hidden')">إغلاق</button>
+        ${plan.branchesWithData.length ? '<button class="btn btn-primary btn-sm" onclick="executeInventoryMigration()">✅ ابدأ الترحيل</button>' : ''}
+      </div>
+    </div>`;
+  modal.classList.remove('hidden');
+}
+
+async function executeInventoryMigration() {
+  if (currentUser !== 'admin') { showToast('الترحيل للأدمن فقط'); return; }
+  const plan = _invMigrationPlan;
+  if (!plan || !plan.branchesWithData.length) { showToast('اعمل فحص الأول'); return; }
+
+  showToast('⏳ جاري الترحيل...');
+  let written = 0, failed = 0;
+  for (const b of plan.branchesWithData) {
+    try {
+      await _db.collection('pos_data').doc('inventory').collection('branches').doc(b)
+        .set({ items: plan.byBranch[b], updatedAt: Date.now(), branchId: b });
+      written++;
+    } catch (e) {
+      console.error('executeInventoryMigration write:', b, e);
+      failed++;
+    }
+  }
+
+  addAuditLog('inventory.migrate', `ترحيل ${plan.totalProducts} منتج عبر ${plan.branchesWithData.length} فرع للهيكل المعزول لكل فرع (${written} فرع نُسخ${failed ? `، ${failed} فشل` : ''})`, null);
+  document.getElementById('invMigrationModal').classList.add('hidden');
+  _invMigrationPlan = null;
+  showMsg('sSettingsMsg', failed
+    ? `⚠️ تم ترحيل ${written} فرع، وفشل ${failed} — راجع الـ Console وأعد المحاولة (آمن تكرر الترحيل)`
+    : `✅ تم ترحيل مخزون ${written} فرع بنجاح. راجع صفحة المخزون للتأكد قبل نشر القواعد الجديدة.`,
     failed ? 'danger' : 'success');
 }
 
@@ -6993,9 +7116,20 @@ function initFirebase() {
       });
 
     initApprovalsFirebaseListener();
-    // ── branch inventory listeners (wh + b1..b4) ──────────────────────────────────
-    BRANCH_IDS.forEach(b => {
-      _db.collection('pos_data').doc(`inv_${b}`)
+    // ── branch inventory listeners ──────────────────────────────────────
+    // ⚠️ NOT YET LIVE — see the long comment above setInv() in 00-core.js.
+    // Subscribes to the NEW pos_data/inventory/branches/{branchId} path
+    // (real per-branch isolation), not the old flat pos_data/inv_{branchId}
+    // doc. Admin subscribes to every branch (needed for the "all branches"
+    // dashboard/reports views); everyone else only their own — which is
+    // also all the new rules permit them to read. A non-admin never had a
+    // real UI need to watch OTHER branches' live stock (even the warehouse
+    // role only ever reads its own inventory; cross-branch stock MOVEMENT
+    // during a transfer is a write, handled separately by the rule's 'wh'
+    // bypass, not a live read subscription).
+    const _invBranches = currentUser === 'admin' ? BRANCH_IDS : [currentBranch];
+    _invBranches.forEach(b => {
+      _db.collection('pos_data').doc('inventory').collection('branches').doc(b)
         .onSnapshot(snap => {
           if (snap.exists) {
             _invCacheByBranch[b] = snap.data().items || [];
@@ -7006,8 +7140,8 @@ function initFirebase() {
               : DB.g(`pos_inv_${b}`, []);
             _invCacheByBranch[b] = local;
             if (local.length) {
-              _db.collection('pos_data').doc(`inv_${b}`)
-                 .set({ items: local, updatedAt: Date.now() });
+              _db.collection('pos_data').doc('inventory').collection('branches').doc(b)
+                 .set({ items: local, updatedAt: Date.now(), branchId: b });
             }
           }
           DB.s(`pos_inv_${b}`, _invCacheByBranch[b]); // keep localStorage in sync
@@ -7020,7 +7154,7 @@ function initFirebase() {
               renderProducts();
             }
           }
-        }, err => console.error(`Firestore inv_${b} error:`, err));
+        }, err => console.error(`Firestore inv/${b} error:`, err));
     });
 
     _db.collection('pos_data').doc('settings')

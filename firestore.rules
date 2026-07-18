@@ -67,16 +67,18 @@ service cloud.firestore {
     // ── POS DATA ──────────────────────────────────────────────────
     // 'auth' stays blocked outright (used to leak password hashes —
     // see CLAUDE.md). 'settings' and 'accounts' (legacy credential
-    // doc) are admin-write-only; everything else (inventory,
-    // suspended bills, customers, transfers, approvals, audit, ...)
-    // is writable by any user WITH a role, because cashier flows
-    // legitimately write them (stock deduction, suspend, audit log).
+    // doc) are admin-write-only; inv_* (legacy per-branch inventory docs —
+    // see the branch-isolated replacement below) are admin-only entirely,
+    // read included; everything else (suspended bills, customers,
+    // transfers, approvals, audit, ...) is writable by any user WITH a
+    // role, because cashier flows legitimately write them (suspend,
+    // audit log, ...).
     match /pos_data/{doc} {
-      allow read: if doc != 'auth' && (
+      allow read: if doc != 'auth' && !doc.matches('inv_.*') && (
         isOwner() ||
         (signedIn() && exists(/databases/$(database)/documents/roles/$(request.auth.uid)))
       );
-      allow write: if doc != 'auth' && (
+      allow write: if doc != 'auth' && !doc.matches('inv_.*') && (
         isOwner() ||
         (signedIn() &&
          exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
@@ -84,6 +86,53 @@ service cloud.firestore {
         (signedIn() &&
          exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
          !(doc in ['settings', 'accounts', 'budgets']))
+      );
+    }
+
+    // ── LEGACY FLAT INVENTORY (pos_data/inv_b1, inv_wh, ...) ────────
+    // ⚠️⚠️ DO NOT TIGHTEN/REMOVE until the inventory migration tool
+    // (Settings → "🔀 ترحيل المخزون لهيكل معزول لكل فرع",
+    // 04-inventory-migration.js) has been run and verified — see the long
+    // comment above setInv() in 00-core.js. Admin-only from here on (kept
+    // readable so an admin can verify/clean up old data after migrating;
+    // no branch device ever needs to read it again once migrated). This is
+    // the SAME gap the sales rule above closed, applied to inventory: each
+    // branch's stock already lived in its OWN document (no array-mixing
+    // like sales had), but the general pos_data/{doc} rule above didn't
+    // check WHICH branch's doc was being read/written — any role could
+    // read or silently edit any OTHER branch's stock counts/costs, not
+    // just their own.
+    match /pos_data/{invDoc} {
+      allow read, write: if invDoc.matches('inv_.*') && (
+        isOwner() || (
+          signedIn() &&
+          exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin'
+        )
+      );
+    }
+
+    // ── INVENTORY — branch-isolated ─────────────────────────────────
+    // ⚠️⚠️ DO NOT PUBLISH until the inventory migration tool has run and
+    // been verified (same caveat as the legacy block above and the sales
+    // section below — do not publish any of these three together before
+    // migrating both sales AND inventory, or publish separately per
+    // resource once each is individually migrated and confirmed).
+    // The 'wh' (warehouse) role additionally gets write access to EVERY
+    // branch's inventory — not a gap, a real designed workflow: warehouse→
+    // branch transfers write to the destination branch's stock (see
+    // confirmWhTransfer in 95-warehouse.js / "وضع مخزن فقط" in
+    // FEATURES.md). No role other than admin/wh ever needs cross-branch
+    // inventory access, matching how the UI already gates transfers.
+    match /pos_data/inventory/branches/{branchId} {
+      allow read, write: if isOwner() || (
+        signedIn() &&
+        exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
+        (
+          get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin' ||
+          get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.branchId == branchId ||
+          get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.branchId == 'wh'
+        )
       );
     }
 

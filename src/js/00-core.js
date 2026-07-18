@@ -66,6 +66,19 @@ function getBranchName(b) { return ((_settingsCache.branches) || BRANCH_DEFAULTS
 function getBranches()    { return _settingsCache.branches || BRANCH_DEFAULTS; }
 
 // INVENTORY — branch-aware
+//
+// ⚠️ NOT YET LIVE — pos_data/inventory/branches/{branchId} write path below
+// is implemented and tested locally, but firestore.rules still only has the
+// OLD flat pos_data/inv_{branchId} rule (any role reads/writes any branch's
+// stock — see the security review dated 2026-07-17). Cutting over requires,
+// in this exact order: (1) run the one-time migration tool (Settings →
+// "🔀 ترحيل المخزون لهيكل معزول لكل فرع", 04-inventory-migration.js) while
+// the OLD rule still permits reading the old inv_{branchId} docs, (2)
+// verify inventory renders correctly for every branch, (3) publish the NEW
+// rules that require roles/{uid}.branchId to match the branchId path
+// segment — a 'wh' (warehouse) role additionally keeps write access to
+// every branch, since warehouse→branch transfers are a real cross-branch
+// workflow, not a security gap (see confirmWhTransfer in 95-warehouse.js).
 const getInv = (branch) => _invCacheByBranch[branch || currentBranch] || [];
 // ⚠️ setInv REPLACES the whole branch inventory — it's inherently last-write-
 // wins, so it must only be used for intentional full replacement (backup
@@ -78,8 +91,8 @@ function setInv(v, branch) {
   _invCacheByBranch[b] = v;
   DB.s(`pos_inv_${b}`, v);
   if (!_fbReady) return;
-  _db.collection('pos_data').doc(`inv_${b}`)
-     .set({ items: v, updatedAt: Date.now() })
+  _db.collection('pos_data').doc('inventory').collection('branches').doc(b)
+     .set({ items: v, updatedAt: Date.now(), branchId: b })
      .catch(e => console.error('Firestore setInv:', e));
 }
 
@@ -114,15 +127,15 @@ function adjustStock(deltas, branch) {
   _invCacheByBranch[b] = applyTo(_invCacheByBranch[b] || []);
   DB.s(`pos_inv_${b}`, _invCacheByBranch[b]);
   if (!_fbReady) return;
-  const ref = _db.collection('pos_data').doc(`inv_${b}`);
+  const ref = _db.collection('pos_data').doc('inventory').collection('branches').doc(b);
   _db.runTransaction(tx =>
     tx.get(ref).then(snap => {
       const items = applyTo(snap.exists ? (snap.data().items || []) : []);
-      tx.set(ref, { items, updatedAt: Date.now() });
+      tx.set(ref, { items, updatedAt: Date.now(), branchId: b });
     })
   ).catch(e => {
     console.error('Firestore adjustStock (falling back to direct write):', e);
-    ref.set({ items: _invCacheByBranch[b], updatedAt: Date.now() })
+    ref.set({ items: _invCacheByBranch[b], updatedAt: Date.now(), branchId: b })
        .catch(e2 => console.error('Firestore adjustStock fallback:', e2));
   });
 }

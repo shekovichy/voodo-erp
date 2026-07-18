@@ -184,9 +184,20 @@ function initFirebase() {
       });
 
     initApprovalsFirebaseListener();
-    // ── branch inventory listeners (wh + b1..b4) ──────────────────────────────────
-    BRANCH_IDS.forEach(b => {
-      _db.collection('pos_data').doc(`inv_${b}`)
+    // ── branch inventory listeners ──────────────────────────────────────
+    // ⚠️ NOT YET LIVE — see the long comment above setInv() in 00-core.js.
+    // Subscribes to the NEW pos_data/inventory/branches/{branchId} path
+    // (real per-branch isolation), not the old flat pos_data/inv_{branchId}
+    // doc. Admin subscribes to every branch (needed for the "all branches"
+    // dashboard/reports views); everyone else only their own — which is
+    // also all the new rules permit them to read. A non-admin never had a
+    // real UI need to watch OTHER branches' live stock (even the warehouse
+    // role only ever reads its own inventory; cross-branch stock MOVEMENT
+    // during a transfer is a write, handled separately by the rule's 'wh'
+    // bypass, not a live read subscription).
+    const _invBranches = currentUser === 'admin' ? BRANCH_IDS : [currentBranch];
+    _invBranches.forEach(b => {
+      _db.collection('pos_data').doc('inventory').collection('branches').doc(b)
         .onSnapshot(snap => {
           if (snap.exists) {
             _invCacheByBranch[b] = snap.data().items || [];
@@ -197,8 +208,8 @@ function initFirebase() {
               : DB.g(`pos_inv_${b}`, []);
             _invCacheByBranch[b] = local;
             if (local.length) {
-              _db.collection('pos_data').doc(`inv_${b}`)
-                 .set({ items: local, updatedAt: Date.now() });
+              _db.collection('pos_data').doc('inventory').collection('branches').doc(b)
+                 .set({ items: local, updatedAt: Date.now(), branchId: b });
             }
           }
           DB.s(`pos_inv_${b}`, _invCacheByBranch[b]); // keep localStorage in sync
@@ -211,7 +222,7 @@ function initFirebase() {
               renderProducts();
             }
           }
-        }, err => console.error(`Firestore inv_${b} error:`, err));
+        }, err => console.error(`Firestore inv/${b} error:`, err));
     });
 
     _db.collection('pos_data').doc('settings')
