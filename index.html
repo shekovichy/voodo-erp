@@ -6912,19 +6912,26 @@ function _resetAllConfirmed() {
     .concat(BRANCH_IDS.map(b=>`pos_inv_${b}`))
     .forEach(k => localStorage.removeItem(k));
   if (_fbReady) {
-    BRANCH_IDS.forEach(b => _db.collection('pos_data').doc(`inv_${b}`).delete().catch(()=>{}));
+    // Inventory now lives at pos_data/inventory/branches/{branchId} (see
+    // setInv() in 00-core.js, restructured 2026-07-17 for real per-branch
+    // isolation) — delete BOTH that and the legacy flat inv_{b} docs, or a
+    // "reset everything" that only wiped the old path would leave the
+    // actual live stock data fully intact.
+    BRANCH_IDS.forEach(b => {
+      _db.collection('pos_data').doc(`inv_${b}`).delete().catch(()=>{});
+      _db.collection('pos_data').doc('inventory').collection('branches').doc(b).delete().catch(()=>{});
+    });
     _db.collection('pos_data').doc('inv').delete().catch(()=>{});
     _db.collection('pos_data').doc('suspended').delete().catch(()=>{});
     _db.collection('pos_data').doc('settings').delete().catch(()=>{});
     _db.collection('pos_data').doc('transfers').delete().catch(()=>{});
-    _db.collection('pos_sales').get().then(snap => {
-      const batch = _db.batch();
-      snap.docs.forEach(doc => batch.delete(doc.ref));
-      return batch.commit();
-    }).catch(()=>{});
   }
+  // Sales: setSales([]) already deletes both the legacy flat month docs and
+  // the new pos_sales/{month}/branches/{branchId} structure across a
+  // 24-month window (see 00-core.js) — no need to duplicate that logic here.
+  setSales([]);
   _invCacheByBranch = {}; BRANCH_IDS.forEach(b => _invCacheByBranch[b] = []);
-  _salesCache = []; _suspendCache = []; _transfersCache = [];
+  _suspendCache = []; _transfersCache = [];
   _settingsCache = { threshold: 5 };
   showMsg('sSettingsMsg','تم حذف كل البيانات','danger');
 }
