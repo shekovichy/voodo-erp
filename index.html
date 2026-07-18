@@ -7161,7 +7161,30 @@ function initFirebase() {
               renderProducts();
             }
           }
-        }, err => console.error(`Firestore inv/${b} error:`, err));
+        }, err => {
+          // Every OTHER listener in this file falls back to the local cache
+          // on error (see 'suspended'/'settings'/'suppliers' etc. below) —
+          // this one didn't, so a denied read (e.g. during the window before
+          // the new branch-scoped rules are published) left
+          // _invCacheByBranch[b] simply unset, and the inventory page/POS
+          // product grid rendered as if the branch had zero stock. Falling
+          // back here means the worst case during that window is "shows the
+          // last locally-cached data", not "shows nothing".
+          console.error(`Firestore inv/${b} error:`, err);
+          const local = b === 'b1'
+            ? (DB.g('pos_inv_b1', null) || DB.g('inv', []))
+            : DB.g(`pos_inv_${b}`, []);
+          _invCacheByBranch[b] = local;
+          if (b === currentBranch) {
+            updateLowStockBell();
+            if (currentUser === 'admin') {
+              visRefresh('page-inventory', renderInventory);
+              visRefresh('page-dashboard', buildDashboard);
+            } else if (currentUser) {
+              renderProducts();
+            }
+          }
+        });
     });
 
     _db.collection('pos_data').doc('settings')
@@ -7395,7 +7418,23 @@ function initFirebase() {
             visRefresh('page-sales', () => { initSalesFilter(); renderSales(); });
             visRefresh('page-dashboard', buildDashboard);
             visRefresh('page-reports', buildSalesReport);
-          }, err => console.error(`Firestore sales/${month}/${b} error:`, err));
+          }, err => {
+            // Fall back to the local cache on a denied/failed read — same
+            // fix as the inventory listener above (see its comment for the
+            // full story: a listener with no fallback here left this
+            // branch+month's slice of _salesCache simply unset instead of
+            // showing the last known-good local data).
+            console.error(`Firestore sales/${month}/${b} error:`, err);
+            const localSalesAll = DB.g('sales', []);
+            const localMonthBranch = localSalesAll.filter(s => s.date.slice(0, 7) === month && (s.branchId || currentBranch) === b);
+            _salesCache = [
+              ..._salesCache.filter(s => !(s.date.slice(0, 7) === month && (s.branchId || '') === b)),
+              ...localMonthBranch
+            ];
+            visRefresh('page-sales', () => { initSalesFilter(); renderSales(); });
+            visRefresh('page-dashboard', buildDashboard);
+            visRefresh('page-reports', buildSalesReport);
+          });
       });
     });
 
