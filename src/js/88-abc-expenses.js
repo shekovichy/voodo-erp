@@ -157,27 +157,34 @@ function renderExpensesPage() {
 // ══════════════════════════════════════════════
 
 const getAudit = () => _auditCache;
-function setAudit(list) {
-  _auditCache = list;
-  DB.s('pos_audit', list);
-  try { _db && _db.collection('pos_data').doc('audit').set({ list, updatedAt: Date.now() }); } catch(e) {}
-}
 
 // changes: optional array of { label, before, after } — one entry per field
 // that actually changed. Powers the "🔍 التفاصيل" diff view in the audit page.
+//
+// Each entry is now its OWN Firestore document (pos_audit/{id}), not an
+// element inside one shared array field. That's what makes real append-only
+// enforcement possible: firestore.rules allows `create` on this collection
+// to anyone with a role, but `update`/`delete` are hard-denied to everyone,
+// including admin, from the client — no rule can express "you may only grow
+// this array, never rewrite an old entry inside it" when the whole log is
+// one field, since any write there replaces the field wholesale. One
+// document per entry is the only way Firestore's document-level security
+// model can guarantee that.
 function addAuditLog(action, details, branchId, changes) {
-  const list = [...getAudit()];
-  list.unshift({
-    id: 'a_' + Date.now(),
+  const entry = {
+    id: 'a_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
     action,
     details,
     user: currentUsername || currentUser || 'system',
     branchId: branchId || currentBranch,
     timestamp: Date.now(),
     changes: (changes && changes.length) ? changes : null
-  });
-  // Keep last 500 entries
-  setAudit(list.slice(0, 500));
+  };
+  _auditCache = [entry, ..._auditCache];
+  DB.s('pos_audit', _auditCache.slice(0, 500)); // local mirror only, capped for storage size
+  if (!_fbReady) return;
+  _db.collection('pos_audit').doc(entry.id).set(entry)
+     .catch(e => console.error('Firestore addAuditLog:', e));
 }
 
 // Builds a before/after diff array from two display-ready objects (values

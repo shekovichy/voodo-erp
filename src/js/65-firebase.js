@@ -325,12 +325,39 @@ function initFirebase() {
         visRefresh('page-dashboard', buildDashboard);
       }, err => { _expensesCache = DB.g('pos_expenses', []); });
 
-    // Audit Log listener
-    _db.collection('pos_data').doc('audit')
+    // Audit Log listener — pos_audit is now ONE DOCUMENT PER ENTRY (see
+    // addAuditLog in 88-abc-expenses.js), not a single array-in-one-doc, so
+    // it's queried and ordered rather than read as a single doc.
+    _db.collection('pos_audit').orderBy('timestamp', 'desc').limit(500)
       .onSnapshot(snap => {
-        _auditCache = snap.exists ? (snap.data().list || []) : DB.g('pos_audit', []);
+        _auditCache = snap.docs.map(d => d.data());
         visRefresh('page-audit', renderAuditPage);
       }, err => { _auditCache = DB.g('pos_audit', []); });
+
+    // One-time migration: the audit log used to live entirely as one array
+    // field in pos_data/audit. If the new pos_audit collection is still
+    // empty, copy any existing entries over as individual documents so
+    // history isn't lost, then never touch the old doc again — the query
+    // above becomes the sole source of truth from here on. Runs from an
+    // admin session only (cashier logins are far more frequent/concurrent,
+    // which would just multiply harmless-but-noisy duplicate-migration
+    // attempts for no benefit — this is a one-time bootstrap, not something
+    // that needs every session racing to perform it).
+    if (currentUser === 'admin') {
+      _db.collection('pos_audit').limit(1).get().then(snap => {
+        if (!snap.empty) return;
+        _db.collection('pos_data').doc('audit').get().then(oldSnap => {
+          const oldList = oldSnap.exists ? (oldSnap.data().list || []) : [];
+          if (!oldList.length) return;
+          const batch = _db.batch();
+          oldList.forEach(entry => {
+            const id = entry.id || ('a_' + entry.timestamp + '_' + Math.random().toString(36).slice(2, 7));
+            batch.set(_db.collection('pos_audit').doc(id), { ...entry, id });
+          });
+          batch.commit().catch(e => console.error('Firestore audit migration:', e));
+        });
+      }).catch(e => console.error('Firestore audit migration check:', e));
+    }
 
     // Transfers listener
     _db.collection('pos_data').doc('transfers')
@@ -382,35 +409,45 @@ function initFirebase() {
         visRefresh('page-customers', renderCustomers);
       }, err => { _customersCache = DB.g('pos_customers', []); });
 
+    // ⚠️ NOT YET LIVE — see the long comment above addSale() in 00-core.js.
+    // This subscribes to the NEW pos_sales/{month}/branches/{branchId}
+    // structure (real per-branch isolation — see firestore.rules), not the
+    // old flat pos_sales/{month} doc. Admin subscribes to every branch;
+    // everyone else only to their own (which is also all the NEW rules will
+    // permit them to read). Do not merge to main / publish the matching
+    // rules until migrateSalesToBranchStructure() has been run — this
+    // listener finds nothing for any month that hasn't been migrated yet.
+    const _saMonths = [];
     for (let i = 0; i < 12; i++) {
       const d = new Date(); d.setMonth(d.getMonth() - i);
-      const month = d.toISOString().slice(0, 7);
-      _db.collection('pos_sales').doc(month)
-        .onSnapshot(snap => {
-          if (snap.exists) {
-            const monthItems = snap.data().items || [];
-            _salesCache = [
-              ..._salesCache.filter(s => s.date.slice(0, 7) !== month),
-              ...monthItems
-            ];
-          } else {
-            // Read fresh from localStorage each time (not a stale startup snapshot).
-            // Seed with arrayUnion+merge (not a plain overwrite) so that if
-            // another device created this month's doc at the same moment, its
-            // sales aren't clobbered by this first-time seed — same lost-update
-            // race that addSale() guards against.
-            const localSalesAll = DB.g('sales', []);
-            const localMonth = localSalesAll.filter(s => s.date.slice(0, 7) === month);
-            if (localMonth.length) {
-              _db.collection('pos_sales').doc(month)
-                 .set({ items: firebase.firestore.FieldValue.arrayUnion(...localMonth), updatedAt: Date.now() }, { merge: true });
-            }
-          }
-          visRefresh('page-sales', () => { initSalesFilter(); renderSales(); });
-          visRefresh('page-dashboard', buildDashboard);
-          visRefresh('page-reports', buildSalesReport);
-        }, err => console.error(`Firestore sales/${month} error:`, err));
+      _saMonths.push(d.toISOString().slice(0, 7));
     }
+    const _saBranches = currentUser === 'admin' ? BRANCH_IDS : [currentBranch];
+    _saBranches.forEach(b => {
+      _saMonths.forEach(month => {
+        _db.collection('pos_sales').doc(month).collection('branches').doc(b)
+          .onSnapshot(snap => {
+            const items = snap.exists ? (snap.data().items || []) : [];
+            _salesCache = [
+              ..._salesCache.filter(s => !(s.date.slice(0, 7) === month && (s.branchId || '') === b)),
+              ...items
+            ];
+            if (!snap.exists) {
+              // Same local-fallback seeding as before, scoped to this
+              // specific branch+month now instead of the whole month.
+              const localSalesAll = DB.g('sales', []);
+              const localMonthBranch = localSalesAll.filter(s => s.date.slice(0, 7) === month && (s.branchId || currentBranch) === b);
+              if (localMonthBranch.length) {
+                _db.collection('pos_sales').doc(month).collection('branches').doc(b)
+                   .set({ items: firebase.firestore.FieldValue.arrayUnion(...localMonthBranch), updatedAt: Date.now(), month, branchId: b }, { merge: true });
+              }
+            }
+            visRefresh('page-sales', () => { initSalesFilter(); renderSales(); });
+            visRefresh('page-dashboard', buildDashboard);
+            visRefresh('page-reports', buildSalesReport);
+          }, err => console.error(`Firestore sales/${month}/${b} error:`, err));
+      });
+    });
 
   } catch(e) {
     console.error('Firebase init error:', e);

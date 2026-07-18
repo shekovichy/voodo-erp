@@ -2738,6 +2738,11 @@ body.warehouse-mode #cartFab {
             <button class="btn btn-warning btn-sm" onclick="previewDemoCleanup()">🔍 فحص بيانات الديمو</button>
           </div>
           <div class="card">
+            <div class="card-title">🔀 ترحيل المبيعات لهيكل معزول لكل فرع</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">⚠️ خطوة تقنية لمرة واحدة — جزء من إغلاق ثغرة عزل بيانات الفروع. متعملهاش إلا بعد التنسيق الكامل، ولازم تسبق نشر قواعد Firestore الجديدة مباشرة.</p>
+            <button class="btn btn-primary btn-sm" onclick="previewSalesMigration()">🔍 فحص وترحيل المبيعات</button>
+          </div>
+          <div class="card">
             <div class="card-title">🗑️ إعادة تعيين البيانات</div>
             <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">⚠️ سيحذف هذا كل بيانات المبيعات والمخزون نهائياً ولا يمكن التراجع</p>
             <div class="flex gap-8">
@@ -3424,20 +3429,42 @@ function adjustStock(deltas, branch) {
 }
 
 // SALES — addSale() لإضافة فاتورة / setSales([]) لمسح الكل
+//
+// ⚠️ NOT YET LIVE — pos_sales/{month}/branches/{branchId} write path below
+// is implemented and tested locally, but firestore.rules still only has the
+// OLD flat pos_sales/{document=**} rule (any role reads/writes the whole
+// month, all branches mixed — see the security review dated 2026-07-17).
+// Cutting over requires, in this exact order: (1) run the one-time
+// migration tool to copy existing flat-doc sales into the new per-branch
+// structure while the OLD rule still permits reading them, (2) verify the
+// migrated data renders correctly, (3) publish the NEW rules that require
+// roles/{uid}.branchId to match the branchId path segment (removing the old
+// blanket rule). Do not merge the new listener/rules pair to main without
+// running the migration first — the new listener looks for data that only
+// exists after migration; publishing before then makes sales reports look
+// empty.
 const getSales = () => _salesCache;
 function addSale(sale) {
   _salesCache.push(sale);
   if (!_fbReady) { DB.s('sales', _salesCache); return; }
   const month = sale.date.slice(0, 7); // YYYY-MM
-  // Atomically append ONLY this sale to the month document instead of
-  // rewriting the whole month array. The old rewrite had a lost-update race:
-  // two branches (or two cashiers) selling at the same moment would each read
-  // the month array, add their own invoice, and write the whole thing back —
-  // the second write silently clobbering the first branch's invoice.
-  // arrayUnion appends server-side, so every concurrent sale survives.
-  // (merge:true creates the doc if the month is new.)
-  _db.collection('pos_sales').doc(month)
-     .set({ items: firebase.firestore.FieldValue.arrayUnion(sale), updatedAt: Date.now() }, { merge: true })
+  const branchId = sale.branchId || currentBranch;
+  // Branch-scoped subcollection, NOT a flat pos_sales/{month} doc. Firestore
+  // security rules operate at the document level — they can allow or deny
+  // an entire document, but can never filter which ELEMENTS of an array
+  // field a given reader may see. So as long as every branch's invoices for
+  // a month lived in one shared document, granting a branch cashier read
+  // access to "their month" meant granting it to every other branch's
+  // invoices in that same document too — a UI filter hides them, but the
+  // raw document (and therefore the data) was never actually restricted.
+  // Splitting storage by branch is what makes a real per-branch rule
+  // possible at all (see firestore.rules). Still arrayUnion'd (not
+  // overwritten) for the same concurrent-write safety as before.
+  _db.collection('pos_sales').doc(month).collection('branches').doc(branchId)
+     .set({
+       items: firebase.firestore.FieldValue.arrayUnion(sale),
+       updatedAt: Date.now(), month, branchId
+     }, { merge: true })
      .catch(e => {
        // Write refused (e.g. a legacy/unauthenticated session during the
        // auth transition, or a rules change) — persist the whole sales
@@ -3451,14 +3478,22 @@ function setSales(v) {
   // Used only for reset (v = [])
   _salesCache = v;
   if (!_fbReady) { DB.s('sales', v); return; }
-  _db.collection('pos_sales').get()
-     .then(snap => {
-       if (!snap.empty) {
-         const batch = _db.batch();
-         snap.docs.forEach(doc => batch.delete(doc.ref));
-         return batch.commit();
-       }
-     }).catch(e => console.error('Firestore setSales clear:', e));
+  if (v.length) { console.error('setSales: non-empty array not supported for cloud writes'); return; }
+  // Delete every branch-month doc across a generous 24-month window (well
+  // under Firestore's 500-ops-per-batch limit even with several branches),
+  // plus any leftover legacy flat pos_sales/{month} docs from before the
+  // per-branch migration.
+  const months = [];
+  for (let i = 0; i < 24; i++) {
+    const d = new Date(); d.setMonth(d.getMonth() - i);
+    months.push(d.toISOString().slice(0, 7));
+  }
+  const batch = _db.batch();
+  months.forEach(month => {
+    batch.delete(_db.collection('pos_sales').doc(month));
+    BRANCH_IDS.forEach(b => batch.delete(_db.collection('pos_sales').doc(month).collection('branches').doc(b)));
+  });
+  batch.commit().catch(e => console.error('Firestore setSales clear:', e));
 }
 
 // USERS — kept in localStorage (passwords stay local)
@@ -3718,6 +3753,130 @@ function executeDemoCleanup() {
   document.getElementById('demoCleanupModal').classList.add('hidden');
   showMsg('sSettingsMsg', `✅ تم حذف ${removed} سجل ديمو. راجع التقارير للتأكد.`);
   try { buildDashboard(); } catch (e) {}
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// ONE-TIME SALES MIGRATION — flat pos_sales/{month} → branch-scoped
+// pos_sales/{month}/branches/{branchId}
+//
+// ⚠️ Run this ONLY as part of the coordinated cutover described in the
+// comment above addSale() in 00-core.js — after the new write/listener code
+// is live but BEFORE publishing the new firestore.rules. Running it earlier
+// or later is harmless (arrayUnion makes it idempotent — safe to re-run),
+// but the SEQUENCE with the rules publish matters: the new rules deny read
+// access to the old flat docs, so if you publish them before migrating,
+// nobody can migrate the old data out anymore.
+// ══════════════════════════════════════════════════════════════════════
+
+let _salesMigrationPlan = null;
+
+async function previewSalesMigration() {
+  if (currentUser !== 'admin') { showToast('الترحيل للأدمن فقط'); return; }
+  if (!_fbReady) { showToast('محتاج اتصال بالإنترنت لعمل الترحيل'); return; }
+
+  showToast('⏳ جاري فحص المبيعات القديمة...');
+  const months = [];
+  for (let i = 0; i < 24; i++) {
+    const d = new Date(); d.setMonth(d.getMonth() - i);
+    months.push(d.toISOString().slice(0, 7));
+  }
+
+  const plan = { byMonth: {}, totalSales: 0, byBranch: {}, monthsWithData: [] };
+  for (const month of months) {
+    let snap;
+    try { snap = await _db.collection('pos_sales').doc(month).get(); }
+    catch (e) { console.error('previewSalesMigration read:', month, e); continue; }
+    if (!snap.exists) continue;
+    const items = snap.data().items || [];
+    if (!items.length) continue;
+    const byBranch = {};
+    items.forEach(sale => {
+      const b = sale.branchId || 'unknown';
+      (byBranch[b] = byBranch[b] || []).push(sale);
+    });
+    plan.byMonth[month] = byBranch;
+    plan.monthsWithData.push(month);
+    plan.totalSales += items.length;
+    Object.keys(byBranch).forEach(b => { plan.byBranch[b] = (plan.byBranch[b] || 0) + byBranch[b].length; });
+  }
+
+  _salesMigrationPlan = plan;
+  _renderSalesMigrationPreview(plan);
+}
+
+function _renderSalesMigrationPreview(plan) {
+  const branchLines = Object.keys(plan.byBranch).map(b =>
+    `<div style="font-size:12px;">• ${escHtml(b === 'unknown' ? '(بدون فرع محدد)' : getBranchName(b))}: ${plan.byBranch[b]} فاتورة</div>`).join('');
+
+  const body = !plan.monthsWithData.length
+    ? '<div style="padding:16px;text-align:center;color:var(--text-muted);">مفيش بيانات في الهيكل القديم للترحيل — إما اتترحلت بالفعل أو مفيش مبيعات مسجّلة.</div>'
+    : `
+      <div style="padding:4px 2px 12px;">
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin-bottom:12px;">
+          <div style="font-weight:700;margin-bottom:8px;">هيتم نسخ الآتي للهيكل الجديد المعزول لكل فرع:</div>
+          <div style="font-size:13px;margin-bottom:4px;">🧾 <strong>${plan.totalSales}</strong> فاتورة عبر <strong>${plan.monthsWithData.length}</strong> شهر</div>
+          <div style="font-size:13px;margin-bottom:4px;">🏬 حسب الفرع:</div>
+          ${branchLines}
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);background:var(--bg-secondary);border-radius:8px;padding:10px;">
+          ⚠️ ده نسخ بس (add-only، مش نقل) — المستندات القديمة بتفضل زي ما هي كنسخة احتياطية. آمن تكرره أكتر من مرة. <strong>متنشرش قواعد Firestore الجديدة إلا بعد ما الترحيل ده يخلص ويتأكد.</strong>
+        </div>
+      </div>`;
+
+  let modal = document.getElementById('salesMigrationModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'salesMigrationModal';
+    modal.className = 'modal-overlay hidden';
+    modal.onclick = (e) => { if (e.target === modal) modal.classList.add('hidden'); };
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div class="modal-box" style="max-width:520px;width:94%;">
+      <div class="modal-header">
+        <h3>🔀 ترحيل المبيعات للهيكل المعزول</h3>
+        <button onclick="document.getElementById('salesMigrationModal').classList.add('hidden')" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button>
+      </div>
+      <div style="max-height:60vh;overflow-y:auto;">${body}</div>
+      <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;">
+        <button class="btn btn-gray btn-sm" onclick="document.getElementById('salesMigrationModal').classList.add('hidden')">إغلاق</button>
+        ${plan.monthsWithData.length ? '<button class="btn btn-primary btn-sm" onclick="executeSalesMigration()">✅ ابدأ الترحيل</button>' : ''}
+      </div>
+    </div>`;
+  modal.classList.remove('hidden');
+}
+
+async function executeSalesMigration() {
+  if (currentUser !== 'admin') { showToast('الترحيل للأدمن فقط'); return; }
+  const plan = _salesMigrationPlan;
+  if (!plan || !plan.monthsWithData.length) { showToast('اعمل فحص الأول'); return; }
+
+  showToast('⏳ جاري الترحيل...');
+  let written = 0, failed = 0;
+  for (const month of plan.monthsWithData) {
+    const byBranch = plan.byMonth[month];
+    for (const branchId of Object.keys(byBranch)) {
+      try {
+        await _db.collection('pos_sales').doc(month).collection('branches').doc(branchId)
+          .set({
+            items: firebase.firestore.FieldValue.arrayUnion(...byBranch[branchId]),
+            updatedAt: Date.now(), month, branchId
+          }, { merge: true });
+        written++;
+      } catch (e) {
+        console.error('executeSalesMigration write:', month, branchId, e);
+        failed++;
+      }
+    }
+  }
+
+  addAuditLog('sales.migrate', `ترحيل ${plan.totalSales} فاتورة عبر ${plan.monthsWithData.length} شهر للهيكل المعزول لكل فرع (${written} مستند نُسخ${failed ? `، ${failed} فشل` : ''})`, null);
+  document.getElementById('salesMigrationModal').classList.add('hidden');
+  _salesMigrationPlan = null;
+  showMsg('sSettingsMsg', failed
+    ? `⚠️ تم ترحيل ${written} مستند، وفشل ${failed} — راجع الـ Console وأعد المحاولة (آمن تكرر الترحيل)`
+    : `✅ تم ترحيل ${written} مستند بنجاح. راجع تقرير المبيعات للتأكد قبل نشر القواعد الجديدة.`,
+    failed ? 'danger' : 'success');
 }
 
 // ══════════════════════════════════════════════
@@ -6963,12 +7122,39 @@ function initFirebase() {
         visRefresh('page-dashboard', buildDashboard);
       }, err => { _expensesCache = DB.g('pos_expenses', []); });
 
-    // Audit Log listener
-    _db.collection('pos_data').doc('audit')
+    // Audit Log listener — pos_audit is now ONE DOCUMENT PER ENTRY (see
+    // addAuditLog in 88-abc-expenses.js), not a single array-in-one-doc, so
+    // it's queried and ordered rather than read as a single doc.
+    _db.collection('pos_audit').orderBy('timestamp', 'desc').limit(500)
       .onSnapshot(snap => {
-        _auditCache = snap.exists ? (snap.data().list || []) : DB.g('pos_audit', []);
+        _auditCache = snap.docs.map(d => d.data());
         visRefresh('page-audit', renderAuditPage);
       }, err => { _auditCache = DB.g('pos_audit', []); });
+
+    // One-time migration: the audit log used to live entirely as one array
+    // field in pos_data/audit. If the new pos_audit collection is still
+    // empty, copy any existing entries over as individual documents so
+    // history isn't lost, then never touch the old doc again — the query
+    // above becomes the sole source of truth from here on. Runs from an
+    // admin session only (cashier logins are far more frequent/concurrent,
+    // which would just multiply harmless-but-noisy duplicate-migration
+    // attempts for no benefit — this is a one-time bootstrap, not something
+    // that needs every session racing to perform it).
+    if (currentUser === 'admin') {
+      _db.collection('pos_audit').limit(1).get().then(snap => {
+        if (!snap.empty) return;
+        _db.collection('pos_data').doc('audit').get().then(oldSnap => {
+          const oldList = oldSnap.exists ? (oldSnap.data().list || []) : [];
+          if (!oldList.length) return;
+          const batch = _db.batch();
+          oldList.forEach(entry => {
+            const id = entry.id || ('a_' + entry.timestamp + '_' + Math.random().toString(36).slice(2, 7));
+            batch.set(_db.collection('pos_audit').doc(id), { ...entry, id });
+          });
+          batch.commit().catch(e => console.error('Firestore audit migration:', e));
+        });
+      }).catch(e => console.error('Firestore audit migration check:', e));
+    }
 
     // Transfers listener
     _db.collection('pos_data').doc('transfers')
@@ -7020,35 +7206,45 @@ function initFirebase() {
         visRefresh('page-customers', renderCustomers);
       }, err => { _customersCache = DB.g('pos_customers', []); });
 
+    // ⚠️ NOT YET LIVE — see the long comment above addSale() in 00-core.js.
+    // This subscribes to the NEW pos_sales/{month}/branches/{branchId}
+    // structure (real per-branch isolation — see firestore.rules), not the
+    // old flat pos_sales/{month} doc. Admin subscribes to every branch;
+    // everyone else only to their own (which is also all the NEW rules will
+    // permit them to read). Do not merge to main / publish the matching
+    // rules until migrateSalesToBranchStructure() has been run — this
+    // listener finds nothing for any month that hasn't been migrated yet.
+    const _saMonths = [];
     for (let i = 0; i < 12; i++) {
       const d = new Date(); d.setMonth(d.getMonth() - i);
-      const month = d.toISOString().slice(0, 7);
-      _db.collection('pos_sales').doc(month)
-        .onSnapshot(snap => {
-          if (snap.exists) {
-            const monthItems = snap.data().items || [];
-            _salesCache = [
-              ..._salesCache.filter(s => s.date.slice(0, 7) !== month),
-              ...monthItems
-            ];
-          } else {
-            // Read fresh from localStorage each time (not a stale startup snapshot).
-            // Seed with arrayUnion+merge (not a plain overwrite) so that if
-            // another device created this month's doc at the same moment, its
-            // sales aren't clobbered by this first-time seed — same lost-update
-            // race that addSale() guards against.
-            const localSalesAll = DB.g('sales', []);
-            const localMonth = localSalesAll.filter(s => s.date.slice(0, 7) === month);
-            if (localMonth.length) {
-              _db.collection('pos_sales').doc(month)
-                 .set({ items: firebase.firestore.FieldValue.arrayUnion(...localMonth), updatedAt: Date.now() }, { merge: true });
-            }
-          }
-          visRefresh('page-sales', () => { initSalesFilter(); renderSales(); });
-          visRefresh('page-dashboard', buildDashboard);
-          visRefresh('page-reports', buildSalesReport);
-        }, err => console.error(`Firestore sales/${month} error:`, err));
+      _saMonths.push(d.toISOString().slice(0, 7));
     }
+    const _saBranches = currentUser === 'admin' ? BRANCH_IDS : [currentBranch];
+    _saBranches.forEach(b => {
+      _saMonths.forEach(month => {
+        _db.collection('pos_sales').doc(month).collection('branches').doc(b)
+          .onSnapshot(snap => {
+            const items = snap.exists ? (snap.data().items || []) : [];
+            _salesCache = [
+              ..._salesCache.filter(s => !(s.date.slice(0, 7) === month && (s.branchId || '') === b)),
+              ...items
+            ];
+            if (!snap.exists) {
+              // Same local-fallback seeding as before, scoped to this
+              // specific branch+month now instead of the whole month.
+              const localSalesAll = DB.g('sales', []);
+              const localMonthBranch = localSalesAll.filter(s => s.date.slice(0, 7) === month && (s.branchId || currentBranch) === b);
+              if (localMonthBranch.length) {
+                _db.collection('pos_sales').doc(month).collection('branches').doc(b)
+                   .set({ items: firebase.firestore.FieldValue.arrayUnion(...localMonthBranch), updatedAt: Date.now(), month, branchId: b }, { merge: true });
+              }
+            }
+            visRefresh('page-sales', () => { initSalesFilter(); renderSales(); });
+            visRefresh('page-dashboard', buildDashboard);
+            visRefresh('page-reports', buildSalesReport);
+          }, err => console.error(`Firestore sales/${month}/${b} error:`, err));
+      });
+    });
 
   } catch(e) {
     console.error('Firebase init error:', e);
@@ -8730,27 +8926,34 @@ function renderExpensesPage() {
 // ══════════════════════════════════════════════
 
 const getAudit = () => _auditCache;
-function setAudit(list) {
-  _auditCache = list;
-  DB.s('pos_audit', list);
-  try { _db && _db.collection('pos_data').doc('audit').set({ list, updatedAt: Date.now() }); } catch(e) {}
-}
 
 // changes: optional array of { label, before, after } — one entry per field
 // that actually changed. Powers the "🔍 التفاصيل" diff view in the audit page.
+//
+// Each entry is now its OWN Firestore document (pos_audit/{id}), not an
+// element inside one shared array field. That's what makes real append-only
+// enforcement possible: firestore.rules allows `create` on this collection
+// to anyone with a role, but `update`/`delete` are hard-denied to everyone,
+// including admin, from the client — no rule can express "you may only grow
+// this array, never rewrite an old entry inside it" when the whole log is
+// one field, since any write there replaces the field wholesale. One
+// document per entry is the only way Firestore's document-level security
+// model can guarantee that.
 function addAuditLog(action, details, branchId, changes) {
-  const list = [...getAudit()];
-  list.unshift({
-    id: 'a_' + Date.now(),
+  const entry = {
+    id: 'a_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
     action,
     details,
     user: currentUsername || currentUser || 'system',
     branchId: branchId || currentBranch,
     timestamp: Date.now(),
     changes: (changes && changes.length) ? changes : null
-  });
-  // Keep last 500 entries
-  setAudit(list.slice(0, 500));
+  };
+  _auditCache = [entry, ..._auditCache];
+  DB.s('pos_audit', _auditCache.slice(0, 500)); // local mirror only, capped for storage size
+  if (!_fbReady) return;
+  _db.collection('pos_audit').doc(entry.id).set(entry)
+     .catch(e => console.error('Firestore addAuditLog:', e));
 }
 
 // Builds a before/after diff array from two display-ready objects (values

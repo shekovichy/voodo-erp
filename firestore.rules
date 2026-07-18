@@ -87,11 +87,58 @@ service cloud.firestore {
       );
     }
 
-    // ── SALES (monthly docs, e.g. pos_sales/2026-07) ──────────────
-    match /pos_sales/{document=**} {
+    // ── SALES ────────────────────────────────────────────────────
+    // ⚠️⚠️ DO NOT PUBLISH THE "branches" SUB-RULE BELOW until the sales
+    // migration tool (Settings → "🔀 ترحيل المبيعات لهيكل معزول لكل فرع",
+    // src/js/03-sales-migration.js) has been run and verified. See the full
+    // sequence in the long comment above addSale() in 00-core.js. Publishing
+    // early makes every branch device's sales listener find nothing (it
+    // already looks for the NEW branch-scoped path in the client code —
+    // that part IS live — but the rule below is what actually restricts who
+    // can read it, and until data exists there, an early-published
+    // restrictive rule just means "correctly denied access to nothing").
+    //
+    // The old flat pos_sales/{month} doc (all branches mixed in one array)
+    // is demoted to admin-only here rather than removed outright — kept
+    // readable so an admin can verify/clean up old data after migrating,
+    // but no branch device ever needs to read it again once migrated. This
+    // closes the actual gap the 2026-07-17 security review flagged:
+    // Firestore rules can only allow/deny a whole document, never filter
+    // which array elements a reader may see — so a shared document mixing
+    // every branch's invoices could never be branch-isolated no matter how
+    // the rule was written. Splitting storage by branch (see addSale) is
+    // what makes real isolation possible at all.
+    match /pos_sales/{month} {
       allow read, write: if isOwner() || (
+        signedIn() &&
+        exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin'
+      );
+      match /branches/{branchId} {
+        allow read, write: if isOwner() || (
+          signedIn() &&
+          exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
+          (
+            get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin' ||
+            get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.branchId == branchId
+          )
+        );
+      }
+    }
+
+    // ── AUDIT LOG — one document per entry, truly append-only ──────
+    // Any role may CREATE a new entry (cashier actions must be logged too,
+    // not just admin's), but update/delete are hard-denied to EVERYONE
+    // including admin from the client — no rule can enforce "grow-only" on
+    // a single shared array field (see the note in 88-abc-expenses.js), but
+    // it can enforce "this specific document may never be modified once
+    // created" when each entry is its own document. That's the actual
+    // append-only guarantee.
+    match /pos_audit/{entryId} {
+      allow read, create: if isOwner() || (
         signedIn() && exists(/databases/$(database)/documents/roles/$(request.auth.uid))
       );
+      allow update, delete: if false;
     }
 
     // ── Deny everything else ──────────────────────────────────────

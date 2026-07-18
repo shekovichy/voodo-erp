@@ -128,20 +128,42 @@ function adjustStock(deltas, branch) {
 }
 
 // SALES — addSale() لإضافة فاتورة / setSales([]) لمسح الكل
+//
+// ⚠️ NOT YET LIVE — pos_sales/{month}/branches/{branchId} write path below
+// is implemented and tested locally, but firestore.rules still only has the
+// OLD flat pos_sales/{document=**} rule (any role reads/writes the whole
+// month, all branches mixed — see the security review dated 2026-07-17).
+// Cutting over requires, in this exact order: (1) run the one-time
+// migration tool to copy existing flat-doc sales into the new per-branch
+// structure while the OLD rule still permits reading them, (2) verify the
+// migrated data renders correctly, (3) publish the NEW rules that require
+// roles/{uid}.branchId to match the branchId path segment (removing the old
+// blanket rule). Do not merge the new listener/rules pair to main without
+// running the migration first — the new listener looks for data that only
+// exists after migration; publishing before then makes sales reports look
+// empty.
 const getSales = () => _salesCache;
 function addSale(sale) {
   _salesCache.push(sale);
   if (!_fbReady) { DB.s('sales', _salesCache); return; }
   const month = sale.date.slice(0, 7); // YYYY-MM
-  // Atomically append ONLY this sale to the month document instead of
-  // rewriting the whole month array. The old rewrite had a lost-update race:
-  // two branches (or two cashiers) selling at the same moment would each read
-  // the month array, add their own invoice, and write the whole thing back —
-  // the second write silently clobbering the first branch's invoice.
-  // arrayUnion appends server-side, so every concurrent sale survives.
-  // (merge:true creates the doc if the month is new.)
-  _db.collection('pos_sales').doc(month)
-     .set({ items: firebase.firestore.FieldValue.arrayUnion(sale), updatedAt: Date.now() }, { merge: true })
+  const branchId = sale.branchId || currentBranch;
+  // Branch-scoped subcollection, NOT a flat pos_sales/{month} doc. Firestore
+  // security rules operate at the document level — they can allow or deny
+  // an entire document, but can never filter which ELEMENTS of an array
+  // field a given reader may see. So as long as every branch's invoices for
+  // a month lived in one shared document, granting a branch cashier read
+  // access to "their month" meant granting it to every other branch's
+  // invoices in that same document too — a UI filter hides them, but the
+  // raw document (and therefore the data) was never actually restricted.
+  // Splitting storage by branch is what makes a real per-branch rule
+  // possible at all (see firestore.rules). Still arrayUnion'd (not
+  // overwritten) for the same concurrent-write safety as before.
+  _db.collection('pos_sales').doc(month).collection('branches').doc(branchId)
+     .set({
+       items: firebase.firestore.FieldValue.arrayUnion(sale),
+       updatedAt: Date.now(), month, branchId
+     }, { merge: true })
      .catch(e => {
        // Write refused (e.g. a legacy/unauthenticated session during the
        // auth transition, or a rules change) — persist the whole sales
@@ -155,14 +177,22 @@ function setSales(v) {
   // Used only for reset (v = [])
   _salesCache = v;
   if (!_fbReady) { DB.s('sales', v); return; }
-  _db.collection('pos_sales').get()
-     .then(snap => {
-       if (!snap.empty) {
-         const batch = _db.batch();
-         snap.docs.forEach(doc => batch.delete(doc.ref));
-         return batch.commit();
-       }
-     }).catch(e => console.error('Firestore setSales clear:', e));
+  if (v.length) { console.error('setSales: non-empty array not supported for cloud writes'); return; }
+  // Delete every branch-month doc across a generous 24-month window (well
+  // under Firestore's 500-ops-per-batch limit even with several branches),
+  // plus any leftover legacy flat pos_sales/{month} docs from before the
+  // per-branch migration.
+  const months = [];
+  for (let i = 0; i < 24; i++) {
+    const d = new Date(); d.setMonth(d.getMonth() - i);
+    months.push(d.toISOString().slice(0, 7));
+  }
+  const batch = _db.batch();
+  months.forEach(month => {
+    batch.delete(_db.collection('pos_sales').doc(month));
+    BRANCH_IDS.forEach(b => batch.delete(_db.collection('pos_sales').doc(month).collection('branches').doc(b)));
+  });
+  batch.commit().catch(e => console.error('Firestore setSales clear:', e));
 }
 
 // USERS — kept in localStorage (passwords stay local)
