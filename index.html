@@ -718,6 +718,211 @@ body.warehouse-mode #cartFab {
   display: none !important;
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   CASHIER / POS — NEON GLASS REDESIGN (2026-07-19)
+   Always dark, independent of the app-wide light/dark toggle — a POS
+   screen reads best high-contrast-on-black, and this is a deliberate
+   separate identity, the same idea the home screen already
+   established with its own nebula background (#homeBg above).
+
+   Implementation note: this re-scopes the SAME theme variables every
+   existing cashier rule already reads (--card, --border, --text,
+   --text-muted, --input-bg, --primary, --success, --danger, --warning)
+   to a dark/neon palette, locally, under .cashier-layout only. That
+   means most of the existing product-card / cart-item / button rules
+   above already repaint correctly with zero duplication — nothing in
+   this block "fights" them. Only what genuinely needs a bespoke
+   treatment (glass blur, accent-cycling cards, the hero pay button,
+   the few spots that used hardcoded hex instead of var(...) — see
+   cart-item-modified / cart-row-promo / cart-row-admin-discount /
+   cart-edit-price-btn, added alongside this in 15-pos-cart.js and
+   template.html) gets its own rule below.
+   ══════════════════════════════════════════════════════════════════ */
+.cashier-layout {
+  --bg: #060b18;
+  --card: rgba(255,255,255,.045);
+  --border: rgba(255,255,255,.09);
+  --text: #eef3ff;
+  --text-muted: #8fa3c9;
+  --input-bg: rgba(255,255,255,.05);
+  --primary: #38bdf8;
+  --primary-dark: #0ea5e9;
+  --primary-light: #7dd3fc;
+  --success: #34d399;
+  --danger: #fb7185;
+  --warning: #fbbf24;
+  --modal-bg: #101a2c;
+  position: relative;
+  /* `color` is inherited as an already-RESOLVED value from body's own
+     `color: var(--text)`, not as a live var() reference — so without
+     re-declaring it here explicitly, every descendant text color stays
+     stuck on the light-mode value despite --text being redefined above. */
+  color: var(--text);
+}
+.cashier-layout::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 50% at 12% -5%,  rgba(56,189,248,.30) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 50% at 105% 15%, rgba(168,85,247,.22) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 60% at 40% 115%, rgba(52,211,153,.16) 0%, transparent 55%),
+    #060b18;
+}
+.cashier-layout .products-panel { background: transparent; }
+
+/* ── Header ── */
+.cashier-layout .pos-logo-badge {
+  background: linear-gradient(135deg,#1a5faf,#38bdf8) !important;
+  box-shadow: 0 4px 18px rgba(56,189,248,.4), inset 0 1px 0 rgba(255,255,255,.25);
+}
+.cashier-layout .btn-outline {
+  background: rgba(255,255,255,.04);
+  border-color: var(--border);
+  color: var(--text);
+}
+.cashier-layout .btn-outline:hover {
+  background: rgba(255,255,255,.1);
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+/* ── Search ── */
+.cashier-layout .search-input {
+  border-radius: 14px;
+  padding: 12px 18px;
+}
+.cashier-layout .search-input::placeholder { color: #5b7196; }
+.cashier-layout .search-input:focus {
+  box-shadow: 0 0 0 4px rgba(56,189,248,.15), 0 0 20px rgba(56,189,248,.2);
+}
+
+/* ── Product grid ── */
+.cashier-layout .product-card {
+  background: linear-gradient(160deg, rgba(255,255,255,.055), rgba(255,255,255,.018));
+  backdrop-filter: blur(14px);
+  border-radius: 14px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(0,0,0,.35);
+}
+.cashier-layout .product-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--accent-a), var(--accent-b));
+  opacity: .85;
+}
+/* 6-color accent cycle, purely presentational — no data/JS change needed */
+.cashier-layout .product-card:nth-of-type(6n+1) { --accent-a:#38bdf8; --accent-b:#818cf8; }
+.cashier-layout .product-card:nth-of-type(6n+2) { --accent-a:#34d399; --accent-b:#22d3ee; }
+.cashier-layout .product-card:nth-of-type(6n+3) { --accent-a:#f472b6; --accent-b:#c084fc; }
+.cashier-layout .product-card:nth-of-type(6n+4) { --accent-a:#fbbf24; --accent-b:#fb923c; }
+.cashier-layout .product-card:nth-of-type(6n+5) { --accent-a:#818cf8; --accent-b:#38bdf8; }
+.cashier-layout .product-card:nth-of-type(6n+6) { --accent-a:#22d3ee; --accent-b:#34d399; }
+.cashier-layout .product-card:hover {
+  transform: translateY(-4px) scale(1.015);
+  border-color: rgba(255,255,255,.22);
+  box-shadow: 0 14px 34px rgba(0,0,0,.5), 0 0 24px -4px var(--accent-a);
+}
+.cashier-layout .product-card.out-of-stock::before { background: #475569; opacity: .5; }
+.cashier-layout .product-price {
+  background: linear-gradient(90deg, var(--accent-a), var(--accent-b));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  font-size: 16px;
+}
+.cashier-layout .product-card.out-of-stock .product-price {
+  -webkit-text-fill-color: #64748b; background: none; color: #64748b;
+}
+.cashier-layout .product-old-price { color: #64748b; }
+
+/* ── Cart panel ── */
+.cashier-layout .cart-panel {
+  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+  backdrop-filter: blur(24px);
+  box-shadow: -20px 0 60px rgba(0,0,0,.35);
+}
+.cashier-layout #cashierBadge {
+  background: linear-gradient(135deg,#38bdf8,#818cf8) !important;
+  color: #04101f !important;
+  font-weight: 800;
+}
+.cashier-layout #homeBtn:hover { background: rgba(255,255,255,.08) !important; }
+
+.cashier-layout .cart-item { transition: background .2s; }
+.cashier-layout .cart-item:hover { background: rgba(255,255,255,.03); }
+.cashier-layout .qty-btn { border-radius: 8px; }
+.cashier-layout .qty-btn:hover {
+  color: #04101f;
+  box-shadow: 0 0 12px rgba(56,189,248,.5);
+}
+.cashier-layout .delete-item { opacity: .75; }
+.cashier-layout .delete-item:hover { opacity: 1; }
+
+.cashier-layout .cart-edit-price-btn {
+  background: rgba(255,255,255,.06);
+  border: none; border-radius: 7px;
+  padding: 4px 8px; cursor: pointer; font-size: 12px;
+  transition: background .2s;
+}
+.cashier-layout .cart-edit-price-btn:hover { background: rgba(255,255,255,.14); }
+.cashier-layout .cart-edit-price-btn.is-modified { background: rgba(251,191,36,.18); }
+
+.cashier-layout .cart-item-modified {
+  background: linear-gradient(90deg, rgba(251,113,133,.12), transparent);
+  border-right: 3px solid #fb7185;
+}
+.cashier-layout .cart-row-promo {
+  color: #c4b5fd; background: rgba(168,85,247,.12);
+  padding: 5px 8px; border-radius: 6px; margin: 2px 0; align-items: center;
+  border: 1px solid rgba(168,85,247,.22);
+}
+.cashier-layout .promo-remove-btn {
+  background: none; border: none; cursor: pointer; color: #fb7185;
+  font-size: 12px; padding: 0 2px;
+}
+.cashier-layout .cart-row-admin-discount {
+  color: #34d399; background: rgba(52,211,153,.12);
+  padding: 5px 8px; border-radius: 6px; margin: 2px 0;
+  border: 1px solid rgba(52,211,153,.22);
+}
+.cashier-layout .cart-total span:last-child {
+  background: linear-gradient(90deg,#38bdf8,#34d399);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+/* ── Action buttons ── */
+.cashier-layout #cartPayBtn {
+  background: linear-gradient(135deg,#0ea5e9,#22c55e) !important;
+  color: #04101f; font-weight: 800; font-size: 16px; border: none;
+  animation: posPayGlow 2.6s ease-in-out infinite;
+}
+@keyframes posPayGlow {
+  0%, 100% { box-shadow: 0 8px 24px rgba(14,165,233,.35), inset 0 0 0 1px rgba(255,255,255,.08); }
+  50%      { box-shadow: 0 8px 32px rgba(34,197,94,.55), inset 0 0 0 1px rgba(255,255,255,.12); }
+}
+.cashier-layout #cartPayBtn:hover { transform: translateY(-1px); }
+.cashier-layout .cart-footer .btn-warning {
+  background: rgba(251,191,36,.16) !important; color: #fbbf24 !important;
+  border: 1px solid rgba(251,191,36,.3);
+}
+.cashier-layout .cart-footer .btn-warning:hover { background: rgba(251,191,36,.28) !important; }
+.cashier-layout .cart-footer .btn-gray { background: rgba(255,255,255,.04); color: var(--text-muted); }
+.cashier-layout .cart-footer .btn-gray:hover { background: rgba(255,255,255,.09); }
+.cashier-layout #approvedCartsBtn {
+  background: rgba(52,211,153,.14) !important; color: #34d399 !important;
+  border-color: rgba(52,211,153,.3) !important;
+}
+.cashier-layout #sessionBtn {
+  background: rgba(129,140,248,.16) !important; color: #a5b4fc !important;
+  border-color: rgba(129,140,248,.3) !important;
+}
+
+/* ── Scrollbars ── */
+.cashier-layout ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); }
+.cashier-layout ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.28); }
+
 </style>
 
 </head>
@@ -826,7 +1031,7 @@ body.warehouse-mode #cartFab {
       <div class="cart-row"><span>عدد الأصناف</span><span id="cartCount">0</span></div>
       <div class="cart-row"><span>المجموع</span><span id="cartSubtotal">0.00 ج</span></div>
       <!-- Admin discount row — shown only when activated from suspended bill -->
-      <div class="cart-row hidden" id="adminDiscountRow" style="color:var(--success); background:#f0fdf4; padding:5px 8px; border-radius:6px; margin:2px 0;">
+      <div class="cart-row hidden cart-row-admin-discount" id="adminDiscountRow">
         <span>✅ خصم مدير</span><span id="cartAdminDiscountDisplay">-0.00 ج</span>
       </div>
       <!-- Applied promo rows (injected dynamically) -->
@@ -852,7 +1057,7 @@ body.warehouse-mode #cartFab {
   <div class="products-panel">
     <div class="flex items-center justify-between mb-16">
       <div style="display:inline-flex; align-items:center; gap:10px;">
-        <div style="background:#1a5faf; padding:7px 12px; border-radius:7px;">
+        <div class="pos-logo-badge" style="padding:7px 12px; border-radius:7px;">
           <svg width="110" height="28" viewBox="0 0 110 28" xmlns="http://www.w3.org/2000/svg">
             <style>text{font-family:'Jost','Arial',sans-serif;fill:white;}</style>
             <text x="55" y="11" font-size="11" font-weight="700" text-anchor="middle" dominant-baseline="middle" letter-spacing="2">VOODO</text>
@@ -5250,7 +5455,7 @@ function renderCart() {
     const priceHtml = modified
       ? `<span style="text-decoration:line-through;color:#9ca3af;font-size:11px;">${fmt(i.originalPrice)} ج</span> <span style="color:#dc2626;font-weight:700;">${fmt(i.price)} ج</span> × ${i.qty}`
       : `${fmt(i.price)} ج × ${i.qty}`;
-    return `<div class="cart-item" style="${modified?'background:#fff5f5;border-right:3px solid #ef4444;':''}">
+    return `<div class="cart-item ${modified?'cart-item-modified':''}">
       <div class="cart-item-info">
         <div class="cart-item-name">${escHtml(i.name)}</div>
         <div class="cart-item-price">${priceHtml}</div>
@@ -5260,7 +5465,7 @@ function renderCart() {
         <span class="qty-num">${i.qty}</span>
         <button class="qty-btn" onclick="changeQty('${escJsAttr(i.code)}',1)">+</button>
       </div>
-      <button onclick="editItemPrice('${escJsAttr(i.code)}')" style="background:${modified?'#fef3c7':'#f3f4f6'};border:none;border-radius:5px;padding:3px 7px;cursor:pointer;font-size:12px;" title="تعديل السعر">✏️</button>
+      <button onclick="editItemPrice('${escJsAttr(i.code)}')" class="cart-edit-price-btn ${modified?'is-modified':''}" title="تعديل السعر">✏️</button>
       <div class="item-total">${fmt(i.price*i.qty)}</div>
       <button class="delete-item" onclick="removeFromCart('${escJsAttr(i.code)}')">✕</button>
     </div>`;
@@ -5295,10 +5500,10 @@ function updateCartUI() {
   const aprEl = document.getElementById('promoAppliedRows');
   if (aprEl) {
     aprEl.innerHTML = (cart._appliedPromos || []).map(p => `
-      <div class="cart-row" style="color:#7c3aed; background:#f5f3ff; padding:5px 8px; border-radius:6px; margin:2px 0; align-items:center;">
+      <div class="cart-row cart-row-promo">
         <span style="display:flex; align-items:center; gap:4px;">
           🏷️ ${escHtml(p.name)}
-          <button onclick="removeAppliedPromo('${escJsAttr(p.id)}')" style="background:none; border:none; cursor:pointer; color:#ef4444; font-size:12px; padding:0 2px;" title="إزالة العرض">✕</button>
+          <button onclick="removeAppliedPromo('${escJsAttr(p.id)}')" class="promo-remove-btn" title="إزالة العرض">✕</button>
         </span>
         <span>-${fmt(p.discAmt)} ج</span>
       </div>`).join('');

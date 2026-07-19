@@ -51,7 +51,7 @@ function renderCart() {
     const priceHtml = modified
       ? `<span style="text-decoration:line-through;color:#9ca3af;font-size:11px;">${fmt(i.originalPrice)} ج</span> <span style="color:#dc2626;font-weight:700;">${fmt(i.price)} ج</span> × ${i.qty}`
       : `${fmt(i.price)} ج × ${i.qty}`;
-    return `<div class="cart-item" style="${modified?'background:#fff5f5;border-right:3px solid #ef4444;':''}">
+    return `<div class="cart-item ${modified?'cart-item-modified':''}">
       <div class="cart-item-info">
         <div class="cart-item-name">${escHtml(i.name)}</div>
         <div class="cart-item-price">${priceHtml}</div>
@@ -61,7 +61,7 @@ function renderCart() {
         <span class="qty-num">${i.qty}</span>
         <button class="qty-btn" onclick="changeQty('${escJsAttr(i.code)}',1)">+</button>
       </div>
-      <button onclick="editItemPrice('${escJsAttr(i.code)}')" style="background:${modified?'#fef3c7':'#f3f4f6'};border:none;border-radius:5px;padding:3px 7px;cursor:pointer;font-size:12px;" title="تعديل السعر">✏️</button>
+      <button onclick="editItemPrice('${escJsAttr(i.code)}')" class="cart-edit-price-btn ${modified?'is-modified':''}" title="تعديل السعر">✏️</button>
       <div class="item-total">${fmt(i.price*i.qty)}</div>
       <button class="delete-item" onclick="removeFromCart('${escJsAttr(i.code)}')">✕</button>
     </div>`;
@@ -96,10 +96,10 @@ function updateCartUI() {
   const aprEl = document.getElementById('promoAppliedRows');
   if (aprEl) {
     aprEl.innerHTML = (cart._appliedPromos || []).map(p => `
-      <div class="cart-row" style="color:#7c3aed; background:#f5f3ff; padding:5px 8px; border-radius:6px; margin:2px 0; align-items:center;">
+      <div class="cart-row cart-row-promo">
         <span style="display:flex; align-items:center; gap:4px;">
           🏷️ ${escHtml(p.name)}
-          <button onclick="removeAppliedPromo('${escJsAttr(p.id)}')" style="background:none; border:none; cursor:pointer; color:#ef4444; font-size:12px; padding:0 2px;" title="إزالة العرض">✕</button>
+          <button onclick="removeAppliedPromo('${escJsAttr(p.id)}')" class="promo-remove-btn" title="إزالة العرض">✕</button>
         </span>
         <span>-${fmt(p.discAmt)} ج</span>
       </div>`).join('');
