@@ -18,6 +18,14 @@ function showPage(page) {
 
 function _showPageImpl(page) {
   if (window._whMode && !['warehouse','transfers'].includes(page)) return;
+  // Real enforcement lives in firestore.rules (see tabForDoc() there) —
+  // this is the UI-side mirror of it, the single choke point every
+  // showPage() call passes through regardless of which icon/link got it
+  // here (or none at all, e.g. a stale deep link or console call).
+  if (page !== 'home' && !canViewTab(page)) {
+    showToast('🚫 مالكش صلاحية الدخول للصفحة دي');
+    return;
+  }
   ['home','dashboard','inventory','sales','suspended','reports','customized','warehouse','settings','customers','promos','transfers','purchases','hr','expenses','audit','accounting','manufacturing','helpdesk','migration','analytics'].forEach(p => {
     document.getElementById('page-'+p)?.classList.add('hidden');
   });

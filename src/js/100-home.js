@@ -91,8 +91,7 @@ function renderHomeIcons() {
   const branchGrid = document.getElementById('homeGrid_branch');
   if (adminGrid) adminGrid.style.display = isAdmin ? '' : 'none';
   if (branchGrid) branchGrid.style.display = isAdmin ? 'none' : '';
-  const branchDash = document.getElementById('homeAppBranchDashboard');
-  if (branchDash) branchDash.style.display = (!isAdmin && isBranchManager) ? '' : 'none';
+  if (!isAdmin) renderBranchDynamicIcons();
   // Update pending badges on admin home icons
   if (isAdmin) {
     try {
@@ -105,6 +104,26 @@ function renderHomeIcons() {
     } catch(e) {}
   }
   renderFolderPreviews();
+}
+
+// Non-admin home screen: the fixed action icons (POS, expense/leave
+// requests) stay hardcoded in template.html — everything else (any tab
+// this account has been granted `view` on) renders here from
+// TAB_PERMISSIONS, so a branch account's home screen reflects exactly
+// what the admin granted it instead of a fixed manager/cashier split.
+function renderBranchDynamicIcons() {
+  const container = document.getElementById('homeGrid_branch_dynamic');
+  if (!container) return;
+  const tabs = TAB_PERMISSIONS.filter(t => canViewTab(t.key) && TAB_ICON[t.key]);
+  container.innerHTML = tabs.map(t => {
+    const icon = TAB_ICON[t.key];
+    return `<div class="app-icon branch-card" onclick="showPage('${t.key}')" style="background:linear-gradient(145deg,${icon.grad.split(',').map(c=>c+'2e').join(',')});border:1px solid ${icon.grad.split(',')[0]}4d;border-radius:20px;padding:20px 12px 16px;gap:10px;">
+      <div class="app-tile" style="background:linear-gradient(135deg,${icon.grad});width:64px;height:64px;">
+        <svg viewBox="0 0 48 48" fill="none">${icon.svg}</svg>
+      </div>
+      <span class="app-name" style="font-weight:700;font-size:14px;">${escHtml(t.label)}</span>
+    </div>`;
+  }).join('');
 }
 
 /* ═══════════════════════════════════════════════

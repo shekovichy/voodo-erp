@@ -1775,27 +1775,13 @@ body.warehouse-mode #cartFab {
                 <span class="app-name" style="font-weight:700; font-size:14px;">طلب إجازة/إذن</span>
               </div>
 
-              <div class="app-icon branch-card" onclick="showPage('reports')" style="background: linear-gradient(145deg,rgba(59,130,246,.18),rgba(37,99,235,.1)); border: 1px solid rgba(59,130,246,.3); border-radius: 20px; padding: 20px 12px 16px; gap: 10px;">
-                <div class="app-tile" style="background: linear-gradient(135deg, #3b82f6, #2563eb); width:64px; height:64px;">
-                  <svg viewBox="0 0 48 48" fill="none"><rect x="8" y="8" width="32" height="32" rx="3" stroke="white" stroke-width="2.5"/><path d="M16 32v-8M24 32V20M32 32V16" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>
-                </div>
-                <span class="app-name" style="font-weight:700; font-size:14px;">التقارير</span>
-              </div>
-
-              <div class="app-icon branch-card" onclick="showPage('helpdesk')" style="background: linear-gradient(145deg,rgba(251,146,60,.18),rgba(194,65,12,.1)); border: 1px solid rgba(251,146,60,.3); border-radius: 20px; padding: 20px 12px 16px; gap: 10px;">
-                <div class="app-tile" style="background: linear-gradient(135deg, #fb923c, #c2410c); width:64px; height:64px;">
-                  <svg viewBox="0 0 48 48" fill="none"><path d="M8 34V16a6 6 0 016-6h20a6 6 0 016 6v10a6 6 0 01-6 6H20l-8 8v-6z" stroke="white" stroke-width="2.5" stroke-linejoin="round"/><circle cx="18" cy="21" r="2" fill="white"/><circle cx="24" cy="21" r="2" fill="white"/><circle cx="30" cy="21" r="2" fill="white"/></svg>
-                </div>
-                <span class="app-name" style="font-weight:700; font-size:14px;">الدعم الفني</span>
-              </div>
-
-              <!-- Branch managers only (isBranchManager) — see renderHomeIcons() -->
-              <div class="app-icon branch-card" id="homeAppBranchDashboard" onclick="showPage('dashboard')" style="display:none; background: linear-gradient(145deg,rgba(6,182,212,.18),rgba(8,145,178,.1)); border: 1px solid rgba(6,182,212,.3); border-radius: 20px; padding: 20px 12px 16px; gap: 10px;">
-                <div class="app-tile" style="background: linear-gradient(135deg, #06b6d4, #0891b2); width:64px; height:64px;">
-                  <svg viewBox="0 0 48 48" fill="none"><rect x="6" y="28" width="9" height="13" rx="2" fill="white"/><rect x="20" y="18" width="9" height="23" rx="2" fill="white"/><rect x="34" y="8" width="9" height="33" rx="2" fill="white"/></svg>
-                </div>
-                <span class="app-name" style="font-weight:700; font-size:14px;">الداشبورد</span>
-              </div>
+              <!-- Everything else (reports, helpdesk, dashboard, and any other
+                   tab this account has been granted) renders dynamically here
+                   from TAB_PERMISSIONS — see renderBranchDynamicIcons() in
+                   100-home.js. Kept out of static HTML because which tabs show
+                   up now depends on the per-user permissions matrix, not a
+                   fixed role. -->
+              <div id="homeGrid_branch_dynamic" style="display:contents;"></div>
 
             </div>
           </div><!-- /homeGrid_branch -->
@@ -2748,6 +2734,11 @@ body.warehouse-mode #cartFab {
             <button class="btn btn-primary btn-sm" onclick="previewInventoryMigration()">🔍 فحص وترحيل المخزون</button>
           </div>
           <div class="card">
+            <div class="card-title">🔀 ترحيل صلاحيات التابات</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">يديّ كل مستخدم موجود صلاحيات افتراضية (نفس اللي كان شايفها بالظبط) عشان تقدر تعدّلها من "إدارة المستخدمين" تحت. آمن تكرره في أي وقت — مبيلمسش حد اتعدّلت صلاحياته يدوياً بالفعل.</p>
+            <button class="btn btn-primary btn-sm" onclick="previewPermissionsMigration()">🔍 فحص وترحيل الصلاحيات</button>
+          </div>
+          <div class="card">
             <div class="card-title">🗑️ إعادة تعيين البيانات</div>
             <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">⚠️ سيحذف هذا كل بيانات المبيعات والمخزون نهائياً ولا يمكن التراجع</p>
             <div class="flex gap-8">
@@ -3126,9 +3117,9 @@ body.warehouse-mode #cartFab {
 
 <!-- ════════════════ USER ACCOUNT MODAL ════════════════ -->
 <div id="userAccountModal" class="modal-overlay hidden">
-  <div class="modal-box" style="max-width:420px;width:94%;">
+  <div class="modal-box" style="max-width:560px;width:94%;">
     <div class="modal-header"><h3 style="margin:0;font-size:17px;" id="uaModalTitle">➕ إضافة مستخدم</h3></div>
-    <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+    <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:14px;max-height:75vh;overflow-y:auto;">
       <input type="hidden" id="uaEditId" value="" />
       <div>
         <label style="font-size:12px;color:var(--text-muted);">اسم المستخدم</label>
@@ -3151,11 +3142,20 @@ body.warehouse-mode #cartFab {
           <select class="form-control" id="uaBranch" style="margin-top:4px;"></select>
         </div>
         <div>
-          <label style="font-size:12px;color:var(--text-muted);">الصلاحية</label>
-          <select class="form-control" id="uaRole" style="margin-top:4px;">
+          <label style="font-size:12px;color:var(--text-muted);">الصلاحية الأساسية (نقطة بداية بس — عدّل الجدول تحت زي ما تحب)</label>
+          <select class="form-control" id="uaRole" style="margin-top:4px;" onchange="applyPermissionTemplate(this.value)">
             <option value="cashier">كاشير</option>
             <option value="manager">مدير فرع</option>
           </select>
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--text-muted);margin-bottom:6px;display:block;">صلاحيات التابات — لكل تاب: مشاهدة و/أو كتابة (إضافة/تعديل/حذف)</label>
+          <div class="table-wrap" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
+            <table style="font-size:12px;">
+              <thead><tr><th style="text-align:right;">التاب</th><th>مشاهدة</th><th>كتابة</th></tr></thead>
+              <tbody id="uaPermsBody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
       <div id="uaMsg"></div>
@@ -3366,6 +3366,129 @@ let _supplierPaymentsCache = [];                     // payments recorded agains
 let _pivotFavoritesCache = [];                       // saved pivot-analyzer report configs
 let _budgetsCache       = [];                        // monthly company budgets (revenue target + expense budget per category)
 let _sessionsCache      = [];                        // POS cash sessions (shift open/close + variance)
+
+// ══ TAB PERMISSIONS — per-user view/write access per page ══════════════
+// Layered on top of the role/branch checks that already exist (admin/
+// manager/cashier + branchId). 'settings' and 'migration' stay hardcoded
+// admin-only (never shown in the matrix — settings still guards the legacy
+// pos_data/accounts credential doc; migration tools are one-time cutover
+// scripts). 'home' has no permission entry — always visible once logged in.
+//
+// `enforced:true` means firestore.rules actually checks this (see
+// tabForDoc()/hasTabPermission() there) — a denied user is blocked at the
+// database, not just the UI.
+//
+// `enforced:false` covers TWO different reasons, both meaning "hiding the
+// tab here is the only boundary that exists":
+//  (a) no dedicated cloud document to gate at all — dashboard/reports are
+//      pure derived views, manufacturing is still localStorage-only.
+//  (b) the tab's document IS synced to Firestore, but the SAME document is
+//      also read/written as a routine part of completing a sale or a cash
+//      shift — inventory/sales (obviously), suspended (a cashier suspends/
+//      resumes their OWN cart from the topbar bell, not just the
+//      management list), customers/promos (looked up and auto-applied
+//      during checkout — see openPayment()/completeSale() in
+//      20-pos-payment.js), and analytics (POS session open/close writes to
+//      the same pos_data/sessions doc — see confirmOpenSession() in the
+//      same file). Firestore rules gate a whole document, not a UI page, so
+//      restricting these would just as well lock a cashier out of finishing
+//      a sale or opening their drawer — found this the hard way while
+//      designing the rule (see the design notes on this feature), so these
+//      stay UI-only on purpose rather than "mostly enforced with a few
+//      landmines still in it".
+const TAB_PERMISSIONS = [
+  { key: 'dashboard',     label: 'الداشبورد',            enforced: false },
+  { key: 'inventory',     label: 'المخزون',              enforced: false },
+  { key: 'sales',         label: 'المبيعات',             enforced: false },
+  { key: 'suspended',     label: 'الفواتير المعلقة',      enforced: false },
+  { key: 'reports',       label: 'التقارير',              enforced: false },
+  { key: 'customized',    label: 'تقارير مخصصة',          enforced: true  },
+  { key: 'warehouse',     label: 'المخزن الرئيسي',        enforced: true  },
+  { key: 'customers',     label: 'العملاء',               enforced: false },
+  { key: 'promos',        label: 'العروض الترويجية',       enforced: false },
+  { key: 'transfers',     label: 'التحويلات بين الفروع',   enforced: true  },
+  { key: 'purchases',     label: 'المشتريات والموردين',    enforced: true  },
+  { key: 'hr',            label: 'الموارد البشرية',        enforced: true  },
+  { key: 'expenses',      label: 'المصاريف',              enforced: true  },
+  { key: 'audit',         label: 'سجل التغييرات',         enforced: true  },
+  { key: 'accounting',    label: 'المحاسبة',              enforced: true  },
+  { key: 'manufacturing', label: 'التصنيع',               enforced: false },
+  { key: 'helpdesk',      label: 'الدعم الفني',           enforced: true  },
+  { key: 'analytics',     label: 'التحليلات الاستراتيجية', enforced: false },
+];
+
+// Icon per tab — shared by the admin's HOME_FOLDERS (100-home.js) and the
+// dynamic per-permission grid rendered for non-admin accounts (same file).
+const TAB_ICON = {
+  dashboard:     { grad:'#06b6d4,#0891b2', svg:'<rect x="6" y="28" width="9" height="13" rx="2" fill="white"/><rect x="20" y="18" width="9" height="23" rx="2" fill="white"/><rect x="34" y="8" width="9" height="33" rx="2" fill="white"/>' },
+  inventory:     { grad:'#22c55e,#16a34a', svg:'<rect x="8" y="18" width="32" height="22" rx="3" stroke="white" stroke-width="3"/><path d="M17 18V13a7 7 0 0114 0v5" stroke="white" stroke-width="3" stroke-linecap="round"/><path d="M18 29h12M24 24v10" stroke="white" stroke-width="2.5" stroke-linecap="round"/>' },
+  sales:         { grad:'#0ea5e9,#0369a1', svg:'<rect x="8" y="8" width="32" height="32" rx="3" stroke="white" stroke-width="2.5"/><path d="M14 24h20M14 30h14M14 18h10" stroke="white" stroke-width="2.5" stroke-linecap="round"/>' },
+  suspended:     { grad:'#f59e0b,#b45309', svg:'<rect x="10" y="14" width="28" height="22" rx="3" stroke="white" stroke-width="2.5"/><path d="M16 22h16M16 28h10" stroke="white" stroke-width="2.5" stroke-linecap="round"/>' },
+  reports:       { grad:'#38bdf8,#0369a1', svg:'<path d="M8 36L18 24l8 6 8-12 6 6" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="6" y="6" width="36" height="36" rx="4" stroke="white" stroke-width="2.5"/>' },
+  customized:    { grad:'#f472b6,#be185d', svg:'<circle cx="21" cy="21" r="12" stroke="white" stroke-width="2.5"/><path d="M30 30l10 10" stroke="white" stroke-width="3.5" stroke-linecap="round"/><path d="M17 21h8M21 17v8" stroke="white" stroke-width="2.5" stroke-linecap="round"/>' },
+  warehouse:     { grad:'#64748b,#475569', svg:'<path d="M6 21L24 9l18 12v20H6V21z" stroke="white" stroke-width="2.5" stroke-linejoin="round"/><rect x="18" y="28" width="12" height="13" rx="2" fill="white"/><rect x="14" y="20" width="7" height="7" rx="1" fill="white" opacity=".7"/><rect x="27" y="20" width="7" height="7" rx="1" fill="white" opacity=".7"/>' },
+  customers:     { grad:'#a855f7,#7c3aed', svg:'<circle cx="24" cy="16" r="8" stroke="white" stroke-width="2.5"/><path d="M8 40c0-8.837 7.163-16 16-16s16 7.163 16 16" stroke="white" stroke-width="2.5" stroke-linecap="round"/>' },
+  promos:        { grad:'#fb7185,#dc2626', svg:'<path d="M20 8H10a2 2 0 00-2 2v10l20 20 12-12L20 8z" stroke="white" stroke-width="2.5" stroke-linejoin="round"/><circle cx="15" cy="15" r="2.5" fill="white"/>' },
+  transfers:     { grad:'#34d399,#059669', svg:'<path d="M10 18h28M30 10l8 8-8 8" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M38 30H10M18 22l-8 8 8 8" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' },
+  purchases:     { grad:'#fcd34d,#a16207', svg:'<path d="M14 8h20l4 8H10l4-8z" stroke="white" stroke-width="2.5" stroke-linejoin="round"/><rect x="10" y="16" width="28" height="24" rx="3" stroke="white" stroke-width="2.5"/><path d="M20 28h8M24 24v8" stroke="white" stroke-width="2.5" stroke-linecap="round"/>' },
+  hr:            { grad:'#8b5cf6,#6d28d9', svg:'<circle cx="18" cy="16" r="6" stroke="white" stroke-width="2.5"/><circle cx="32" cy="16" r="6" stroke="white" stroke-width="2.5"/><path d="M6 40c0-6.627 5.373-12 12-12s12 5.373 12 12M22 40c0-6.627 5.373-12 12-12" stroke="white" stroke-width="2.5" stroke-linecap="round"/>' },
+  expenses:      { grad:'#f87171,#b91c1c', svg:'<circle cx="24" cy="24" r="16" stroke="white" stroke-width="2.5"/><path d="M24 13v22M18 19c0-3.314 2.686-6 6-6s6 2.686 6 6-2.686 4-6 4-6 1.686-6 4 2.686 6 6 6 6-2.686 6-6" stroke="white" stroke-width="2.5" stroke-linecap="round"/>' },
+  audit:         { grad:'#94a3b8,#334155', svg:'<rect x="10" y="6" width="28" height="36" rx="3" stroke="white" stroke-width="2.5"/><path d="M16 16h16M16 22h16M16 28h8" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M30 32l2 2 4-4" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' },
+  accounting:    { grad:'#34d399,#047857', svg:'<rect x="10" y="6" width="28" height="36" rx="3" stroke="white" stroke-width="2.5"/><path d="M16 16h16M16 22h16M16 28h10" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M28 32l3 3 5-5" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' },
+  manufacturing: { grad:'#f59e0b,#92400e', svg:'<circle cx="18" cy="30" r="7" stroke="white" stroke-width="2.5"/><circle cx="32" cy="30" r="7" stroke="white" stroke-width="2.5"/><path d="M18 23V12h10l6 8" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' },
+  helpdesk:      { grad:'#fb923c,#c2410c', svg:'<path d="M8 34V16a6 6 0 016-6h20a6 6 0 016 6v10a6 6 0 01-6 6H20l-8 8v-6z" stroke="white" stroke-width="2.5" stroke-linejoin="round"/><circle cx="18" cy="21" r="2" fill="white"/><circle cx="24" cy="21" r="2" fill="white"/><circle cx="30" cy="21" r="2" fill="white"/>' },
+  analytics:     { grad:'#6366f1,#4338ca', svg:'<path d="M8 40V22M18 40V14M28 40V26M38 40V10" stroke="white" stroke-width="4" stroke-linecap="round"/><path d="M8 16l10-8 10 6 10-10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' },
+};
+
+// Starting-point templates the create/edit-user UI pre-fills when you pick
+// a base type — every value is then freely editable per user and saved as
+// its own roles/{uid}.permissions map. Admin has no map at all (full
+// bypass, matches isOwner()/role=='admin' short-circuits in every rule).
+//
+// ⚠️ Defaults to FULL access on every tab for manager/cashier alike — this
+// deliberately matches the *data layer* as it's worked until now: every
+// pos_data/{doc} was already readable/writable by any signed-in role
+// (see firestore.rules), the UI just never linked to most of these pages
+// for non-admin. Tried defaulting to a "minimal" set matching what the old
+// UI visibly linked to instead, but that turned out to have gaps — e.g. the
+// topbar's suspended-invoices bell is reachable from every branch account
+// regardless of home-screen icons, not just the ones the icon grid implied
+// — and any such gap silently breaks a real cashier workflow after
+// migration. Defaulting wide-open and letting the admin dial specific
+// users DOWN from here is the only direction where a mistake just leaves
+// someone with access they already effectively had, instead of quietly
+// taking away something they need mid-shift.
+function _defaultPermissionsFor(role) {
+  if (role === 'admin') return null;
+  const perms = {};
+  TAB_PERMISSIONS.forEach(t => { perms[t.key] = { view: true, write: true }; });
+  return perms;
+}
+
+// Effective permissions for whoever is currently logged in — null means
+// unrestricted (admin, or a legacy offline account with no cloud role at
+// all). Falls back to the role's default template if this account predates
+// the permissions system (hasn't been migrated yet — see
+// 06-permissions-migration.js), mirroring the same fallback firestore.rules
+// applies so the UI and the actual server-side access never disagree.
+function getMyPermissions() {
+  const rec = DB.g('pos_role_cache', null);
+  if (!rec || rec.role === 'admin') return null;
+  return rec.permissions || _defaultPermissionsFor(rec.role === 'manager' ? 'manager' : 'cashier');
+}
+function canViewTab(tabKey) {
+  if (currentUser === 'admin') return true;
+  const perms = getMyPermissions();
+  if (!perms) return true;
+  if (!TAB_PERMISSIONS.some(t => t.key === tabKey)) return true; // untracked tab — always allowed
+  return !!(perms[tabKey] && perms[tabKey].view);
+}
+function canWriteTab(tabKey) {
+  if (currentUser === 'admin') return true;
+  const perms = getMyPermissions();
+  if (!perms) return true;
+  return !!(perms[tabKey] && perms[tabKey].write);
+}
 
 // Helper: current branch display name
 function getBranchName(b) { return ((_settingsCache.branches) || BRANCH_DEFAULTS)[b] || b; }
@@ -4634,6 +4757,116 @@ function updateClock() {
 }
 
 
+// ══════════════════════════════════════════════════════════════════════
+// ONE-TIME PERMISSIONS BACKFILL — writes roles/{uid}.permissions onto every
+// EXISTING account that doesn't have one yet (computed from its current
+// role via _defaultPermissionsFor() in 00-core.js, which mirrors exactly
+// what that account could already reach through the UI before this system
+// existed — see the long comment on that function). Nothing changes for
+// anyone until the admin explicitly edits a user's matrix afterward.
+//
+// Safe to run anytime, safe to re-run: it only ever touches accounts whose
+// `permissions` field is still absent — an admin who already customized
+// someone's matrix is never overwritten by running this again. Also safe
+// to publish the new firestore.rules BEFORE running this: the rules fall
+// back to the same defaults for any account still missing `permissions`
+// (see hasTabPermission() in firestore.rules), so nothing breaks either way
+// — this tool exists so the admin can actually SEE and edit each account's
+// starting matrix from "إدارة المستخدمين" afterward.
+// ══════════════════════════════════════════════════════════════════════
+
+let _permsMigrationPlan = null;
+
+async function previewPermissionsMigration() {
+  if (currentUser !== 'admin') { showToast('الترحيل للأدمن فقط'); return; }
+  if (!_fbReady) { showToast('محتاج اتصال بالإنترنت لعمل الترحيل'); return; }
+
+  showToast('⏳ جاري فحص المستخدمين...');
+  let snap;
+  try { snap = await firebase.firestore().collection('roles').get(); }
+  catch (e) { console.error('previewPermissionsMigration read:', e); showToast('تعذّر القراءة'); return; }
+
+  const affected = [];
+  snap.forEach(doc => {
+    const rec = doc.data();
+    if (rec.role === 'admin') return; // admin never has/needs a permissions map
+    if (rec.permissions) return;      // already has one — never touched
+    affected.push({ uid: doc.id, username: rec.username, role: rec.role });
+  });
+
+  _permsMigrationPlan = affected;
+  _renderPermsMigrationPreview(affected);
+}
+
+function _renderPermsMigrationPreview(affected) {
+  const rows = affected.map(a =>
+    `<div style="font-size:12px;">• ${escHtml(a.username)} — ${a.role === 'manager' ? 'مدير فرع' : 'كاشير'}</div>`).join('');
+
+  const body = !affected.length
+    ? '<div style="padding:16px;text-align:center;color:var(--text-muted);">كل المستخدمين عندهم صلاحيات محددة بالفعل — مفيش حاجة للترحيل.</div>'
+    : `
+      <div style="padding:4px 2px 12px;">
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin-bottom:12px;">
+          <div style="font-weight:700;margin-bottom:8px;">هيتم إعطاء الصلاحيات الافتراضية دي (اللي كانوا شايفينها بالظبط قبل كده) للمستخدمين دول:</div>
+          <div style="font-size:13px;margin-bottom:4px;">👥 <strong>${affected.length}</strong> مستخدم</div>
+          ${rows}
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);background:var(--bg-secondary);border-radius:8px;padding:10px;">
+          ⚠️ ده بس بيدّي كل واحد نفس الصلاحيات اللي كان شايفها فعلياً قبل كده (تقارير + دعم فني، ومدير الفرع كمان الداشبورد) — مفيش حد هياخد صلاحية جديدة تلقائي. بعد كده تقدر تعدّل صلاحيات أي حد من نفس شاشة "إدارة المستخدمين".
+        </div>
+      </div>`;
+
+  let modal = document.getElementById('permsMigrationModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'permsMigrationModal';
+    modal.className = 'modal-overlay hidden';
+    modal.onclick = (e) => { if (e.target === modal) modal.classList.add('hidden'); };
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div class="modal-box" style="max-width:520px;width:94%;">
+      <div class="modal-header">
+        <h3>🔀 ترحيل صلاحيات التابات</h3>
+        <button onclick="document.getElementById('permsMigrationModal').classList.add('hidden')" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button>
+      </div>
+      <div style="max-height:60vh;overflow-y:auto;">${body}</div>
+      <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;">
+        <button class="btn btn-gray btn-sm" onclick="document.getElementById('permsMigrationModal').classList.add('hidden')">إغلاق</button>
+        ${affected.length ? '<button class="btn btn-primary btn-sm" onclick="executePermissionsMigration()">✅ ابدأ الترحيل</button>' : ''}
+      </div>
+    </div>`;
+  modal.classList.remove('hidden');
+}
+
+async function executePermissionsMigration() {
+  if (currentUser !== 'admin') { showToast('الترحيل للأدمن فقط'); return; }
+  const plan = _permsMigrationPlan;
+  if (!plan || !plan.length) { showToast('اعمل فحص الأول'); return; }
+
+  showToast('⏳ جاري الترحيل...');
+  let written = 0, failed = 0;
+  for (const a of plan) {
+    try {
+      const permissions = _defaultPermissionsFor(a.role === 'manager' ? 'manager' : 'cashier');
+      await firebase.firestore().collection('roles').doc(a.uid).set({ permissions }, { merge: true });
+      written++;
+    } catch (e) {
+      console.error('executePermissionsMigration write:', a.uid, e);
+      failed++;
+    }
+  }
+
+  addAuditLog('permissions.migrate', `ترحيل صلاحيات التابات لـ ${written} مستخدم${failed ? `، وفشل ${failed}` : ''}`, null);
+  document.getElementById('permsMigrationModal').classList.add('hidden');
+  _permsMigrationPlan = null;
+  showMsg('sSettingsMsg', failed
+    ? `⚠️ تم ترحيل ${written}، وفشل ${failed} — راجع الـ Console وأعد المحاولة (آمن تكرر الترحيل)`
+    : `✅ تم ترحيل صلاحيات ${written} مستخدم. راجعهم من "إدارة المستخدمين" وعدّل اللي محتاج تعديل.`,
+    failed ? 'danger' : 'success');
+  if (_rolesListCache) renderUserAccountsSettings();
+}
+
 // ══════════════════════════════════════════════
 // CASHIER – PRODUCTS
 // ══════════════════════════════════════════════
@@ -4783,8 +5016,7 @@ function renderHomeIcons() {
   const branchGrid = document.getElementById('homeGrid_branch');
   if (adminGrid) adminGrid.style.display = isAdmin ? '' : 'none';
   if (branchGrid) branchGrid.style.display = isAdmin ? 'none' : '';
-  const branchDash = document.getElementById('homeAppBranchDashboard');
-  if (branchDash) branchDash.style.display = (!isAdmin && isBranchManager) ? '' : 'none';
+  if (!isAdmin) renderBranchDynamicIcons();
   // Update pending badges on admin home icons
   if (isAdmin) {
     try {
@@ -4797,6 +5029,26 @@ function renderHomeIcons() {
     } catch(e) {}
   }
   renderFolderPreviews();
+}
+
+// Non-admin home screen: the fixed action icons (POS, expense/leave
+// requests) stay hardcoded in template.html — everything else (any tab
+// this account has been granted `view` on) renders here from
+// TAB_PERMISSIONS, so a branch account's home screen reflects exactly
+// what the admin granted it instead of a fixed manager/cashier split.
+function renderBranchDynamicIcons() {
+  const container = document.getElementById('homeGrid_branch_dynamic');
+  if (!container) return;
+  const tabs = TAB_PERMISSIONS.filter(t => canViewTab(t.key) && TAB_ICON[t.key]);
+  container.innerHTML = tabs.map(t => {
+    const icon = TAB_ICON[t.key];
+    return `<div class="app-icon branch-card" onclick="showPage('${t.key}')" style="background:linear-gradient(145deg,${icon.grad.split(',').map(c=>c+'2e').join(',')});border:1px solid ${icon.grad.split(',')[0]}4d;border-radius:20px;padding:20px 12px 16px;gap:10px;">
+      <div class="app-tile" style="background:linear-gradient(135deg,${icon.grad});width:64px;height:64px;">
+        <svg viewBox="0 0 48 48" fill="none">${icon.svg}</svg>
+      </div>
+      <span class="app-name" style="font-weight:700;font-size:14px;">${escHtml(t.label)}</span>
+    </div>`;
+  }).join('');
 }
 
 /* ═══════════════════════════════════════════════
@@ -5355,6 +5607,14 @@ function showPage(page) {
 
 function _showPageImpl(page) {
   if (window._whMode && !['warehouse','transfers'].includes(page)) return;
+  // Real enforcement lives in firestore.rules (see tabForDoc() there) —
+  // this is the UI-side mirror of it, the single choke point every
+  // showPage() call passes through regardless of which icon/link got it
+  // here (or none at all, e.g. a stale deep link or console call).
+  if (page !== 'home' && !canViewTab(page)) {
+    showToast('🚫 مالكش صلاحية الدخول للصفحة دي');
+    return;
+  }
   ['home','dashboard','inventory','sales','suspended','reports','customized','warehouse','settings','customers','promos','transfers','purchases','hr','expenses','audit','accounting','manufacturing','helpdesk','migration','analytics'].forEach(p => {
     document.getElementById('page-'+p)?.classList.add('hidden');
   });
@@ -6679,6 +6939,44 @@ function toggleUserAccountFields() {
   document.getElementById('uaBranchFields').style.display = isAdmin ? 'none' : 'flex';
 }
 
+// ── Permissions matrix (view/write per tab) ─────────────────────────
+function renderPermsMatrix(perms) {
+  const body = document.getElementById('uaPermsBody');
+  if (!body) return;
+  body.innerHTML = TAB_PERMISSIONS.map(t => {
+    const p = (perms && perms[t.key]) || { view: false, write: false };
+    const note = t.enforced ? '' : ' title="التاب ده مالوش تخزين سحابي مخصص لسه — الإخفاء هنا شكلي بس، مش ممنوع فعلياً من قاعدة البيانات"';
+    return `<tr data-tab="${t.key}"${note}>
+      <td style="text-align:right;">${escHtml(t.label)}${t.enforced ? '' : ' ⚠️'}</td>
+      <td style="text-align:center;"><input type="checkbox" class="ua-perm-view" ${p.view ? 'checked' : ''} onchange="_onPermViewChange(this)" /></td>
+      <td style="text-align:center;"><input type="checkbox" class="ua-perm-write" ${p.write ? 'checked' : ''} onchange="_onPermWriteChange(this)" /></td>
+    </tr>`;
+  }).join('');
+}
+// Write implies view (can't sensibly edit a tab you can't see); unchecking
+// view drops write too — keeps the matrix internally consistent instead of
+// silently saving a write:true/view:false combo firestore.rules would
+// technically honor but makes no operational sense.
+function _onPermViewChange(cb) {
+  if (!cb.checked) { const row = cb.closest('tr'); row.querySelector('.ua-perm-write').checked = false; }
+}
+function _onPermWriteChange(cb) {
+  if (cb.checked) { const row = cb.closest('tr'); row.querySelector('.ua-perm-view').checked = true; }
+}
+function readPermsFromMatrix() {
+  const perms = {};
+  document.querySelectorAll('#uaPermsBody tr').forEach(row => {
+    perms[row.dataset.tab] = {
+      view: row.querySelector('.ua-perm-view').checked,
+      write: row.querySelector('.ua-perm-write').checked
+    };
+  });
+  return perms;
+}
+function applyPermissionTemplate(role) {
+  renderPermsMatrix(_defaultPermissionsFor(role === 'manager' ? 'manager' : 'cashier'));
+}
+
 function openUserAccountModal(uid) {
   const branchSel = document.getElementById('uaBranch');
   branchSel.innerHTML = BRANCH_IDS.map(b => `<option value="${b}">${escHtml(getBranchName(b))}</option>`).join('');
@@ -6700,7 +6998,9 @@ function openUserAccountModal(uid) {
     document.getElementById('uaType').value = acc.role === 'admin' ? 'admin' : 'branch';
     if (acc.role !== 'admin') {
       branchSel.value = acc.branchId || 'b1';
-      document.getElementById('uaRole').value = acc.role === 'manager' ? 'manager' : 'cashier';
+      const roleForTemplate = acc.role === 'manager' ? 'manager' : 'cashier';
+      document.getElementById('uaRole').value = roleForTemplate;
+      renderPermsMatrix(acc.permissions || _defaultPermissionsFor(roleForTemplate));
     }
   } else {
     document.getElementById('uaModalTitle').textContent = '➕ إضافة مستخدم';
@@ -6709,6 +7009,7 @@ function openUserAccountModal(uid) {
     passInp.placeholder = 'كلمة المرور (6 أحرف على الأقل)';
     document.getElementById('uaType').value = 'branch';
     document.getElementById('uaRole').value = 'cashier';
+    renderPermsMatrix(_defaultPermissionsFor('cashier'));
   }
   toggleUserAccountFields();
   document.getElementById('userAccountModal').classList.remove('hidden');
@@ -6730,6 +7031,7 @@ async function saveUserAccount() {
 
   const roleValue = type === 'admin' ? 'admin' : (role === 'manager' ? 'manager' : 'cashier');
   const roleLabel = r => r === 'admin' ? 'أدمن' : (r === 'manager' ? 'مدير فرع' : 'كاشير');
+  const permissions = roleValue === 'admin' ? null : readPermsFromMatrix();
 
   if (uid) {
     // Edit = update the roles doc only (identity/password are Firebase Auth's)
@@ -6739,6 +7041,7 @@ async function saveUserAccount() {
       await firebase.firestore().collection('roles').doc(uid).set({
         role: roleValue,
         branchId: roleValue === 'admin' ? null : branchId,
+        permissions,
       }, { merge: true });
     } catch (e) { showErr('تعذّر الحفظ: ' + e.message); return; }
     const changes = buildAuditDiff(
@@ -6753,7 +7056,7 @@ async function saveUserAccount() {
     if (!passRaw || passRaw.length < 6) { showErr('كلمة المرور لازم تكون 6 أحرف على الأقل (شرط Firebase)'); return; }
     if (_rolesListCache.find(a => a.username === username)) { showErr('اسم المستخدم ده مستخدم بالفعل'); return; }
     try {
-      await createManagedUser(username, passRaw, roleValue, roleValue === 'admin' ? null : branchId);
+      await createManagedUser(username, passRaw, roleValue, roleValue === 'admin' ? null : branchId, permissions);
     } catch (e) {
       if (e && e.code === 'auth/email-already-in-use') showErr('اسم المستخدم ده عليه حساب بالفعل');
       else if (e && e.code === 'auth/weak-password') showErr('كلمة المرور ضعيفة — 6 أحرف على الأقل');
@@ -7034,7 +7337,7 @@ function _secondaryAuth() {
   const app = existing || firebase.initializeApp(FIREBASE_CONFIG, 'user-mgmt');
   return app.auth();
 }
-async function createManagedUser(username, password, role, branchId) {
+async function createManagedUser(username, password, role, branchId, permissions) {
   const email = usernameToEmail(username);
   const sec = _secondaryAuth();
   const cred = await sec.createUserWithEmailAndPassword(email, password);
@@ -7045,6 +7348,7 @@ async function createManagedUser(username, password, role, branchId) {
     email,
     role,
     branchId: branchId || null,
+    permissions: permissions || null,
     createdAt: Date.now(),
     createdBy: (firebase.auth().currentUser || {}).uid || null
   });

@@ -1080,27 +1080,13 @@
                 <span class="app-name" style="font-weight:700; font-size:14px;">طلب إجازة/إذن</span>
               </div>
 
-              <div class="app-icon branch-card" onclick="showPage('reports')" style="background: linear-gradient(145deg,rgba(59,130,246,.18),rgba(37,99,235,.1)); border: 1px solid rgba(59,130,246,.3); border-radius: 20px; padding: 20px 12px 16px; gap: 10px;">
-                <div class="app-tile" style="background: linear-gradient(135deg, #3b82f6, #2563eb); width:64px; height:64px;">
-                  <svg viewBox="0 0 48 48" fill="none"><rect x="8" y="8" width="32" height="32" rx="3" stroke="white" stroke-width="2.5"/><path d="M16 32v-8M24 32V20M32 32V16" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>
-                </div>
-                <span class="app-name" style="font-weight:700; font-size:14px;">التقارير</span>
-              </div>
-
-              <div class="app-icon branch-card" onclick="showPage('helpdesk')" style="background: linear-gradient(145deg,rgba(251,146,60,.18),rgba(194,65,12,.1)); border: 1px solid rgba(251,146,60,.3); border-radius: 20px; padding: 20px 12px 16px; gap: 10px;">
-                <div class="app-tile" style="background: linear-gradient(135deg, #fb923c, #c2410c); width:64px; height:64px;">
-                  <svg viewBox="0 0 48 48" fill="none"><path d="M8 34V16a6 6 0 016-6h20a6 6 0 016 6v10a6 6 0 01-6 6H20l-8 8v-6z" stroke="white" stroke-width="2.5" stroke-linejoin="round"/><circle cx="18" cy="21" r="2" fill="white"/><circle cx="24" cy="21" r="2" fill="white"/><circle cx="30" cy="21" r="2" fill="white"/></svg>
-                </div>
-                <span class="app-name" style="font-weight:700; font-size:14px;">الدعم الفني</span>
-              </div>
-
-              <!-- Branch managers only (isBranchManager) — see renderHomeIcons() -->
-              <div class="app-icon branch-card" id="homeAppBranchDashboard" onclick="showPage('dashboard')" style="display:none; background: linear-gradient(145deg,rgba(6,182,212,.18),rgba(8,145,178,.1)); border: 1px solid rgba(6,182,212,.3); border-radius: 20px; padding: 20px 12px 16px; gap: 10px;">
-                <div class="app-tile" style="background: linear-gradient(135deg, #06b6d4, #0891b2); width:64px; height:64px;">
-                  <svg viewBox="0 0 48 48" fill="none"><rect x="6" y="28" width="9" height="13" rx="2" fill="white"/><rect x="20" y="18" width="9" height="23" rx="2" fill="white"/><rect x="34" y="8" width="9" height="33" rx="2" fill="white"/></svg>
-                </div>
-                <span class="app-name" style="font-weight:700; font-size:14px;">الداشبورد</span>
-              </div>
+              <!-- Everything else (reports, helpdesk, dashboard, and any other
+                   tab this account has been granted) renders dynamically here
+                   from TAB_PERMISSIONS — see renderBranchDynamicIcons() in
+                   100-home.js. Kept out of static HTML because which tabs show
+                   up now depends on the per-user permissions matrix, not a
+                   fixed role. -->
+              <div id="homeGrid_branch_dynamic" style="display:contents;"></div>
 
             </div>
           </div><!-- /homeGrid_branch -->
@@ -2053,6 +2039,11 @@
             <button class="btn btn-primary btn-sm" onclick="previewInventoryMigration()">🔍 فحص وترحيل المخزون</button>
           </div>
           <div class="card">
+            <div class="card-title">🔀 ترحيل صلاحيات التابات</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">يديّ كل مستخدم موجود صلاحيات افتراضية (نفس اللي كان شايفها بالظبط) عشان تقدر تعدّلها من "إدارة المستخدمين" تحت. آمن تكرره في أي وقت — مبيلمسش حد اتعدّلت صلاحياته يدوياً بالفعل.</p>
+            <button class="btn btn-primary btn-sm" onclick="previewPermissionsMigration()">🔍 فحص وترحيل الصلاحيات</button>
+          </div>
+          <div class="card">
             <div class="card-title">🗑️ إعادة تعيين البيانات</div>
             <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">⚠️ سيحذف هذا كل بيانات المبيعات والمخزون نهائياً ولا يمكن التراجع</p>
             <div class="flex gap-8">
@@ -2431,9 +2422,9 @@
 
 <!-- ════════════════ USER ACCOUNT MODAL ════════════════ -->
 <div id="userAccountModal" class="modal-overlay hidden">
-  <div class="modal-box" style="max-width:420px;width:94%;">
+  <div class="modal-box" style="max-width:560px;width:94%;">
     <div class="modal-header"><h3 style="margin:0;font-size:17px;" id="uaModalTitle">➕ إضافة مستخدم</h3></div>
-    <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+    <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:14px;max-height:75vh;overflow-y:auto;">
       <input type="hidden" id="uaEditId" value="" />
       <div>
         <label style="font-size:12px;color:var(--text-muted);">اسم المستخدم</label>
@@ -2456,11 +2447,20 @@
           <select class="form-control" id="uaBranch" style="margin-top:4px;"></select>
         </div>
         <div>
-          <label style="font-size:12px;color:var(--text-muted);">الصلاحية</label>
-          <select class="form-control" id="uaRole" style="margin-top:4px;">
+          <label style="font-size:12px;color:var(--text-muted);">الصلاحية الأساسية (نقطة بداية بس — عدّل الجدول تحت زي ما تحب)</label>
+          <select class="form-control" id="uaRole" style="margin-top:4px;" onchange="applyPermissionTemplate(this.value)">
             <option value="cashier">كاشير</option>
             <option value="manager">مدير فرع</option>
           </select>
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--text-muted);margin-bottom:6px;display:block;">صلاحيات التابات — لكل تاب: مشاهدة و/أو كتابة (إضافة/تعديل/حذف)</label>
+          <div class="table-wrap" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
+            <table style="font-size:12px;">
+              <thead><tr><th style="text-align:right;">التاب</th><th>مشاهدة</th><th>كتابة</th></tr></thead>
+              <tbody id="uaPermsBody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
       <div id="uaMsg"></div>

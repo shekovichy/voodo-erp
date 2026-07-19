@@ -95,7 +95,7 @@ function _secondaryAuth() {
   const app = existing || firebase.initializeApp(FIREBASE_CONFIG, 'user-mgmt');
   return app.auth();
 }
-async function createManagedUser(username, password, role, branchId) {
+async function createManagedUser(username, password, role, branchId, permissions) {
   const email = usernameToEmail(username);
   const sec = _secondaryAuth();
   const cred = await sec.createUserWithEmailAndPassword(email, password);
@@ -106,6 +106,7 @@ async function createManagedUser(username, password, role, branchId) {
     email,
     role,
     branchId: branchId || null,
+    permissions: permissions || null,
     createdAt: Date.now(),
     createdBy: (firebase.auth().currentUser || {}).uid || null
   });

@@ -45,6 +45,44 @@ function toggleUserAccountFields() {
   document.getElementById('uaBranchFields').style.display = isAdmin ? 'none' : 'flex';
 }
 
+// ── Permissions matrix (view/write per tab) ─────────────────────────
+function renderPermsMatrix(perms) {
+  const body = document.getElementById('uaPermsBody');
+  if (!body) return;
+  body.innerHTML = TAB_PERMISSIONS.map(t => {
+    const p = (perms && perms[t.key]) || { view: false, write: false };
+    const note = t.enforced ? '' : ' title="التاب ده مالوش تخزين سحابي مخصص لسه — الإخفاء هنا شكلي بس، مش ممنوع فعلياً من قاعدة البيانات"';
+    return `<tr data-tab="${t.key}"${note}>
+      <td style="text-align:right;">${escHtml(t.label)}${t.enforced ? '' : ' ⚠️'}</td>
+      <td style="text-align:center;"><input type="checkbox" class="ua-perm-view" ${p.view ? 'checked' : ''} onchange="_onPermViewChange(this)" /></td>
+      <td style="text-align:center;"><input type="checkbox" class="ua-perm-write" ${p.write ? 'checked' : ''} onchange="_onPermWriteChange(this)" /></td>
+    </tr>`;
+  }).join('');
+}
+// Write implies view (can't sensibly edit a tab you can't see); unchecking
+// view drops write too — keeps the matrix internally consistent instead of
+// silently saving a write:true/view:false combo firestore.rules would
+// technically honor but makes no operational sense.
+function _onPermViewChange(cb) {
+  if (!cb.checked) { const row = cb.closest('tr'); row.querySelector('.ua-perm-write').checked = false; }
+}
+function _onPermWriteChange(cb) {
+  if (cb.checked) { const row = cb.closest('tr'); row.querySelector('.ua-perm-view').checked = true; }
+}
+function readPermsFromMatrix() {
+  const perms = {};
+  document.querySelectorAll('#uaPermsBody tr').forEach(row => {
+    perms[row.dataset.tab] = {
+      view: row.querySelector('.ua-perm-view').checked,
+      write: row.querySelector('.ua-perm-write').checked
+    };
+  });
+  return perms;
+}
+function applyPermissionTemplate(role) {
+  renderPermsMatrix(_defaultPermissionsFor(role === 'manager' ? 'manager' : 'cashier'));
+}
+
 function openUserAccountModal(uid) {
   const branchSel = document.getElementById('uaBranch');
   branchSel.innerHTML = BRANCH_IDS.map(b => `<option value="${b}">${escHtml(getBranchName(b))}</option>`).join('');
@@ -66,7 +104,9 @@ function openUserAccountModal(uid) {
     document.getElementById('uaType').value = acc.role === 'admin' ? 'admin' : 'branch';
     if (acc.role !== 'admin') {
       branchSel.value = acc.branchId || 'b1';
-      document.getElementById('uaRole').value = acc.role === 'manager' ? 'manager' : 'cashier';
+      const roleForTemplate = acc.role === 'manager' ? 'manager' : 'cashier';
+      document.getElementById('uaRole').value = roleForTemplate;
+      renderPermsMatrix(acc.permissions || _defaultPermissionsFor(roleForTemplate));
     }
   } else {
     document.getElementById('uaModalTitle').textContent = '➕ إضافة مستخدم';
@@ -75,6 +115,7 @@ function openUserAccountModal(uid) {
     passInp.placeholder = 'كلمة المرور (6 أحرف على الأقل)';
     document.getElementById('uaType').value = 'branch';
     document.getElementById('uaRole').value = 'cashier';
+    renderPermsMatrix(_defaultPermissionsFor('cashier'));
   }
   toggleUserAccountFields();
   document.getElementById('userAccountModal').classList.remove('hidden');
@@ -96,6 +137,7 @@ async function saveUserAccount() {
 
   const roleValue = type === 'admin' ? 'admin' : (role === 'manager' ? 'manager' : 'cashier');
   const roleLabel = r => r === 'admin' ? 'أدمن' : (r === 'manager' ? 'مدير فرع' : 'كاشير');
+  const permissions = roleValue === 'admin' ? null : readPermsFromMatrix();
 
   if (uid) {
     // Edit = update the roles doc only (identity/password are Firebase Auth's)
@@ -105,6 +147,7 @@ async function saveUserAccount() {
       await firebase.firestore().collection('roles').doc(uid).set({
         role: roleValue,
         branchId: roleValue === 'admin' ? null : branchId,
+        permissions,
       }, { merge: true });
     } catch (e) { showErr('تعذّر الحفظ: ' + e.message); return; }
     const changes = buildAuditDiff(
@@ -119,7 +162,7 @@ async function saveUserAccount() {
     if (!passRaw || passRaw.length < 6) { showErr('كلمة المرور لازم تكون 6 أحرف على الأقل (شرط Firebase)'); return; }
     if (_rolesListCache.find(a => a.username === username)) { showErr('اسم المستخدم ده مستخدم بالفعل'); return; }
     try {
-      await createManagedUser(username, passRaw, roleValue, roleValue === 'admin' ? null : branchId);
+      await createManagedUser(username, passRaw, roleValue, roleValue === 'admin' ? null : branchId, permissions);
     } catch (e) {
       if (e && e.code === 'auth/email-already-in-use') showErr('اسم المستخدم ده عليه حساب بالفعل');
       else if (e && e.code === 'auth/weak-password') showErr('كلمة المرور ضعيفة — 6 أحرف على الأقل');
