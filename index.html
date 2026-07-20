@@ -718,6 +718,36 @@ body.warehouse-mode #cartFab {
   display: none !important;
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   CASHIER / POS — REFINEMENT PASS (2026-07-20)
+   Second attempt, after a from-scratch dark-neon reskin was rejected
+   as generic AI-cliché ("near-black + neon accent" — an explicitly
+   documented anti-pattern). This pass stays in the app's existing
+   light theme and only touches things with a concrete reason:
+     - stock-level accent bar (green/amber/muted) replaces decorative
+       per-card color cycling — color now encodes real inventory data
+     - one consistent outline treatment for the secondary cart-footer
+       buttons, replacing a mix of unrelated hardcoded hues (green
+       fill, indigo fill) with the same brand-blue outline already
+       used elsewhere in that row
+     - removed the infinite pulse animation on the pay button — a
+       decorative animation running all day in a cashier's peripheral
+       vision is fatiguing, not premium; a normal hover/press state is
+       enough for a button that's already the largest, most saturated
+       element in the panel
+   ══════════════════════════════════════════════════════════════════ */
+.cashier-layout .product-card.stock-ok  { border-right: 3px solid var(--success); }
+.cashier-layout .product-card.stock-low { border-right: 3px solid var(--warning); }
+.cashier-layout .product-card.stock-out { border-right: 3px solid var(--border); }
+
+.cashier-layout .cart-pay-btn-pending {
+  background: var(--warning) !important;
+}
+
+.cashier-layout #approvedCartsBtn { color: var(--success); border-color: var(--success); }
+.cashier-layout #approvedCartsBtn:hover { background: var(--success); color: #fff; }
+.cashier-layout #sessionBtn:hover { background: var(--primary); color: #fff; }
+
 </style>
 
 </head>
@@ -839,11 +869,11 @@ body.warehouse-mode #cartFab {
         <button class="btn btn-primary btn-lg" id="cartPayBtn" onclick="openPayment()" style="grid-column:1/-1;">💳 دفع</button>
         <button class="btn btn-warning" onclick="suspendBill()" style="font-size:13px;">⏸ تعليق</button>
         <button class="btn btn-outline" onclick="openResumeModal()" style="font-size:13px;">↩️ استئناف</button>
-        <button class="btn btn-outline" onclick="openApprovedCarts()" style="font-size:12px;background:#f0fdf4;color:#15803d;border-color:#bbf7d0;grid-column:1/-1;" id="approvedCartsBtn">✅ فواتير معتمدة</button>
+        <button class="btn btn-outline" onclick="openApprovedCarts()" style="font-size:12px;grid-column:1/-1;" id="approvedCartsBtn">✅ فواتير معتمدة</button>
         <button class="btn btn-gray btn-sm" onclick="clearCart()" style="grid-column:1/-1;">🗑️ مسح الفاتورة</button>
         <button class="btn btn-outline btn-sm" onclick="openCashierReport()" style="grid-column:1/-1;font-size:12px;">📊 تقرير مبيعاتي</button>
         <button class="btn btn-outline btn-sm" onclick="openCashierReturn()" style="grid-column:1/-1;font-size:12px;color:var(--danger);border-color:var(--danger);">🔄 مرتجعات</button>
-        <button class="btn btn-outline btn-sm" id="sessionBtn" onclick="toggleSession()" style="grid-column:1/-1;font-size:12px;color:#4338ca;border-color:#c7d2fe;background:#eef2ff;">🧑‍💰 فتح وردية</button>
+        <button class="btn btn-outline btn-sm" id="sessionBtn" onclick="toggleSession()" style="grid-column:1/-1;font-size:12px;">🧑‍💰 فتح وردية</button>
       </div>
     </div>
   </div>
@@ -4898,9 +4928,14 @@ function renderProducts() {
       (inv.length ? 'لم يُعثر على نتائج' : '📦 لا توجد منتجات — استورد ملف Excel من لوحة الإدارة') + '</div>';
     return;
   }
+  const threshold = getThreshold();
   grid.innerHTML = items.map(p => {
     const oos = p.qty <= 0;
-    return `<div class="product-card ${oos ? 'out-of-stock' : ''}" onclick="${oos ? '' : `addToCart('${escJsAttr(p.code)}')`}">
+    // Card accent reflects actual stock level (reuses the same low-stock
+    // threshold as the bell/report elsewhere), not a decorative color —
+    // a cashier scanning the grid can read urgency at a glance.
+    const stockLevel = oos ? 'out' : p.qty <= threshold ? 'low' : 'ok';
+    return `<div class="product-card stock-${stockLevel} ${oos ? 'out-of-stock' : ''}" onclick="${oos ? '' : `addToCart('${escJsAttr(p.code)}')`}">
       <div class="product-code">${escHtml(p.code)}</div>
       <div class="product-name">${escHtml(p.name)}</div>
       <div class="product-price">${fmt(p.priceAfter)} ج</div>
@@ -5312,13 +5347,12 @@ function updateCartUI() {
   const hasModified = cart.some(function(i){ return i.priceModified; });
   const payBtn = document.getElementById('cartPayBtn');
   if (payBtn) {
+    payBtn.classList.toggle('cart-pay-btn-pending', hasModified);
     if (hasModified) {
       payBtn.textContent = '📤 إرسال للموافقة';
-      payBtn.style.background = '#d97706';
       payBtn.onclick = sendForApproval;
     } else {
       payBtn.textContent = '💳 دفع';
-      payBtn.style.background = '';
       payBtn.onclick = openPayment;
     }
   }

@@ -693,3 +693,33 @@ body.warehouse-mode .topbar button[onclick*="showPage"]:not([onclick*="'warehous
 body.warehouse-mode #cartFab {
   display: none !important;
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   CASHIER / POS — REFINEMENT PASS (2026-07-20)
+   Second attempt, after a from-scratch dark-neon reskin was rejected
+   as generic AI-cliché ("near-black + neon accent" — an explicitly
+   documented anti-pattern). This pass stays in the app's existing
+   light theme and only touches things with a concrete reason:
+     - stock-level accent bar (green/amber/muted) replaces decorative
+       per-card color cycling — color now encodes real inventory data
+     - one consistent outline treatment for the secondary cart-footer
+       buttons, replacing a mix of unrelated hardcoded hues (green
+       fill, indigo fill) with the same brand-blue outline already
+       used elsewhere in that row
+     - removed the infinite pulse animation on the pay button — a
+       decorative animation running all day in a cashier's peripheral
+       vision is fatiguing, not premium; a normal hover/press state is
+       enough for a button that's already the largest, most saturated
+       element in the panel
+   ══════════════════════════════════════════════════════════════════ */
+.cashier-layout .product-card.stock-ok  { border-right: 3px solid var(--success); }
+.cashier-layout .product-card.stock-low { border-right: 3px solid var(--warning); }
+.cashier-layout .product-card.stock-out { border-right: 3px solid var(--border); }
+
+.cashier-layout .cart-pay-btn-pending {
+  background: var(--warning) !important;
+}
+
+.cashier-layout #approvedCartsBtn { color: var(--success); border-color: var(--success); }
+.cashier-layout #approvedCartsBtn:hover { background: var(--success); color: #fff; }
+.cashier-layout #sessionBtn:hover { background: var(--primary); color: #fff; }

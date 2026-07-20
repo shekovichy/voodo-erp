@@ -113,13 +113,12 @@ function updateCartUI() {
   const hasModified = cart.some(function(i){ return i.priceModified; });
   const payBtn = document.getElementById('cartPayBtn');
   if (payBtn) {
+    payBtn.classList.toggle('cart-pay-btn-pending', hasModified);
     if (hasModified) {
       payBtn.textContent = '📤 إرسال للموافقة';
-      payBtn.style.background = '#d97706';
       payBtn.onclick = sendForApproval;
     } else {
       payBtn.textContent = '💳 دفع';
-      payBtn.style.background = '';
       payBtn.onclick = openPayment;
     }
   }
