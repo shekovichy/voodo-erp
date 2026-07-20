@@ -136,49 +136,54 @@ const TAB_ICON = {
 
 // Starting-point templates the create/edit-user UI pre-fills when you pick
 // a base type — every value is then freely editable per user and saved as
-// its own roles/{uid}.permissions map. Admin has no map at all (full
-// bypass, matches isOwner()/role=='admin' short-circuits in every rule).
+// its own roles/{uid}.permissions map. 'admin' is now just a LABEL: only
+// the real owner (isOwner()/isRealOwner — the hardcoded OWNER_EMAIL) gets
+// unconditional full bypass. An admin-labeled staff account is governed by
+// this same customizable matrix like manager/cashier (2026-07-20 — the
+// owner asked to be able to hand out an "admin" title without it silently
+// meaning root access, e.g. for someone managing a single company/branch
+// on the owner's behalf).
 //
-// ⚠️ Defaults to FULL access on every tab for manager/cashier alike — this
-// deliberately matches the *data layer* as it's worked until now: every
-// pos_data/{doc} was already readable/writable by any signed-in role
+// ⚠️ Defaults to FULL access on every tab for every non-owner role alike —
+// this deliberately matches the *data layer* as it's worked until now:
+// every pos_data/{doc} was already readable/writable by any signed-in role
 // (see firestore.rules), the UI just never linked to most of these pages
 // for non-admin. Tried defaulting to a "minimal" set matching what the old
 // UI visibly linked to instead, but that turned out to have gaps — e.g. the
 // topbar's suspended-invoices bell is reachable from every branch account
 // regardless of home-screen icons, not just the ones the icon grid implied
-// — and any such gap silently breaks a real cashier workflow after
-// migration. Defaulting wide-open and letting the admin dial specific
-// users DOWN from here is the only direction where a mistake just leaves
-// someone with access they already effectively had, instead of quietly
-// taking away something they need mid-shift.
+// — and any such gap silently breaks a real workflow after migration.
+// Defaulting wide-open and letting the owner dial specific users DOWN from
+// here is the only direction where a mistake just leaves someone with
+// access they already effectively had, instead of quietly taking away
+// something they need mid-shift.
 function _defaultPermissionsFor(role) {
-  if (role === 'admin') return null;
   const perms = {};
   TAB_PERMISSIONS.forEach(t => { perms[t.key] = { view: true, write: true }; });
   return perms;
 }
 
 // Effective permissions for whoever is currently logged in — null means
-// unrestricted (admin, or a legacy offline account with no cloud role at
-// all). Falls back to the role's default template if this account predates
-// the permissions system (hasn't been migrated yet — see
+// unrestricted (the real owner, or a legacy offline account with no cloud
+// role at all). Falls back to the role's default template if this account
+// predates the permissions system (hasn't been migrated yet — see
 // 06-permissions-migration.js), mirroring the same fallback firestore.rules
 // applies so the UI and the actual server-side access never disagree.
 function getMyPermissions() {
+  if (isRealOwner) return null;
   const rec = DB.g('pos_role_cache', null);
-  if (!rec || rec.role === 'admin') return null;
-  return rec.permissions || _defaultPermissionsFor(rec.role === 'manager' ? 'manager' : 'cashier');
+  if (!rec) return null; // no cloud role at all (legacy local account) — nothing to restrict
+  return rec.permissions || _defaultPermissionsFor(rec.role);
 }
 function canViewTab(tabKey) {
-  if (currentUser === 'admin') return true;
+  if (isRealOwner) return true;
   const perms = getMyPermissions();
   if (!perms) return true;
   if (!TAB_PERMISSIONS.some(t => t.key === tabKey)) return true; // untracked tab — always allowed
   return !!(perms[tabKey] && perms[tabKey].view);
 }
 function canWriteTab(tabKey) {
-  if (currentUser === 'admin') return true;
+  if (isRealOwner) return true;
   const perms = getMyPermissions();
   if (!perms) return true;
   return !!(perms[tabKey] && perms[tabKey].write);
@@ -439,6 +444,14 @@ let currentUsername = null;
 // on a couple of additional, branch-scoped, read-only pages — see doLogin()
 // in 05-utils.js and renderHomeIcons()/buildDashboard().
 let isBranchManager = false;
+// True ONLY for the hardcoded owner account (OWNER_EMAIL) — an 'admin'-
+// labeled staff account created from "المستخدمين والصلاحيات" is currentUser
+// === 'admin' too (keeps every existing admin-only UI check working) but is
+// NOT isRealOwner, so it's governed by its own permissions matrix instead of
+// bypassing everything. Set in _enterSessionByRole()/_legacyLogin() (the
+// single hardcoded local 'admin' fallback also counts, since it predates
+// the multi-admin concept and has no cloud access to protect either way).
+let isRealOwner = false;
 let cart = [];
 let payMethod = 'cash';
 let chartWeekly = null, chartTop = null, chartRptSales = null, chartProfit = null;

@@ -1250,6 +1250,17 @@
         </div>
         <!-- Pane: Targets -->
         <div id="hrPane_targets">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-title">👤 إدارة البائعين</div>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">الأسماء دي هتظهر في نافذة الدفع عشان تختار البائع لكل فاتورة.</p>
+          <div id="sellersListWrap" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;"></div>
+          <div class="flex gap-8">
+            <input class="form-control" id="sNewSeller" placeholder="اسم البائع الجديد" style="max-width:220px;" onkeydown="if(event.key==='Enter')addSeller()" />
+            <select class="form-control" id="sNewSellerBranch" style="max-width:160px;"></select>
+            <button class="btn btn-primary" onclick="addSeller()">➕ إضافة</button>
+          </div>
+          <div id="sSellersMsg" class="mt-16"></div>
+        </div>
         <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); margin-bottom:16px;">
           <div class="stat-card"><div class="stat-label">🎯 إجمالي الأهداف</div><div class="stat-value" id="hr-total-target" style="font-size:22px;">0 ج</div></div>
           <div class="stat-card"><div class="stat-label">💰 إجمالي المبيعات</div><div class="stat-value" id="hr-total-sales" style="font-size:22px; color:var(--success);">0 ج</div></div>
@@ -1983,19 +1994,6 @@
             <button class="btn btn-primary" onclick="changePass('admin')">حفظ</button>
             <div id="sAdminMsg" class="mt-16"></div>
           </div>
-          <div class="card" style="grid-column:1/-1;">
-            <div class="card-title">👥 إدارة المستخدمين</div>
-            <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">أنشئ حساب أدمن إضافي أو حساب فرع (كاشير أو مدير فرع) — يتزامن تلقائيًا مع كل الأجهزة</p>
-            <div id="userAccountsContainer" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
-            <button class="btn btn-primary" onclick="openUserAccountModal()">➕ إضافة مستخدم</button>
-          </div>
-          <div class="card" style="grid-column:1/-1;">
-            <div class="card-title">🔑 حسابات دخول محلية قديمة</div>
-            <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
-              من قبل ما نظام الحسابات الحقيقي (فوق) يتفعّل، كان الدخول بيتم بأسماء وباسوردات محفوظة محلياً — لسه شغالة كـ fallback أوفلاين ومستقلة تماماً عن "إدارة المستخدمين"، يعني <strong>حذف حد من فوق مش بيمنعه من الدخول بيها لو موجود هنا</strong>. لو مستخدم بيقدر يدخل بعد ما مسحته، هتلاقيه هنا.
-            </p>
-            <div id="legacyLoginContainer" style="display:flex;flex-direction:column;gap:8px;"></div>
-          </div>
           <div class="card">
             <div class="card-title">🏬 أسماء الفروع</div>
             <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">يمكنك تغيير اسم أي فرع — يظهر في كل الصفحات</p>
@@ -2019,17 +2017,6 @@
             <button class="btn btn-primary" onclick="saveSettings()">حفظ الإعدادات</button>
             <div id="sSettingsMsg" class="mt-16"></div>
           </div>
-          <div class="card" style="grid-column:1/-1;">
-            <div class="card-title">👤 إدارة البائعين</div>
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">الأسماء دي هتظهر في نافذة الدفع عشان تختار البائع لكل فاتورة.</p>
-            <div id="sellersListWrap" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;"></div>
-            <div class="flex gap-8">
-              <input class="form-control" id="sNewSeller" placeholder="اسم البائع الجديد" style="max-width:220px;" onkeydown="if(event.key==='Enter')addSeller()" />
-              <select class="form-control" id="sNewSellerBranch" style="max-width:160px;"></select>
-              <button class="btn btn-primary" onclick="addSeller()">➕ إضافة</button>
-            </div>
-            <div id="sSellersMsg" class="mt-16"></div>
-          </div>
           <div class="card">
             <div class="card-title">🧹 تنظيف بيانات الديمو المتسربة</div>
             <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">لو بيانات الديمو (فروع/بائعين/منتجات تجريبية) اتخلطت مع بياناتك الحقيقية — الأداة دي بتلاقيها وتوريهالك <strong>قبل</strong> ما تمسح، وماتمسحش غير اللي عليه بصمة ديمو مؤكدة (أكواد منتجات P001–P020، عملاء الديمو، الفواتير التجريبية).</p>
@@ -2044,11 +2031,6 @@
             <div class="card-title">🔀 ترحيل المخزون لهيكل معزول لكل فرع</div>
             <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">⚠️ خطوة تقنية لمرة واحدة — نفس فكرة ترحيل المبيعات فوق، بس للمخزون. متعملهاش إلا بعد التنسيق الكامل، ولازم تسبق نشر قواعد Firestore الجديدة مباشرة.</p>
             <button class="btn btn-primary btn-sm" onclick="previewInventoryMigration()">🔍 فحص وترحيل المخزون</button>
-          </div>
-          <div class="card">
-            <div class="card-title">🔀 ترحيل صلاحيات التابات</div>
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">يديّ كل مستخدم موجود صلاحيات افتراضية (نفس اللي كان شايفها بالظبط) عشان تقدر تعدّلها من "إدارة المستخدمين" تحت. آمن تكرره في أي وقت — مبيلمسش حد اتعدّلت صلاحياته يدوياً بالفعل.</p>
-            <button class="btn btn-primary btn-sm" onclick="previewPermissionsMigration()">🔍 فحص وترحيل الصلاحيات</button>
           </div>
           <div class="card">
             <div class="card-title">🗑️ إعادة تعيين البيانات</div>
@@ -2109,6 +2091,33 @@
           </div>
         </div>
 
+      </div>
+
+      <!-- ═══════════ USERS & PERMISSIONS (owner-only — see isRealOwner in 00-core.js) ═══════════ -->
+      <div id="page-userperms" class="hidden">
+        <div class="flex items-center justify-between mb-16">
+          <h2 style="margin:0; font-size:20px;">👥 المستخدمين والصلاحيات</h2>
+        </div>
+        <div class="grid-2">
+          <div class="card" style="grid-column:1/-1;">
+            <div class="card-title">المستخدمين</div>
+            <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">أنشئ حساب أدمن أو مدير فرع أو كاشير، واختار بالظبط أي تابات يشوفها ويقدر يتصرف فيها من الجدول. لقب "أدمن" مجرد اسم — أنت اللي بتحدد صلاحياته الفعلية.</p>
+            <div id="userAccountsContainer" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
+            <button class="btn btn-primary" onclick="openUserAccountModal()">➕ إضافة مستخدم</button>
+          </div>
+          <div class="card" style="grid-column:1/-1;">
+            <div class="card-title">🔑 حسابات دخول محلية قديمة</div>
+            <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+              من قبل ما نظام الحسابات الحقيقي (فوق) يتفعّل، كان الدخول بيتم بأسماء وباسوردات محفوظة محلياً — لسه شغالة كـ fallback أوفلاين ومستقلة تماماً عن المستخدمين فوق، يعني <strong>حذف حد من فوق مش بيمنعه من الدخول بيها لو موجود هنا</strong>. لو مستخدم بيقدر يدخل بعد ما مسحته، هتلاقيه هنا.
+            </p>
+            <div id="legacyLoginContainer" style="display:flex;flex-direction:column;gap:8px;"></div>
+          </div>
+          <div class="card" style="grid-column:1/-1;">
+            <div class="card-title">🔀 ترحيل صلاحيات التابات</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">يديّ كل مستخدم موجود صلاحيات افتراضية (نفس اللي كان شايفها بالظبط) عشان تقدر تعدّلها فوق. آمن تكرره في أي وقت — مبيلمسش حد اتعدّلت صلاحياته يدوياً بالفعل.</p>
+            <button class="btn btn-primary btn-sm" onclick="previewPermissionsMigration()">🔍 فحص وترحيل الصلاحيات</button>
+          </div>
+        </div>
       </div>
 
     </div><!-- /content-area -->
@@ -2443,12 +2452,12 @@
       </div>
       <div>
         <label style="font-size:12px;color:var(--text-muted);">نوع المستخدم</label>
-        <select class="form-control" id="uaType" style="margin-top:4px;" onchange="toggleUserAccountFields()">
+        <select class="form-control" id="uaType" style="margin-top:4px;" onchange="onUserTypeChanged()">
           <option value="branch">مستخدم فرع</option>
           <option value="admin">أدمن</option>
         </select>
       </div>
-      <div id="uaBranchFields" style="display:flex;flex-direction:column;gap:14px;">
+      <div id="uaBranchOnlyFields" style="display:flex;flex-direction:column;gap:14px;">
         <div>
           <label style="font-size:12px;color:var(--text-muted);">الفرع</label>
           <select class="form-control" id="uaBranch" style="margin-top:4px;"></select>
@@ -2460,14 +2469,14 @@
             <option value="manager">مدير فرع</option>
           </select>
         </div>
-        <div>
-          <label style="font-size:12px;color:var(--text-muted);margin-bottom:6px;display:block;">صلاحيات التابات — لكل تاب: مشاهدة و/أو كتابة (إضافة/تعديل/حذف)</label>
-          <div class="table-wrap" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
-            <table style="font-size:12px;">
-              <thead><tr><th style="text-align:right;">التاب</th><th>مشاهدة</th><th>كتابة</th></tr></thead>
-              <tbody id="uaPermsBody"></tbody>
-            </table>
-          </div>
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--text-muted);margin-bottom:6px;display:block;">صلاحيات التابات — "أدمن" مجرد اسم، صلاحياته الفعلية هي اللي تحددها هنا. لكل تاب: مشاهدة و/أو كتابة (إضافة/تعديل/حذف)</label>
+        <div class="table-wrap" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
+          <table style="font-size:12px;">
+            <thead><tr><th style="text-align:right;">التاب</th><th>مشاهدة</th><th>كتابة</th></tr></thead>
+            <tbody id="uaPermsBody"></tbody>
+          </table>
         </div>
       </div>
       <div id="uaMsg"></div>

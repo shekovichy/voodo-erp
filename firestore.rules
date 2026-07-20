@@ -66,9 +66,11 @@ service cloud.firestore {
     // parameterized) broke the Rules Playground simulator (see the note at
     // the top of this file), so every get() stays inlined at the allow-line
     // call site and only the resulting *data* is passed in here.
+    // No role=='admin' bypass here on purpose — 'admin' is just a label
+    // since 2026-07-20, the real owner is the only unconditional bypass
+    // (handled via isOwner() at every call site, not in here).
     function _tabOk(roleData, tab, action) {
-      return roleData.role == 'admin'
-        || !('permissions' in roleData)
+      return !('permissions' in roleData)
         || (tab in roleData.permissions && roleData.permissions[tab][action] == true);
     }
     // pos_data/{doc} → the one tab that doc's access is gated by. Docs not
@@ -96,20 +98,17 @@ service cloud.firestore {
     }
 
     // ── ROLES — the permission source of truth ────────────────────
-    // Users may read their own role (the app resolves it at login);
-    // only admins may list or modify roles.
+    // Users may read their own role (the app resolves it at login); ONLY
+    // the real owner may list/create/update/delete roles or read someone
+    // else's. 'admin' is just a label since 2026-07-20 (see
+    // _defaultPermissionsFor in 00-core.js) — an admin-labeled account must
+    // NOT be able to touch this collection, or it could edit its own (or
+    // anyone else's) permissions map and grant itself whatever it wants,
+    // defeating the entire point of the owner choosing each account's
+    // access individually.
     match /roles/{uid} {
-      allow get: if signedIn() && (
-        request.auth.uid == uid ||
-        isOwner() ||
-        (exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin')
-      );
-      allow list, create, update, delete: if isOwner() || (
-        signedIn() &&
-        exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin'
-      );
+      allow get: if signedIn() && (request.auth.uid == uid || isOwner());
+      allow list, create, update, delete: if isOwner();
     }
 
     // ── POS DATA ──────────────────────────────────────────────────
@@ -134,9 +133,6 @@ service cloud.firestore {
       );
       allow write: if doc != 'auth' && !doc.matches('inv_.*') && (
         isOwner() ||
-        (signedIn() &&
-         exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin') ||
         (signedIn() &&
          exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
          !(doc in ['settings', 'accounts', 'budgets']) && (

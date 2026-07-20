@@ -26,21 +26,32 @@ function _showPageImpl(page) {
     showToast('🚫 مالكش صلاحية الدخول للصفحة دي');
     return;
   }
-  ['home','dashboard','inventory','sales','suspended','reports','customized','warehouse','settings','customers','promos','transfers','purchases','hr','expenses','audit','accounting','manufacturing','helpdesk','migration','analytics'].forEach(p => {
+  // Settings/migration/userperms are owner-only, full stop — not part of
+  // the customizable permissions matrix at all, and not delegable to an
+  // 'admin'-labeled account (see isRealOwner in 00-core.js). Settings holds
+  // the legacy credential doc + destructive reset tools; userperms is what
+  // GRANTS permissions, so letting a delegate in would let them escalate
+  // their own access.
+  if (['settings', 'migration', 'userperms'].includes(page) && !isRealOwner) {
+    showToast('🚫 الصفحة دي للمالك فقط');
+    return;
+  }
+  ['home','dashboard','inventory','sales','suspended','reports','customized','warehouse','settings','customers','promos','transfers','purchases','hr','expenses','audit','accounting','manufacturing','helpdesk','migration','analytics','userperms'].forEach(p => {
     document.getElementById('page-'+p)?.classList.add('hidden');
   });
   document.getElementById('page-'+page).classList.remove('hidden');
   var content = document.querySelector('.main-content');
   if (content) content.classList.toggle('home-mode', page === 'home');
   if (page === 'home') { updateHomeClock(); updateSuspendedBadge(); }
-  const titles ={ dashboard:'الرئيسية', inventory:'إدارة المخزون', sales:'سجل المبيعات', suspended:'فواتير معلقة', reports:'التقارير', customized:'تقارير مخصصة', home:'الرئيسية', warehouse:'المخزن الرئيسي', settings:'الإعدادات', customers:'العملاء', purchases:'المشتريات', hr:'الموارد البشرية', expenses:'المصاريف', audit:'سجل التغييرات', accounting:'المحاسبة الرسمية', helpdesk:'الدعم الفني', migration:'استيراد بيانات قديمة', analytics:'التحليلات الاستراتيجية' };
+  const titles ={ dashboard:'الرئيسية', inventory:'إدارة المخزون', sales:'سجل المبيعات', suspended:'فواتير معلقة', reports:'التقارير', customized:'تقارير مخصصة', home:'الرئيسية', warehouse:'المخزن الرئيسي', settings:'الإعدادات', customers:'العملاء', purchases:'المشتريات', hr:'الموارد البشرية', expenses:'المصاريف', audit:'سجل التغييرات', accounting:'المحاسبة الرسمية', helpdesk:'الدعم الفني', migration:'استيراد بيانات قديمة', analytics:'التحليلات الاستراتيجية', userperms:'المستخدمين والصلاحيات' };
   document.getElementById('pageTitle').textContent = titles[page] || '';
   if (page === 'dashboard')  buildDashboard();
   if (page === 'inventory')  renderInventory();
   if (page === 'sales')      { initSalesFilter(); renderSales(); }
   if (page === 'reports')    { buildSalesReport(); setTimeout(()=>showVLTab('catreport'),100); }
   if (page === 'suspended')  renderSuspendedPage();
-  if (page === 'settings')   { renderSellersSettings(); renderLastBackupInfo(); initGoogleDriveUI(); document.getElementById('sVipThreshold').value = _settingsCache.vipThreshold || 1000; populateBranchNameInputs(); renderUserAccountsSettings(); renderLegacyLoginCleanup(); }
+  if (page === 'settings')   { renderLastBackupInfo(); initGoogleDriveUI(); document.getElementById('sVipThreshold').value = _settingsCache.vipThreshold || 1000; populateBranchNameInputs(); }
+  if (page === 'userperms')  { renderUserAccountsSettings(); renderLegacyLoginCleanup(); }
   if (page === 'customers')  renderCustomers();
   if (page === 'promos')     renderPromosPage();
   if (page === 'transfers')  renderTransfersPage();

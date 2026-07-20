@@ -44,7 +44,7 @@ function emailToUsername(e) {
 async function resolveRoleAndEnter(fbUser) {
   let rec = null;
   if ((fbUser.email || '').toLowerCase() === OWNER_EMAIL) {
-    rec = { role: 'admin', username: emailToUsername(fbUser.email), branchId: null };
+    rec = { role: 'admin', username: emailToUsername(fbUser.email), branchId: null, email: fbUser.email };
   } else {
     const snap = await firebase.firestore().collection('roles').doc(fbUser.uid).get();
     if (snap.exists) rec = snap.data();
@@ -61,6 +61,7 @@ async function resolveRoleAndEnter(fbUser) {
 
 function _enterSessionByRole(rec) {
   currentUsername = rec.username || null;
+  isRealOwner = (rec.email || '').toLowerCase() === OWNER_EMAIL;
   if (rec.role === 'admin') {
     _enterAdminSession(`تسجيل دخول: ${rec.username}`);
   } else {

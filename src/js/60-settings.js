@@ -42,7 +42,17 @@ async function renderUserAccountsSettings() {
 
 function toggleUserAccountFields() {
   const isAdmin = document.getElementById('uaType').value === 'admin';
-  document.getElementById('uaBranchFields').style.display = isAdmin ? 'none' : 'flex';
+  document.getElementById('uaBranchOnlyFields').style.display = isAdmin ? 'none' : 'flex';
+}
+// Only called from uaType's onchange (a real user action) — resets the
+// matrix to that type's starting template. openUserAccountModal() sets the
+// matrix itself (from the account's saved permissions, or a fresh template
+// for a new user) and must NOT go through this, or editing an existing
+// user would silently wipe their real permissions back to the default.
+function onUserTypeChanged() {
+  toggleUserAccountFields();
+  const isAdmin = document.getElementById('uaType').value === 'admin';
+  applyPermissionTemplate(isAdmin ? 'admin' : document.getElementById('uaRole').value);
 }
 
 // ── Permissions matrix (view/write per tab) ─────────────────────────
@@ -80,7 +90,7 @@ function readPermsFromMatrix() {
   return perms;
 }
 function applyPermissionTemplate(role) {
-  renderPermsMatrix(_defaultPermissionsFor(role === 'manager' ? 'manager' : 'cashier'));
+  renderPermsMatrix(_defaultPermissionsFor(role));
 }
 
 function openUserAccountModal(uid) {
@@ -104,10 +114,9 @@ function openUserAccountModal(uid) {
     document.getElementById('uaType').value = acc.role === 'admin' ? 'admin' : 'branch';
     if (acc.role !== 'admin') {
       branchSel.value = acc.branchId || 'b1';
-      const roleForTemplate = acc.role === 'manager' ? 'manager' : 'cashier';
-      document.getElementById('uaRole').value = roleForTemplate;
-      renderPermsMatrix(acc.permissions || _defaultPermissionsFor(roleForTemplate));
+      document.getElementById('uaRole').value = acc.role === 'manager' ? 'manager' : 'cashier';
     }
+    renderPermsMatrix(acc.permissions || _defaultPermissionsFor(acc.role));
   } else {
     document.getElementById('uaModalTitle').textContent = '➕ إضافة مستخدم';
     userInp.value = ''; userInp.disabled = false;
@@ -137,7 +146,9 @@ async function saveUserAccount() {
 
   const roleValue = type === 'admin' ? 'admin' : (role === 'manager' ? 'manager' : 'cashier');
   const roleLabel = r => r === 'admin' ? 'أدمن' : (r === 'manager' ? 'مدير فرع' : 'كاشير');
-  const permissions = roleValue === 'admin' ? null : readPermsFromMatrix();
+  // 'admin' is just a label now — everyone's real access comes from this
+  // matrix, the owner alone (isOwner()/isRealOwner) is the true bypass.
+  const permissions = readPermsFromMatrix();
 
   if (uid) {
     // Edit = update the roles doc only (identity/password are Firebase Auth's)

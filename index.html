@@ -1945,6 +1945,17 @@ body.warehouse-mode #cartFab {
         </div>
         <!-- Pane: Targets -->
         <div id="hrPane_targets">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-title">👤 إدارة البائعين</div>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">الأسماء دي هتظهر في نافذة الدفع عشان تختار البائع لكل فاتورة.</p>
+          <div id="sellersListWrap" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;"></div>
+          <div class="flex gap-8">
+            <input class="form-control" id="sNewSeller" placeholder="اسم البائع الجديد" style="max-width:220px;" onkeydown="if(event.key==='Enter')addSeller()" />
+            <select class="form-control" id="sNewSellerBranch" style="max-width:160px;"></select>
+            <button class="btn btn-primary" onclick="addSeller()">➕ إضافة</button>
+          </div>
+          <div id="sSellersMsg" class="mt-16"></div>
+        </div>
         <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); margin-bottom:16px;">
           <div class="stat-card"><div class="stat-label">🎯 إجمالي الأهداف</div><div class="stat-value" id="hr-total-target" style="font-size:22px;">0 ج</div></div>
           <div class="stat-card"><div class="stat-label">💰 إجمالي المبيعات</div><div class="stat-value" id="hr-total-sales" style="font-size:22px; color:var(--success);">0 ج</div></div>
@@ -2678,19 +2689,6 @@ body.warehouse-mode #cartFab {
             <button class="btn btn-primary" onclick="changePass('admin')">حفظ</button>
             <div id="sAdminMsg" class="mt-16"></div>
           </div>
-          <div class="card" style="grid-column:1/-1;">
-            <div class="card-title">👥 إدارة المستخدمين</div>
-            <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">أنشئ حساب أدمن إضافي أو حساب فرع (كاشير أو مدير فرع) — يتزامن تلقائيًا مع كل الأجهزة</p>
-            <div id="userAccountsContainer" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
-            <button class="btn btn-primary" onclick="openUserAccountModal()">➕ إضافة مستخدم</button>
-          </div>
-          <div class="card" style="grid-column:1/-1;">
-            <div class="card-title">🔑 حسابات دخول محلية قديمة</div>
-            <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
-              من قبل ما نظام الحسابات الحقيقي (فوق) يتفعّل، كان الدخول بيتم بأسماء وباسوردات محفوظة محلياً — لسه شغالة كـ fallback أوفلاين ومستقلة تماماً عن "إدارة المستخدمين"، يعني <strong>حذف حد من فوق مش بيمنعه من الدخول بيها لو موجود هنا</strong>. لو مستخدم بيقدر يدخل بعد ما مسحته، هتلاقيه هنا.
-            </p>
-            <div id="legacyLoginContainer" style="display:flex;flex-direction:column;gap:8px;"></div>
-          </div>
           <div class="card">
             <div class="card-title">🏬 أسماء الفروع</div>
             <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">يمكنك تغيير اسم أي فرع — يظهر في كل الصفحات</p>
@@ -2714,17 +2712,6 @@ body.warehouse-mode #cartFab {
             <button class="btn btn-primary" onclick="saveSettings()">حفظ الإعدادات</button>
             <div id="sSettingsMsg" class="mt-16"></div>
           </div>
-          <div class="card" style="grid-column:1/-1;">
-            <div class="card-title">👤 إدارة البائعين</div>
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">الأسماء دي هتظهر في نافذة الدفع عشان تختار البائع لكل فاتورة.</p>
-            <div id="sellersListWrap" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;"></div>
-            <div class="flex gap-8">
-              <input class="form-control" id="sNewSeller" placeholder="اسم البائع الجديد" style="max-width:220px;" onkeydown="if(event.key==='Enter')addSeller()" />
-              <select class="form-control" id="sNewSellerBranch" style="max-width:160px;"></select>
-              <button class="btn btn-primary" onclick="addSeller()">➕ إضافة</button>
-            </div>
-            <div id="sSellersMsg" class="mt-16"></div>
-          </div>
           <div class="card">
             <div class="card-title">🧹 تنظيف بيانات الديمو المتسربة</div>
             <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">لو بيانات الديمو (فروع/بائعين/منتجات تجريبية) اتخلطت مع بياناتك الحقيقية — الأداة دي بتلاقيها وتوريهالك <strong>قبل</strong> ما تمسح، وماتمسحش غير اللي عليه بصمة ديمو مؤكدة (أكواد منتجات P001–P020، عملاء الديمو، الفواتير التجريبية).</p>
@@ -2739,11 +2726,6 @@ body.warehouse-mode #cartFab {
             <div class="card-title">🔀 ترحيل المخزون لهيكل معزول لكل فرع</div>
             <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">⚠️ خطوة تقنية لمرة واحدة — نفس فكرة ترحيل المبيعات فوق، بس للمخزون. متعملهاش إلا بعد التنسيق الكامل، ولازم تسبق نشر قواعد Firestore الجديدة مباشرة.</p>
             <button class="btn btn-primary btn-sm" onclick="previewInventoryMigration()">🔍 فحص وترحيل المخزون</button>
-          </div>
-          <div class="card">
-            <div class="card-title">🔀 ترحيل صلاحيات التابات</div>
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">يديّ كل مستخدم موجود صلاحيات افتراضية (نفس اللي كان شايفها بالظبط) عشان تقدر تعدّلها من "إدارة المستخدمين" تحت. آمن تكرره في أي وقت — مبيلمسش حد اتعدّلت صلاحياته يدوياً بالفعل.</p>
-            <button class="btn btn-primary btn-sm" onclick="previewPermissionsMigration()">🔍 فحص وترحيل الصلاحيات</button>
           </div>
           <div class="card">
             <div class="card-title">🗑️ إعادة تعيين البيانات</div>
@@ -2804,6 +2786,33 @@ body.warehouse-mode #cartFab {
           </div>
         </div>
 
+      </div>
+
+      <!-- ═══════════ USERS & PERMISSIONS (owner-only — see isRealOwner in 00-core.js) ═══════════ -->
+      <div id="page-userperms" class="hidden">
+        <div class="flex items-center justify-between mb-16">
+          <h2 style="margin:0; font-size:20px;">👥 المستخدمين والصلاحيات</h2>
+        </div>
+        <div class="grid-2">
+          <div class="card" style="grid-column:1/-1;">
+            <div class="card-title">المستخدمين</div>
+            <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">أنشئ حساب أدمن أو مدير فرع أو كاشير، واختار بالظبط أي تابات يشوفها ويقدر يتصرف فيها من الجدول. لقب "أدمن" مجرد اسم — أنت اللي بتحدد صلاحياته الفعلية.</p>
+            <div id="userAccountsContainer" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
+            <button class="btn btn-primary" onclick="openUserAccountModal()">➕ إضافة مستخدم</button>
+          </div>
+          <div class="card" style="grid-column:1/-1;">
+            <div class="card-title">🔑 حسابات دخول محلية قديمة</div>
+            <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+              من قبل ما نظام الحسابات الحقيقي (فوق) يتفعّل، كان الدخول بيتم بأسماء وباسوردات محفوظة محلياً — لسه شغالة كـ fallback أوفلاين ومستقلة تماماً عن المستخدمين فوق، يعني <strong>حذف حد من فوق مش بيمنعه من الدخول بيها لو موجود هنا</strong>. لو مستخدم بيقدر يدخل بعد ما مسحته، هتلاقيه هنا.
+            </p>
+            <div id="legacyLoginContainer" style="display:flex;flex-direction:column;gap:8px;"></div>
+          </div>
+          <div class="card" style="grid-column:1/-1;">
+            <div class="card-title">🔀 ترحيل صلاحيات التابات</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">يديّ كل مستخدم موجود صلاحيات افتراضية (نفس اللي كان شايفها بالظبط) عشان تقدر تعدّلها فوق. آمن تكرره في أي وقت — مبيلمسش حد اتعدّلت صلاحياته يدوياً بالفعل.</p>
+            <button class="btn btn-primary btn-sm" onclick="previewPermissionsMigration()">🔍 فحص وترحيل الصلاحيات</button>
+          </div>
+        </div>
       </div>
 
     </div><!-- /content-area -->
@@ -3138,12 +3147,12 @@ body.warehouse-mode #cartFab {
       </div>
       <div>
         <label style="font-size:12px;color:var(--text-muted);">نوع المستخدم</label>
-        <select class="form-control" id="uaType" style="margin-top:4px;" onchange="toggleUserAccountFields()">
+        <select class="form-control" id="uaType" style="margin-top:4px;" onchange="onUserTypeChanged()">
           <option value="branch">مستخدم فرع</option>
           <option value="admin">أدمن</option>
         </select>
       </div>
-      <div id="uaBranchFields" style="display:flex;flex-direction:column;gap:14px;">
+      <div id="uaBranchOnlyFields" style="display:flex;flex-direction:column;gap:14px;">
         <div>
           <label style="font-size:12px;color:var(--text-muted);">الفرع</label>
           <select class="form-control" id="uaBranch" style="margin-top:4px;"></select>
@@ -3155,14 +3164,14 @@ body.warehouse-mode #cartFab {
             <option value="manager">مدير فرع</option>
           </select>
         </div>
-        <div>
-          <label style="font-size:12px;color:var(--text-muted);margin-bottom:6px;display:block;">صلاحيات التابات — لكل تاب: مشاهدة و/أو كتابة (إضافة/تعديل/حذف)</label>
-          <div class="table-wrap" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
-            <table style="font-size:12px;">
-              <thead><tr><th style="text-align:right;">التاب</th><th>مشاهدة</th><th>كتابة</th></tr></thead>
-              <tbody id="uaPermsBody"></tbody>
-            </table>
-          </div>
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--text-muted);margin-bottom:6px;display:block;">صلاحيات التابات — "أدمن" مجرد اسم، صلاحياته الفعلية هي اللي تحددها هنا. لكل تاب: مشاهدة و/أو كتابة (إضافة/تعديل/حذف)</label>
+        <div class="table-wrap" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
+          <table style="font-size:12px;">
+            <thead><tr><th style="text-align:right;">التاب</th><th>مشاهدة</th><th>كتابة</th></tr></thead>
+            <tbody id="uaPermsBody"></tbody>
+          </table>
         </div>
       </div>
       <div id="uaMsg"></div>
@@ -3449,49 +3458,54 @@ const TAB_ICON = {
 
 // Starting-point templates the create/edit-user UI pre-fills when you pick
 // a base type — every value is then freely editable per user and saved as
-// its own roles/{uid}.permissions map. Admin has no map at all (full
-// bypass, matches isOwner()/role=='admin' short-circuits in every rule).
+// its own roles/{uid}.permissions map. 'admin' is now just a LABEL: only
+// the real owner (isOwner()/isRealOwner — the hardcoded OWNER_EMAIL) gets
+// unconditional full bypass. An admin-labeled staff account is governed by
+// this same customizable matrix like manager/cashier (2026-07-20 — the
+// owner asked to be able to hand out an "admin" title without it silently
+// meaning root access, e.g. for someone managing a single company/branch
+// on the owner's behalf).
 //
-// ⚠️ Defaults to FULL access on every tab for manager/cashier alike — this
-// deliberately matches the *data layer* as it's worked until now: every
-// pos_data/{doc} was already readable/writable by any signed-in role
+// ⚠️ Defaults to FULL access on every tab for every non-owner role alike —
+// this deliberately matches the *data layer* as it's worked until now:
+// every pos_data/{doc} was already readable/writable by any signed-in role
 // (see firestore.rules), the UI just never linked to most of these pages
 // for non-admin. Tried defaulting to a "minimal" set matching what the old
 // UI visibly linked to instead, but that turned out to have gaps — e.g. the
 // topbar's suspended-invoices bell is reachable from every branch account
 // regardless of home-screen icons, not just the ones the icon grid implied
-// — and any such gap silently breaks a real cashier workflow after
-// migration. Defaulting wide-open and letting the admin dial specific
-// users DOWN from here is the only direction where a mistake just leaves
-// someone with access they already effectively had, instead of quietly
-// taking away something they need mid-shift.
+// — and any such gap silently breaks a real workflow after migration.
+// Defaulting wide-open and letting the owner dial specific users DOWN from
+// here is the only direction where a mistake just leaves someone with
+// access they already effectively had, instead of quietly taking away
+// something they need mid-shift.
 function _defaultPermissionsFor(role) {
-  if (role === 'admin') return null;
   const perms = {};
   TAB_PERMISSIONS.forEach(t => { perms[t.key] = { view: true, write: true }; });
   return perms;
 }
 
 // Effective permissions for whoever is currently logged in — null means
-// unrestricted (admin, or a legacy offline account with no cloud role at
-// all). Falls back to the role's default template if this account predates
-// the permissions system (hasn't been migrated yet — see
+// unrestricted (the real owner, or a legacy offline account with no cloud
+// role at all). Falls back to the role's default template if this account
+// predates the permissions system (hasn't been migrated yet — see
 // 06-permissions-migration.js), mirroring the same fallback firestore.rules
 // applies so the UI and the actual server-side access never disagree.
 function getMyPermissions() {
+  if (isRealOwner) return null;
   const rec = DB.g('pos_role_cache', null);
-  if (!rec || rec.role === 'admin') return null;
-  return rec.permissions || _defaultPermissionsFor(rec.role === 'manager' ? 'manager' : 'cashier');
+  if (!rec) return null; // no cloud role at all (legacy local account) — nothing to restrict
+  return rec.permissions || _defaultPermissionsFor(rec.role);
 }
 function canViewTab(tabKey) {
-  if (currentUser === 'admin') return true;
+  if (isRealOwner) return true;
   const perms = getMyPermissions();
   if (!perms) return true;
   if (!TAB_PERMISSIONS.some(t => t.key === tabKey)) return true; // untracked tab — always allowed
   return !!(perms[tabKey] && perms[tabKey].view);
 }
 function canWriteTab(tabKey) {
-  if (currentUser === 'admin') return true;
+  if (isRealOwner) return true;
   const perms = getMyPermissions();
   if (!perms) return true;
   return !!(perms[tabKey] && perms[tabKey].write);
@@ -3752,6 +3766,14 @@ let currentUsername = null;
 // on a couple of additional, branch-scoped, read-only pages — see doLogin()
 // in 05-utils.js and renderHomeIcons()/buildDashboard().
 let isBranchManager = false;
+// True ONLY for the hardcoded owner account (OWNER_EMAIL) — an 'admin'-
+// labeled staff account created from "المستخدمين والصلاحيات" is currentUser
+// === 'admin' too (keeps every existing admin-only UI check working) but is
+// NOT isRealOwner, so it's governed by its own permissions matrix instead of
+// bypassing everything. Set in _enterSessionByRole()/_legacyLogin() (the
+// single hardcoded local 'admin' fallback also counts, since it predates
+// the multi-admin concept and has no cloud access to protect either way).
+let isRealOwner = false;
 let cart = [];
 let payMethod = 'cash';
 let chartWeekly = null, chartTop = null, chartRptSales = null, chartProfit = null;
@@ -4427,6 +4449,7 @@ async function _legacyLogin(user, pass) {
   if (user === 'admin' && users.admin && await checkPass(pass, users.admin)) {
     await upgradePassIfNeeded(pass, users.admin, 'admin');
     currentUsername = user;
+    isRealOwner = true; // the single hardcoded local admin fallback predates multi-admin accounts and has no cloud access either way
     _enterAdminSession('تسجيل دخول (محلي): admin');
     return true;
   }
@@ -4785,7 +4808,7 @@ function updateClock() {
 let _permsMigrationPlan = null;
 
 async function previewPermissionsMigration() {
-  if (currentUser !== 'admin') { showToast('الترحيل للأدمن فقط'); return; }
+  if (!isRealOwner) { showToast('الترحيل للمالك فقط'); return; }
   if (!_fbReady) { showToast('محتاج اتصال بالإنترنت لعمل الترحيل'); return; }
 
   showToast('⏳ جاري فحص المستخدمين...');
@@ -4796,8 +4819,12 @@ async function previewPermissionsMigration() {
   const affected = [];
   snap.forEach(doc => {
     const rec = doc.data();
-    if (rec.role === 'admin') return; // admin never has/needs a permissions map
-    if (rec.permissions) return;      // already has one — never touched
+    // The real owner never has a roles/{uid} doc at all (see
+    // resolveRoleAndEnter — matched by email, not this collection), so
+    // every doc here is by definition a non-owner account, 'admin'-labeled
+    // ones included since 2026-07-20 (admin became just a label, not an
+    // automatic bypass — see _defaultPermissionsFor in 00-core.js).
+    if (rec.permissions) return; // already has one — never touched
     affected.push({ uid: doc.id, username: rec.username, role: rec.role });
   });
 
@@ -4806,8 +4833,9 @@ async function previewPermissionsMigration() {
 }
 
 function _renderPermsMigrationPreview(affected) {
+  const roleLabel = r => r === 'admin' ? 'أدمن' : (r === 'manager' ? 'مدير فرع' : 'كاشير');
   const rows = affected.map(a =>
-    `<div style="font-size:12px;">• ${escHtml(a.username)} — ${a.role === 'manager' ? 'مدير فرع' : 'كاشير'}</div>`).join('');
+    `<div style="font-size:12px;">• ${escHtml(a.username)} — ${roleLabel(a.role)}</div>`).join('');
 
   const body = !affected.length
     ? '<div style="padding:16px;text-align:center;color:var(--text-muted);">كل المستخدمين عندهم صلاحيات محددة بالفعل — مفيش حاجة للترحيل.</div>'
@@ -4819,7 +4847,7 @@ function _renderPermsMigrationPreview(affected) {
           ${rows}
         </div>
         <div style="font-size:12px;color:var(--text-muted);background:var(--bg-secondary);border-radius:8px;padding:10px;">
-          ⚠️ ده بس بيدّي كل واحد نفس الصلاحيات اللي كان شايفها فعلياً قبل كده (تقارير + دعم فني، ومدير الفرع كمان الداشبورد) — مفيش حد هياخد صلاحية جديدة تلقائي. بعد كده تقدر تعدّل صلاحيات أي حد من نفس شاشة "إدارة المستخدمين".
+          ⚠️ ده بيدّي كل واحد صلاحية كاملة على كل التابات مبدئياً (نفس الوصول اللي كان متاح فعلياً قبل نظام الصلاحيات ده) — تقدر بعد كده تعدّل/تقلّل صلاحيات أي حد من "المستخدمين والصلاحيات".
         </div>
       </div>`;
 
@@ -4847,7 +4875,7 @@ function _renderPermsMigrationPreview(affected) {
 }
 
 async function executePermissionsMigration() {
-  if (currentUser !== 'admin') { showToast('الترحيل للأدمن فقط'); return; }
+  if (!isRealOwner) { showToast('الترحيل للمالك فقط'); return; }
   const plan = _permsMigrationPlan;
   if (!plan || !plan.length) { showToast('اعمل فحص الأول'); return; }
 
@@ -4855,7 +4883,7 @@ async function executePermissionsMigration() {
   let written = 0, failed = 0;
   for (const a of plan) {
     try {
-      const permissions = _defaultPermissionsFor(a.role === 'manager' ? 'manager' : 'cashier');
+      const permissions = _defaultPermissionsFor(a.role);
       await firebase.firestore().collection('roles').doc(a.uid).set({ permissions }, { merge: true });
       written++;
     } catch (e) {
@@ -5089,11 +5117,19 @@ const HOME_FOLDERS = {
   ]},
   system: { name: '⚙️ النظام والإدارة', icons: [
     { page:'audit',    label:'سجل التغييرات', grad:'#94a3b8,#334155', svg:'<rect x="10" y="6" width="28" height="36" rx="3" stroke="white" stroke-width="2.5"/><path d="M16 16h16M16 22h16M16 28h8" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M30 32l2 2 4-4" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' },
-    { page:'settings', label:'الإعدادات',     grad:'#a1a1aa,#3f3f46', svg:'<circle cx="24" cy="24" r="5" stroke="white" stroke-width="2.5"/><path d="M24 8v4M24 36v4M8 24h4M36 24h4M13.4 13.4l2.8 2.8M31.8 31.8l2.8 2.8M13.4 34.6l2.8-2.8M31.8 16.2l2.8-2.8" stroke="white" stroke-width="2.5" stroke-linecap="round"/>' },
+    { page:'userperms', label:'المستخدمين والصلاحيات', grad:'#f59e0b,#b45309', svg:'<circle cx="18" cy="16" r="6" stroke="white" stroke-width="2.5"/><circle cx="32" cy="16" r="6" stroke="white" stroke-width="2.5"/><path d="M6 40c0-6.627 5.373-12 12-12s12 5.373 12 12M22 40c0-6.627 5.373-12 12-12" stroke="white" stroke-width="2.5" stroke-linecap="round"/>', ownerOnly:true },
+    { page:'settings', label:'الإعدادات',     grad:'#a1a1aa,#3f3f46', svg:'<circle cx="24" cy="24" r="5" stroke="white" stroke-width="2.5"/><path d="M24 8v4M24 36v4M8 24h4M36 24h4M13.4 13.4l2.8 2.8M31.8 31.8l2.8 2.8M13.4 34.6l2.8-2.8M31.8 16.2l2.8-2.8" stroke="white" stroke-width="2.5" stroke-linecap="round"/>', ownerOnly:true },
     { page:'helpdesk', label:'الدعم الفني',   grad:'#fb923c,#c2410c', svg:'<path d="M8 34V16a6 6 0 016-6h20a6 6 0 016 6v10a6 6 0 01-6 6H20l-8 8v-6z" stroke="white" stroke-width="2.5" stroke-linejoin="round"/><circle cx="18" cy="21" r="2" fill="white"/><circle cx="24" cy="21" r="2" fill="white"/><circle cx="30" cy="21" r="2" fill="white"/>' },
-    { page:'migration', label:'استيراد بيانات', grad:'#0ea5a5,#0b7a7a', svg:'<path d="M24 6v24M24 30l-9-9M24 30l9-9" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="8" y="36" width="32" height="6" rx="2" fill="white"/>' },
+    { page:'migration', label:'استيراد بيانات', grad:'#0ea5a5,#0b7a7a', svg:'<path d="M24 6v24M24 30l-9-9M24 30l9-9" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="8" y="36" width="32" height="6" rx="2" fill="white"/>', ownerOnly:true },
   ]},
 };
+// Icons flagged ownerOnly are hidden from the home screen entirely for an
+// 'admin'-labeled account that isn't the real owner (isRealOwner,
+// 00-core.js) — showing an icon that then bounces with "owner only" is
+// worse than just not showing it.
+function _visibleFolderIcons(icons) {
+  return isRealOwner ? icons : icons.filter(i => !i.ownerOnly);
+}
 
 // Stacked-card preview inside each folder tile — the first item's icon
 // shown full-size and clear, with up to 2 plain color slivers peeking out
@@ -5102,7 +5138,8 @@ function renderFolderPreviews() {
   Object.keys(HOME_FOLDERS).forEach(function(id) {
     const el = document.getElementById('folderPreview_' + id);
     if (!el) return;
-    const icons = HOME_FOLDERS[id].icons;
+    const icons = _visibleFolderIcons(HOME_FOLDERS[id].icons);
+    if (!icons.length) { el.innerHTML = ''; return; }
     let html = '';
     if (icons[2]) html += '<div class="folder-peek p3" style="background:linear-gradient(145deg,' + icons[2].grad + ');"></div>';
     if (icons[1]) html += '<div class="folder-peek p2" style="background:linear-gradient(145deg,' + icons[1].grad + ');"></div>';
@@ -5115,7 +5152,7 @@ function renderFolderPreviews() {
 function openHomeFolder(id) {
   const folder = HOME_FOLDERS[id]; if (!folder) return;
   document.getElementById('homeFolderTitle').textContent = folder.name;
-  document.getElementById('homeFolderGrid').innerHTML = folder.icons.map(function(i) {
+  document.getElementById('homeFolderGrid').innerHTML = _visibleFolderIcons(folder.icons).map(function(i) {
     return '<div class="app-icon" onclick="closeHomeFolder();showPage(\'' + i.page + '\')">'
       + '<div class="app-tile" style="width:58px;height:58px;background:linear-gradient(145deg,' + i.grad + ');">'
       + '<svg viewBox="0 0 48 48" fill="none" style="width:30px;height:30px;">' + i.svg + '</svg></div>'
@@ -5622,21 +5659,32 @@ function _showPageImpl(page) {
     showToast('🚫 مالكش صلاحية الدخول للصفحة دي');
     return;
   }
-  ['home','dashboard','inventory','sales','suspended','reports','customized','warehouse','settings','customers','promos','transfers','purchases','hr','expenses','audit','accounting','manufacturing','helpdesk','migration','analytics'].forEach(p => {
+  // Settings/migration/userperms are owner-only, full stop — not part of
+  // the customizable permissions matrix at all, and not delegable to an
+  // 'admin'-labeled account (see isRealOwner in 00-core.js). Settings holds
+  // the legacy credential doc + destructive reset tools; userperms is what
+  // GRANTS permissions, so letting a delegate in would let them escalate
+  // their own access.
+  if (['settings', 'migration', 'userperms'].includes(page) && !isRealOwner) {
+    showToast('🚫 الصفحة دي للمالك فقط');
+    return;
+  }
+  ['home','dashboard','inventory','sales','suspended','reports','customized','warehouse','settings','customers','promos','transfers','purchases','hr','expenses','audit','accounting','manufacturing','helpdesk','migration','analytics','userperms'].forEach(p => {
     document.getElementById('page-'+p)?.classList.add('hidden');
   });
   document.getElementById('page-'+page).classList.remove('hidden');
   var content = document.querySelector('.main-content');
   if (content) content.classList.toggle('home-mode', page === 'home');
   if (page === 'home') { updateHomeClock(); updateSuspendedBadge(); }
-  const titles ={ dashboard:'الرئيسية', inventory:'إدارة المخزون', sales:'سجل المبيعات', suspended:'فواتير معلقة', reports:'التقارير', customized:'تقارير مخصصة', home:'الرئيسية', warehouse:'المخزن الرئيسي', settings:'الإعدادات', customers:'العملاء', purchases:'المشتريات', hr:'الموارد البشرية', expenses:'المصاريف', audit:'سجل التغييرات', accounting:'المحاسبة الرسمية', helpdesk:'الدعم الفني', migration:'استيراد بيانات قديمة', analytics:'التحليلات الاستراتيجية' };
+  const titles ={ dashboard:'الرئيسية', inventory:'إدارة المخزون', sales:'سجل المبيعات', suspended:'فواتير معلقة', reports:'التقارير', customized:'تقارير مخصصة', home:'الرئيسية', warehouse:'المخزن الرئيسي', settings:'الإعدادات', customers:'العملاء', purchases:'المشتريات', hr:'الموارد البشرية', expenses:'المصاريف', audit:'سجل التغييرات', accounting:'المحاسبة الرسمية', helpdesk:'الدعم الفني', migration:'استيراد بيانات قديمة', analytics:'التحليلات الاستراتيجية', userperms:'المستخدمين والصلاحيات' };
   document.getElementById('pageTitle').textContent = titles[page] || '';
   if (page === 'dashboard')  buildDashboard();
   if (page === 'inventory')  renderInventory();
   if (page === 'sales')      { initSalesFilter(); renderSales(); }
   if (page === 'reports')    { buildSalesReport(); setTimeout(()=>showVLTab('catreport'),100); }
   if (page === 'suspended')  renderSuspendedPage();
-  if (page === 'settings')   { renderSellersSettings(); renderLastBackupInfo(); initGoogleDriveUI(); document.getElementById('sVipThreshold').value = _settingsCache.vipThreshold || 1000; populateBranchNameInputs(); renderUserAccountsSettings(); renderLegacyLoginCleanup(); }
+  if (page === 'settings')   { renderLastBackupInfo(); initGoogleDriveUI(); document.getElementById('sVipThreshold').value = _settingsCache.vipThreshold || 1000; populateBranchNameInputs(); }
+  if (page === 'userperms')  { renderUserAccountsSettings(); renderLegacyLoginCleanup(); }
   if (page === 'customers')  renderCustomers();
   if (page === 'promos')     renderPromosPage();
   if (page === 'transfers')  renderTransfersPage();
@@ -6943,7 +6991,17 @@ async function renderUserAccountsSettings() {
 
 function toggleUserAccountFields() {
   const isAdmin = document.getElementById('uaType').value === 'admin';
-  document.getElementById('uaBranchFields').style.display = isAdmin ? 'none' : 'flex';
+  document.getElementById('uaBranchOnlyFields').style.display = isAdmin ? 'none' : 'flex';
+}
+// Only called from uaType's onchange (a real user action) — resets the
+// matrix to that type's starting template. openUserAccountModal() sets the
+// matrix itself (from the account's saved permissions, or a fresh template
+// for a new user) and must NOT go through this, or editing an existing
+// user would silently wipe their real permissions back to the default.
+function onUserTypeChanged() {
+  toggleUserAccountFields();
+  const isAdmin = document.getElementById('uaType').value === 'admin';
+  applyPermissionTemplate(isAdmin ? 'admin' : document.getElementById('uaRole').value);
 }
 
 // ── Permissions matrix (view/write per tab) ─────────────────────────
@@ -6981,7 +7039,7 @@ function readPermsFromMatrix() {
   return perms;
 }
 function applyPermissionTemplate(role) {
-  renderPermsMatrix(_defaultPermissionsFor(role === 'manager' ? 'manager' : 'cashier'));
+  renderPermsMatrix(_defaultPermissionsFor(role));
 }
 
 function openUserAccountModal(uid) {
@@ -7005,10 +7063,9 @@ function openUserAccountModal(uid) {
     document.getElementById('uaType').value = acc.role === 'admin' ? 'admin' : 'branch';
     if (acc.role !== 'admin') {
       branchSel.value = acc.branchId || 'b1';
-      const roleForTemplate = acc.role === 'manager' ? 'manager' : 'cashier';
-      document.getElementById('uaRole').value = roleForTemplate;
-      renderPermsMatrix(acc.permissions || _defaultPermissionsFor(roleForTemplate));
+      document.getElementById('uaRole').value = acc.role === 'manager' ? 'manager' : 'cashier';
     }
+    renderPermsMatrix(acc.permissions || _defaultPermissionsFor(acc.role));
   } else {
     document.getElementById('uaModalTitle').textContent = '➕ إضافة مستخدم';
     userInp.value = ''; userInp.disabled = false;
@@ -7038,7 +7095,9 @@ async function saveUserAccount() {
 
   const roleValue = type === 'admin' ? 'admin' : (role === 'manager' ? 'manager' : 'cashier');
   const roleLabel = r => r === 'admin' ? 'أدمن' : (r === 'manager' ? 'مدير فرع' : 'كاشير');
-  const permissions = roleValue === 'admin' ? null : readPermsFromMatrix();
+  // 'admin' is just a label now — everyone's real access comes from this
+  // matrix, the owner alone (isOwner()/isRealOwner) is the true bypass.
+  const permissions = readPermsFromMatrix();
 
   if (uid) {
     // Edit = update the roles doc only (identity/password are Firebase Auth's)
@@ -7384,7 +7443,7 @@ function emailToUsername(e) {
 async function resolveRoleAndEnter(fbUser) {
   let rec = null;
   if ((fbUser.email || '').toLowerCase() === OWNER_EMAIL) {
-    rec = { role: 'admin', username: emailToUsername(fbUser.email), branchId: null };
+    rec = { role: 'admin', username: emailToUsername(fbUser.email), branchId: null, email: fbUser.email };
   } else {
     const snap = await firebase.firestore().collection('roles').doc(fbUser.uid).get();
     if (snap.exists) rec = snap.data();
@@ -7401,6 +7460,7 @@ async function resolveRoleAndEnter(fbUser) {
 
 function _enterSessionByRole(rec) {
   currentUsername = rec.username || null;
+  isRealOwner = (rec.email || '').toLowerCase() === OWNER_EMAIL;
   if (rec.role === 'admin') {
     _enterAdminSession(`تسجيل دخول: ${rec.username}`);
   } else {
@@ -8625,6 +8685,7 @@ function populateHRMonthFilter() {
 }
 
 function renderHRPage() {
+  renderSellersSettings();
   populateHRMonthFilter();
   const selMonth = document.getElementById('hrMonthFilter')?.value || new Date().toISOString().slice(0,7);
   const hrRec = getHR().find(h => h.month === selMonth) || { targets: {} };

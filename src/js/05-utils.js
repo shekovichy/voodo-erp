@@ -281,6 +281,7 @@ async function _legacyLogin(user, pass) {
   if (user === 'admin' && users.admin && await checkPass(pass, users.admin)) {
     await upgradePassIfNeeded(pass, users.admin, 'admin');
     currentUsername = user;
+    isRealOwner = true; // the single hardcoded local admin fallback predates multi-admin accounts and has no cloud access either way
     _enterAdminSession('تسجيل دخول (محلي): admin');
     return true;
   }

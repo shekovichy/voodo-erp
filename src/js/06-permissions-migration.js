@@ -19,7 +19,7 @@
 let _permsMigrationPlan = null;
 
 async function previewPermissionsMigration() {
-  if (currentUser !== 'admin') { showToast('الترحيل للأدمن فقط'); return; }
+  if (!isRealOwner) { showToast('الترحيل للمالك فقط'); return; }
   if (!_fbReady) { showToast('محتاج اتصال بالإنترنت لعمل الترحيل'); return; }
 
   showToast('⏳ جاري فحص المستخدمين...');
@@ -30,8 +30,12 @@ async function previewPermissionsMigration() {
   const affected = [];
   snap.forEach(doc => {
     const rec = doc.data();
-    if (rec.role === 'admin') return; // admin never has/needs a permissions map
-    if (rec.permissions) return;      // already has one — never touched
+    // The real owner never has a roles/{uid} doc at all (see
+    // resolveRoleAndEnter — matched by email, not this collection), so
+    // every doc here is by definition a non-owner account, 'admin'-labeled
+    // ones included since 2026-07-20 (admin became just a label, not an
+    // automatic bypass — see _defaultPermissionsFor in 00-core.js).
+    if (rec.permissions) return; // already has one — never touched
     affected.push({ uid: doc.id, username: rec.username, role: rec.role });
   });
 
@@ -40,8 +44,9 @@ async function previewPermissionsMigration() {
 }
 
 function _renderPermsMigrationPreview(affected) {
+  const roleLabel = r => r === 'admin' ? 'أدمن' : (r === 'manager' ? 'مدير فرع' : 'كاشير');
   const rows = affected.map(a =>
-    `<div style="font-size:12px;">• ${escHtml(a.username)} — ${a.role === 'manager' ? 'مدير فرع' : 'كاشير'}</div>`).join('');
+    `<div style="font-size:12px;">• ${escHtml(a.username)} — ${roleLabel(a.role)}</div>`).join('');
 
   const body = !affected.length
     ? '<div style="padding:16px;text-align:center;color:var(--text-muted);">كل المستخدمين عندهم صلاحيات محددة بالفعل — مفيش حاجة للترحيل.</div>'
@@ -53,7 +58,7 @@ function _renderPermsMigrationPreview(affected) {
           ${rows}
         </div>
         <div style="font-size:12px;color:var(--text-muted);background:var(--bg-secondary);border-radius:8px;padding:10px;">
-          ⚠️ ده بس بيدّي كل واحد نفس الصلاحيات اللي كان شايفها فعلياً قبل كده (تقارير + دعم فني، ومدير الفرع كمان الداشبورد) — مفيش حد هياخد صلاحية جديدة تلقائي. بعد كده تقدر تعدّل صلاحيات أي حد من نفس شاشة "إدارة المستخدمين".
+          ⚠️ ده بيدّي كل واحد صلاحية كاملة على كل التابات مبدئياً (نفس الوصول اللي كان متاح فعلياً قبل نظام الصلاحيات ده) — تقدر بعد كده تعدّل/تقلّل صلاحيات أي حد من "المستخدمين والصلاحيات".
         </div>
       </div>`;
 
@@ -81,7 +86,7 @@ function _renderPermsMigrationPreview(affected) {
 }
 
 async function executePermissionsMigration() {
-  if (currentUser !== 'admin') { showToast('الترحيل للأدمن فقط'); return; }
+  if (!isRealOwner) { showToast('الترحيل للمالك فقط'); return; }
   const plan = _permsMigrationPlan;
   if (!plan || !plan.length) { showToast('اعمل فحص الأول'); return; }
 
@@ -89,7 +94,7 @@ async function executePermissionsMigration() {
   let written = 0, failed = 0;
   for (const a of plan) {
     try {
-      const permissions = _defaultPermissionsFor(a.role === 'manager' ? 'manager' : 'cashier');
+      const permissions = _defaultPermissionsFor(a.role);
       await firebase.firestore().collection('roles').doc(a.uid).set({ permissions }, { merge: true });
       written++;
     } catch (e) {
