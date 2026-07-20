@@ -58,6 +58,7 @@ function populateHRMonthFilter() {
 }
 
 function renderHRPage() {
+  renderSellersSettings();
   populateHRMonthFilter();
   const selMonth = document.getElementById('hrMonthFilter')?.value || new Date().toISOString().slice(0,7);
   const hrRec = getHR().find(h => h.month === selMonth) || { targets: {} };

@@ -47,21 +47,73 @@ service cloud.firestore {
       return signedIn() && request.auth.token.email == 'shekovichy@gmail.com';
     }
 
+    // ── TAB PERMISSIONS (2026-07-19) ────────────────────────────────
+    // Per-user view/write access per tab — see TAB_PERMISSIONS in
+    // 00-core.js for the full picture (labels, which tabs are enforced
+    // here vs UI-only, and why). Deliberately narrow: only mapped for
+    // pos_data docs confirmed to have ZERO overlap with core POS/checkout/
+    // cash-shift operations (customers, promos, inventory, sales,
+    // suspended, and the pos_data/sessions doc are all read or written as
+    // a routine part of completing a sale or opening/closing a drawer —
+    // gating those here would lock a restricted cashier out of their own
+    // job, not just a management page, since a Firestore rule can only
+    // gate a whole document, not a UI page. Those stay on the OLD
+    // unconditional "any role with a roles/ doc" behavior below, exactly
+    // as before this feature existed).
+    //
+    // _tabOk takes an ALREADY-FETCHED roleData map, never calls get()/
+    // exists() itself — wrapping get()/exists() inside a function (even
+    // parameterized) broke the Rules Playground simulator (see the note at
+    // the top of this file), so every get() stays inlined at the allow-line
+    // call site and only the resulting *data* is passed in here.
+    // No role=='admin' bypass here on purpose — 'admin' is just a label
+    // since 2026-07-20, the real owner is the only unconditional bypass
+    // (handled via isOwner() at every call site, not in here).
+    function _tabOk(roleData, tab, action) {
+      return !('permissions' in roleData)
+        || (tab in roleData.permissions && roleData.permissions[tab][action] == true);
+    }
+    // pos_data/{doc} → the leaf permission key that doc's access is gated
+    // by (2026-07-20: hr/purchases/expenses split into their real
+    // sub-items — each already lives in its own document, so each gets
+    // its own independent grant instead of one collapsed tab-wide key;
+    // see DEPARTMENTS in 00-core.js for the full tree these keys belong
+    // to). Docs not listed here (settings, accounts, customers,
+    // promotions, sessions, suspended, price_approvals, ...) are untouched
+    // by this system — see the long comment above. 'transfers' isn't in
+    // this map on purpose: it is shared by BOTH the transfers and
+    // warehouse tabs, handled as a special case at the call site instead
+    // of a single-tab lookup.
+    function tabForDoc(doc) {
+      return {
+        'pivot_favorites':   'customized',
+        'suppliers':         'purchases_suppliers',
+        'purchases':         'purchases_orders',
+        'supplier_payments': 'purchases_payments',
+        'hr':                'hr_targets',
+        'attendance':        'hr_attendance',
+        'payroll':           'hr_payroll',
+        'leave_requests':    'hr_leaves',
+        'expenses':          'expenses_main',
+        'expense_requests':  'expenses_requests',
+        'audit':             'audit',
+        'budgets':           'accounting',
+        'helpdesk':          'helpdesk'
+      }[doc];
+    }
+
     // ── ROLES — the permission source of truth ────────────────────
-    // Users may read their own role (the app resolves it at login);
-    // only admins may list or modify roles.
+    // Users may read their own role (the app resolves it at login); ONLY
+    // the real owner may list/create/update/delete roles or read someone
+    // else's. 'admin' is just a label since 2026-07-20 (see
+    // _defaultPermissionsFor in 00-core.js) — an admin-labeled account must
+    // NOT be able to touch this collection, or it could edit its own (or
+    // anyone else's) permissions map and grant itself whatever it wants,
+    // defeating the entire point of the owner choosing each account's
+    // access individually.
     match /roles/{uid} {
-      allow get: if signedIn() && (
-        request.auth.uid == uid ||
-        isOwner() ||
-        (exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin')
-      );
-      allow list, create, update, delete: if isOwner() || (
-        signedIn() &&
-        exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin'
-      );
+      allow get: if signedIn() && (request.auth.uid == uid || isOwner());
+      allow list, create, update, delete: if isOwner();
     }
 
     // ── POS DATA ──────────────────────────────────────────────────
@@ -76,16 +128,25 @@ service cloud.firestore {
     match /pos_data/{doc} {
       allow read: if doc != 'auth' && !doc.matches('inv_.*') && (
         isOwner() ||
-        (signedIn() && exists(/databases/$(database)/documents/roles/$(request.auth.uid)))
+        (signedIn() && exists(/databases/$(database)/documents/roles/$(request.auth.uid)) && (
+          doc == 'transfers'
+            ? (_tabOk(get(/databases/$(database)/documents/roles/$(request.auth.uid)).data, 'transfers', 'view') ||
+               _tabOk(get(/databases/$(database)/documents/roles/$(request.auth.uid)).data, 'warehouse', 'view'))
+            : (tabForDoc(doc) == null ||
+               _tabOk(get(/databases/$(database)/documents/roles/$(request.auth.uid)).data, tabForDoc(doc), 'view'))
+        ))
       );
       allow write: if doc != 'auth' && !doc.matches('inv_.*') && (
         isOwner() ||
         (signedIn() &&
          exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin') ||
-        (signedIn() &&
-         exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
-         !(doc in ['settings', 'accounts', 'budgets']))
+         !(doc in ['settings', 'accounts', 'budgets']) && (
+           doc == 'transfers'
+             ? (_tabOk(get(/databases/$(database)/documents/roles/$(request.auth.uid)).data, 'transfers', 'write') ||
+                _tabOk(get(/databases/$(database)/documents/roles/$(request.auth.uid)).data, 'warehouse', 'write'))
+             : (tabForDoc(doc) == null ||
+                _tabOk(get(/databases/$(database)/documents/roles/$(request.auth.uid)).data, tabForDoc(doc), 'write'))
+         ))
       );
     }
 
@@ -184,7 +245,16 @@ service cloud.firestore {
     // created" when each entry is its own document. That's the actual
     // append-only guarantee.
     match /pos_audit/{entryId} {
-      allow read, create: if isOwner() || (
+      // Read is gated by the 'audit' tab permission (see TAB PERMISSIONS
+      // above) — but create is NOT: every page in the app logs its own
+      // actions here as a side effect (see addAuditLog in 88-abc-expenses.js),
+      // so a cashier who can't view the audit log page must still be able to
+      // trigger a log entry from whatever page they're legitimately using.
+      allow read: if isOwner() || (
+        signedIn() && exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
+        _tabOk(get(/databases/$(database)/documents/roles/$(request.auth.uid)).data, 'audit', 'view')
+      );
+      allow create: if isOwner() || (
         signedIn() && exists(/databases/$(database)/documents/roles/$(request.auth.uid))
       );
       allow update, delete: if false;

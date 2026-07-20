@@ -40,9 +40,169 @@ async function renderUserAccountsSettings() {
   }).join('');
 }
 
+// ── Segmented pill selectors (نوع المستخدم / الصلاحية الأساسية) ──────
+// Same visual pattern already used for the HR/Accounting/Purchases page
+// tab switchers (a pill row inside a var(--bg-secondary) track) — reused
+// here instead of a plain <select>, since each is only 2 options and this
+// screen is security-relevant enough to read clearly at a glance instead
+// of hiding the choice behind a dropdown.
+function _setActivePill(prefix, options, value) {
+  options.forEach(v => {
+    const btn = document.getElementById(prefix + '_' + v);
+    if (!btn) return;
+    const active = v === value;
+    btn.style.background = active ? 'white' : '';
+    btn.style.fontWeight = active ? '700' : '400';
+    btn.style.boxShadow = active ? '0 1px 4px rgba(0,0,0,.1)' : '';
+  });
+}
+function setUserTypeValue(v) {
+  document.getElementById('uaType').value = v;
+  _setActivePill('uaTypeBtn', ['branch', 'admin'], v);
+}
+function setUserRoleValue(v) {
+  document.getElementById('uaRole').value = v;
+  _setActivePill('uaRoleBtn', ['cashier', 'manager'], v);
+}
+function selectUserType(v) { setUserTypeValue(v); onUserTypeChanged(); }
+function selectUserRole(v) { setUserRoleValue(v); onUserTypeChanged(); }
+
+// Cashier/manager permissions are FIXED (_FIXED_ROLE_GRANTS, 00-core.js) —
+// the owner picked them directly, so the tree is hidden entirely for
+// those two; only 'admin' is actually customizable per-account (see the
+// long note on _defaultPermissionsFor). 2026-07-20, directly requested:
+// "اللعب كله في يوزرات الأدمن".
 function toggleUserAccountFields() {
   const isAdmin = document.getElementById('uaType').value === 'admin';
-  document.getElementById('uaBranchFields').style.display = isAdmin ? 'none' : 'flex';
+  document.getElementById('uaBranchOnlyFields').style.display = isAdmin ? 'none' : 'flex';
+  document.getElementById('uaPermsSection').classList.toggle('hidden', !isAdmin);
+  document.getElementById('uaFixedRoleNote').classList.toggle('hidden', isAdmin);
+}
+// Only called from uaType's/uaRole's onchange (a real user action) —
+// resets the matrix to that type's template. openUserAccountModal() sets
+// the matrix itself (from the account's saved permissions, or a fresh
+// template for a new user) and must NOT go through this, or editing an
+// existing user would silently wipe their real permissions back to the
+// default.
+function onUserTypeChanged() {
+  toggleUserAccountFields();
+  const isAdmin = document.getElementById('uaType').value === 'admin';
+  applyPermissionTemplate(isAdmin ? 'admin' : document.getElementById('uaRole').value);
+}
+
+// ── Permissions tree (Department → Tab → optional sub-item) ─────────
+// Only rows with a data-key hold real permission data (view/write
+// checkboxes read/written by readPermsFromMatrix()/renderPermsMatrix()).
+// Department rows and tab-with-children "parent" rows are pure UI
+// conveniences — checking one cascades to every data-key row under it;
+// their own checked/indeterminate state is always DERIVED from their
+// children afterward (_refreshAllParentStates), never stored itself.
+function renderPermsMatrix(perms) {
+  const body = document.getElementById('uaPermsBody');
+  if (!body) return;
+  perms = perms || {};
+  const rows = [];
+  DEPARTMENTS.forEach(dept => {
+    rows.push(`<tr class="perm-dept-row" data-dept="${dept.key}" style="background:var(--bg-secondary);">
+      <td style="font-weight:700;">${escHtml(dept.label)}</td>
+      <td style="text-align:center;"><input type="checkbox" class="perm-dept-view" onchange="_onDeptToggle('${dept.key}','view',this.checked)" /></td>
+      <td style="text-align:center;"><input type="checkbox" class="perm-dept-write" onchange="_onDeptToggle('${dept.key}','write',this.checked)" /></td>
+    </tr>`);
+    dept.tabs.forEach(tab => {
+      const warn = tab.enforced ? '' : ' ⚠️';
+      const title = tab.enforced ? '' : ' title="التاب ده مالوش تخزين سحابي مخصص لسه — الإخفاء هنا شكلي بس، مش ممنوع فعلياً من قاعدة البيانات"';
+      if (tab.children) {
+        rows.push(`<tr class="perm-tab-row" data-tab="${tab.key}"${title}>
+          <td style="padding-right:22px;font-weight:600;">${escHtml(tab.label)}${warn}</td>
+          <td style="text-align:center;"><input type="checkbox" class="perm-tab-view" onchange="_onTabToggle('${tab.key}','view',this.checked)" /></td>
+          <td style="text-align:center;"><input type="checkbox" class="perm-tab-write" onchange="_onTabToggle('${tab.key}','write',this.checked)" /></td>
+        </tr>`);
+        tab.children.forEach(child => {
+          const p = perms[child.key] || { view: false, write: false };
+          rows.push(`<tr data-dept="${dept.key}" data-tab="${tab.key}" data-key="${child.key}">
+            <td style="padding-right:40px;color:var(--text-muted);">${escHtml(child.label)}</td>
+            <td style="text-align:center;"><input type="checkbox" class="ua-perm-view" ${p.view ? 'checked' : ''} onchange="_onLeafViewChange(this)" /></td>
+            <td style="text-align:center;"><input type="checkbox" class="ua-perm-write" ${p.write ? 'checked' : ''} onchange="_onLeafWriteChange(this)" /></td>
+          </tr>`);
+        });
+      } else {
+        const p = perms[tab.key] || { view: false, write: false };
+        rows.push(`<tr data-dept="${dept.key}" data-key="${tab.key}"${title}>
+          <td style="padding-right:22px;">${escHtml(tab.label)}${warn}</td>
+          <td style="text-align:center;"><input type="checkbox" class="ua-perm-view" ${p.view ? 'checked' : ''} onchange="_onLeafViewChange(this)" /></td>
+          <td style="text-align:center;"><input type="checkbox" class="ua-perm-write" ${p.write ? 'checked' : ''} onchange="_onLeafWriteChange(this)" /></td>
+        </tr>`);
+      }
+    });
+  });
+  body.innerHTML = rows.join('');
+  _refreshAllParentStates();
+}
+// Sets every data-key row's checkboxes under `selector` to `checked` for
+// `kind` (view/write) — write implies view (can't sensibly edit a tab you
+// can't see); unchecking view drops write too, same rule the single-row
+// version always enforced, just applied to a whole batch at once.
+function _setLeafCheckboxes(selector, kind, checked) {
+  document.querySelectorAll(selector).forEach(row => {
+    const viewCb = row.querySelector('.ua-perm-view');
+    const writeCb = row.querySelector('.ua-perm-write');
+    if (kind === 'view') { viewCb.checked = checked; if (!checked) writeCb.checked = false; }
+    else { writeCb.checked = checked; if (checked) viewCb.checked = true; }
+  });
+}
+function _onDeptToggle(deptKey, kind, checked) {
+  _setLeafCheckboxes(`#uaPermsBody tr[data-dept="${deptKey}"][data-key]`, kind, checked);
+  _refreshAllParentStates();
+}
+function _onTabToggle(tabKey, kind, checked) {
+  _setLeafCheckboxes(`#uaPermsBody tr[data-tab="${tabKey}"][data-key]`, kind, checked);
+  _refreshAllParentStates();
+}
+function _onLeafViewChange(cb) {
+  if (!cb.checked) { const row = cb.closest('tr'); row.querySelector('.ua-perm-write').checked = false; }
+  _refreshAllParentStates();
+}
+function _onLeafWriteChange(cb) {
+  if (cb.checked) { const row = cb.closest('tr'); row.querySelector('.ua-perm-view').checked = true; }
+  _refreshAllParentStates();
+}
+// Derives every department/tab-parent checkbox's checked/indeterminate
+// state from its actual data-key children — these rows never hold their
+// own value, so this always runs after any change anywhere in the tree.
+function _refreshAllParentStates() {
+  document.querySelectorAll('#uaPermsBody tr.perm-tab-row').forEach(row => {
+    const tabKey = row.dataset.tab;
+    ['view', 'write'].forEach(kind => {
+      const kids = [...document.querySelectorAll(`#uaPermsBody tr[data-tab="${tabKey}"][data-key] .ua-perm-${kind}`)];
+      const checkedCount = kids.filter(c => c.checked).length;
+      const cb = row.querySelector('.perm-tab-' + kind);
+      cb.checked = kids.length > 0 && checkedCount === kids.length;
+      cb.indeterminate = checkedCount > 0 && checkedCount < kids.length;
+    });
+  });
+  document.querySelectorAll('#uaPermsBody tr.perm-dept-row').forEach(row => {
+    const deptKey = row.dataset.dept;
+    ['view', 'write'].forEach(kind => {
+      const leaves = [...document.querySelectorAll(`#uaPermsBody tr[data-dept="${deptKey}"][data-key] .ua-perm-${kind}`)];
+      const checkedCount = leaves.filter(c => c.checked).length;
+      const cb = row.querySelector('.perm-dept-' + kind);
+      cb.checked = leaves.length > 0 && checkedCount === leaves.length;
+      cb.indeterminate = checkedCount > 0 && checkedCount < leaves.length;
+    });
+  });
+}
+function readPermsFromMatrix() {
+  const perms = {};
+  document.querySelectorAll('#uaPermsBody tr[data-key]').forEach(row => {
+    perms[row.dataset.key] = {
+      view: row.querySelector('.ua-perm-view').checked,
+      write: row.querySelector('.ua-perm-write').checked
+    };
+  });
+  return perms;
+}
+function applyPermissionTemplate(role) {
+  renderPermsMatrix(_defaultPermissionsFor(role));
 }
 
 function openUserAccountModal(uid) {
@@ -63,25 +223,29 @@ function openUserAccountModal(uid) {
     userInp.value = acc.username; userInp.disabled = true;
     passInp.value = ''; passInp.disabled = true;
     passInp.placeholder = 'المستخدم يغيّر كلمة سره بنفسه من الإعدادات';
-    document.getElementById('uaType').value = acc.role === 'admin' ? 'admin' : 'branch';
+    setUserTypeValue(acc.role === 'admin' ? 'admin' : 'branch');
     if (acc.role !== 'admin') {
       branchSel.value = acc.branchId || 'b1';
-      document.getElementById('uaRole').value = acc.role === 'manager' ? 'manager' : 'cashier';
+      setUserRoleValue(acc.role === 'manager' ? 'manager' : 'cashier');
     }
+    renderPermsMatrix(acc.permissions || _defaultPermissionsFor(acc.role));
   } else {
     document.getElementById('uaModalTitle').textContent = '➕ إضافة مستخدم';
     userInp.value = ''; userInp.disabled = false;
     passInp.value = ''; passInp.disabled = false;
     passInp.placeholder = 'كلمة المرور (6 أحرف على الأقل)';
-    document.getElementById('uaType').value = 'branch';
-    document.getElementById('uaRole').value = 'cashier';
+    setUserTypeValue('branch');
+    setUserRoleValue('cashier');
+    renderPermsMatrix(_defaultPermissionsFor('cashier'));
   }
   toggleUserAccountFields();
-  document.getElementById('userAccountModal').classList.remove('hidden');
+  const form = document.getElementById('uaInlineForm');
+  form.classList.remove('hidden');
+  form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function closeUserAccountModal() {
-  document.getElementById('userAccountModal').classList.add('hidden');
+  document.getElementById('uaInlineForm').classList.add('hidden');
 }
 
 async function saveUserAccount() {
@@ -96,6 +260,9 @@ async function saveUserAccount() {
 
   const roleValue = type === 'admin' ? 'admin' : (role === 'manager' ? 'manager' : 'cashier');
   const roleLabel = r => r === 'admin' ? 'أدمن' : (r === 'manager' ? 'مدير فرع' : 'كاشير');
+  // 'admin' is just a label now — everyone's real access comes from this
+  // matrix, the owner alone (isOwner()/isRealOwner) is the true bypass.
+  const permissions = readPermsFromMatrix();
 
   if (uid) {
     // Edit = update the roles doc only (identity/password are Firebase Auth's)
@@ -105,6 +272,7 @@ async function saveUserAccount() {
       await firebase.firestore().collection('roles').doc(uid).set({
         role: roleValue,
         branchId: roleValue === 'admin' ? null : branchId,
+        permissions,
       }, { merge: true });
     } catch (e) { showErr('تعذّر الحفظ: ' + e.message); return; }
     const changes = buildAuditDiff(
@@ -119,7 +287,7 @@ async function saveUserAccount() {
     if (!passRaw || passRaw.length < 6) { showErr('كلمة المرور لازم تكون 6 أحرف على الأقل (شرط Firebase)'); return; }
     if (_rolesListCache.find(a => a.username === username)) { showErr('اسم المستخدم ده مستخدم بالفعل'); return; }
     try {
-      await createManagedUser(username, passRaw, roleValue, roleValue === 'admin' ? null : branchId);
+      await createManagedUser(username, passRaw, roleValue, roleValue === 'admin' ? null : branchId, permissions);
     } catch (e) {
       if (e && e.code === 'auth/email-already-in-use') showErr('اسم المستخدم ده عليه حساب بالفعل');
       else if (e && e.code === 'auth/weak-password') showErr('كلمة المرور ضعيفة — 6 أحرف على الأقل');
