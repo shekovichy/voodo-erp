@@ -204,9 +204,17 @@ function initFirebase() {
             _invCacheByBranch[b] = snap.data().items || [];
           } else {
             // Migration: first load — try old single-branch 'inv' for b1, then localStorage
-            const local = b === 'b1'
+            // Filtered against the demo-product fingerprint (_DEMO_CODES,
+            // 02-demo-cleanup.js) before it ever touches the cache or gets
+            // written back — a device whose local cache still has old demo
+            // stock (leftover from before demo mode was removed) would
+            // otherwise re-seed it into Firestore every time this doc looks
+            // empty (a fresh device, or right after any reset), which is
+            // exactly how demo inventory kept reappearing after cleanup.
+            const local = (b === 'b1'
               ? (DB.g('pos_inv_b1', null) || DB.g('inv', []))
-              : DB.g(`pos_inv_${b}`, []);
+              : DB.g(`pos_inv_${b}`, [])
+            ).filter(p => !_DEMO_CODES.has(p.code));
             _invCacheByBranch[b] = local;
             if (local.length) {
               _db.collection('pos_data').doc('inventory').collection('branches').doc(b)
@@ -437,7 +445,11 @@ function initFirebase() {
     // Customers listener
     _db.collection('pos_data').doc('customers')
       .onSnapshot(snap => {
-        _customersCache = snap.exists ? (snap.data().items || []) : DB.g('pos_customers', []);
+        // Filtered against the demo-customer fingerprint (_isDemoCustomer,
+        // 02-demo-cleanup.js) for the same reason as the inventory/sales
+        // seed-fallbacks above — a device's stale local demo customers
+        // must never get re-seeded into Firestore.
+        _customersCache = snap.exists ? (snap.data().items || []) : DB.g('pos_customers', []).filter(c => !_isDemoCustomer(c));
         if (!snap.exists && _customersCache.length) {
           _db.collection('pos_data').doc('customers').set({ items: _customersCache, updatedAt: Date.now() });
         }
@@ -474,7 +486,12 @@ function initFirebase() {
     }
     function _localSalesFallback(month, b) {
       const localSalesAll = DB.g('sales', []);
-      return localSalesAll.filter(s => s.date.slice(0, 7) === month && (s.branchId || currentBranch) === b);
+      // Excludes demo-fingerprinted sales (_isDemoSale, 02-demo-cleanup.js)
+      // — this local cache feeds the "seed Firestore from local when the
+      // cloud doc looks empty" path below (and a device's old demo sales
+      // sitting in localStorage from before demo mode was removed is
+      // exactly how demo sales kept reappearing after cleanup).
+      return localSalesAll.filter(s => s.date.slice(0, 7) === month && (s.branchId || currentBranch) === b && !_isDemoSale(s));
     }
     function _refreshSalesViews() {
       visRefresh('page-sales', () => { initSalesFilter(); renderSales(); });
