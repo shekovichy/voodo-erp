@@ -65,17 +65,25 @@ function setUserRoleValue(v) {
   _setActivePill('uaRoleBtn', ['cashier', 'manager'], v);
 }
 function selectUserType(v) { setUserTypeValue(v); onUserTypeChanged(); }
-function selectUserRole(v) { setUserRoleValue(v); applyPermissionTemplate(v); }
+function selectUserRole(v) { setUserRoleValue(v); onUserTypeChanged(); }
 
+// Cashier/manager permissions are FIXED (_FIXED_ROLE_GRANTS, 00-core.js) —
+// the owner picked them directly, so the tree is hidden entirely for
+// those two; only 'admin' is actually customizable per-account (see the
+// long note on _defaultPermissionsFor). 2026-07-20, directly requested:
+// "اللعب كله في يوزرات الأدمن".
 function toggleUserAccountFields() {
   const isAdmin = document.getElementById('uaType').value === 'admin';
   document.getElementById('uaBranchOnlyFields').style.display = isAdmin ? 'none' : 'flex';
+  document.getElementById('uaPermsSection').classList.toggle('hidden', !isAdmin);
+  document.getElementById('uaFixedRoleNote').classList.toggle('hidden', isAdmin);
 }
-// Only called from uaType's onchange (a real user action) — resets the
-// matrix to that type's starting template. openUserAccountModal() sets the
-// matrix itself (from the account's saved permissions, or a fresh template
-// for a new user) and must NOT go through this, or editing an existing
-// user would silently wipe their real permissions back to the default.
+// Only called from uaType's/uaRole's onchange (a real user action) —
+// resets the matrix to that type's template. openUserAccountModal() sets
+// the matrix itself (from the account's saved permissions, or a fresh
+// template for a new user) and must NOT go through this, or editing an
+// existing user would silently wipe their real permissions back to the
+// default.
 function onUserTypeChanged() {
   toggleUserAccountFields();
   const isAdmin = document.getElementById('uaType').value === 'admin';

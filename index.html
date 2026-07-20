@@ -2803,8 +2803,8 @@ body.warehouse-mode #cartFab {
                   </div>
                 </div>
               </div>
-              <div>
-                <label style="font-size:12px;color:var(--text-muted);margin-bottom:6px;display:block;">صلاحيات التابات — "أدمن" مجرد اسم، صلاحياته الفعلية هي اللي تحددها هنا. لكل تاب: مشاهدة و/أو كتابة (إضافة/تعديل/حذف)</label>
+              <div id="uaPermsSection">
+                <label style="font-size:12px;color:var(--text-muted);margin-bottom:6px;display:block;">صلاحيات التابات — قابلة للتعديل هنا لأن "أدمن" مجرد اسم، أنت اللي بتحدد صلاحياته الفعلية. لكل تاب: مشاهدة و/أو كتابة (إضافة/تعديل/حذف)</label>
                 <div class="table-wrap" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
                   <table style="font-size:12px;">
                     <thead><tr><th style="text-align:right;">التاب</th><th>مشاهدة</th><th>كتابة</th></tr></thead>
@@ -2812,6 +2812,7 @@ body.warehouse-mode #cartFab {
                   </table>
                 </div>
               </div>
+              <div id="uaFixedRoleNote" class="hidden" style="font-size:12px;color:var(--text-muted);background:var(--bg-secondary);border-radius:8px;padding:10px;">صلاحيات الكاشير ومدير الفرع ثابتة حسب الدور — مش قابلة للتعديل هنا.</div>
               <div id="uaMsg"></div>
               <div style="display:flex;gap:8px;">
                 <button class="btn btn-primary" onclick="saveUserAccount()">💾 حفظ</button>
@@ -3502,9 +3503,35 @@ const TAB_ICON = {
 // here is the only direction where a mistake just leaves someone with
 // access they already effectively had, instead of quietly taking away
 // something they need mid-shift.
+// 2026-07-20: cashier/manager are FIXED role-appropriate sets the owner
+// picked directly (not a starting point — the matrix is hidden entirely
+// for these two types in the UI, see toggleUserAccountFields() in
+// 60-settings.js; only 'admin' is actually customizable, since only admin-
+// labeled accounts vary enough per-person to need it). Anything not
+// listed for a role defaults to no access.
+const _FIXED_ROLE_GRANTS = {
+  cashier: { helpdesk: { view: true, write: true } },
+  manager: {
+    helpdesk:           { view: true, write: true },
+    reports:            { view: true, write: false }, // branch-locked already (lockBranchFilter) — sees only their own branch
+    hr_attendance:      { view: true, write: true },
+    expenses_requests:  { view: true, write: true },
+    warehouse:           { view: true, write: true },
+    transfers:           { view: true, write: true },
+  },
+};
 function _defaultPermissionsFor(role) {
   const perms = {};
-  TAB_PERMISSIONS.forEach(t => { perms[t.key] = { view: true, write: true }; });
+  TAB_PERMISSIONS.forEach(t => { perms[t.key] = { view: false, write: false }; });
+  if (role === 'admin') {
+    // Admin's matrix is a fully-editable starting point, not a fixed
+    // grant — defaults to everything ON so the owner dials it DOWN
+    // rather than having to hunt for what to turn on (see the long
+    // rationale above this used to sit on, still true for admin).
+    TAB_PERMISSIONS.forEach(t => { perms[t.key] = { view: true, write: true }; });
+  } else {
+    Object.assign(perms, _FIXED_ROLE_GRANTS[role] || {});
+  }
   return perms;
 }
 
@@ -7042,17 +7069,25 @@ function setUserRoleValue(v) {
   _setActivePill('uaRoleBtn', ['cashier', 'manager'], v);
 }
 function selectUserType(v) { setUserTypeValue(v); onUserTypeChanged(); }
-function selectUserRole(v) { setUserRoleValue(v); applyPermissionTemplate(v); }
+function selectUserRole(v) { setUserRoleValue(v); onUserTypeChanged(); }
 
+// Cashier/manager permissions are FIXED (_FIXED_ROLE_GRANTS, 00-core.js) —
+// the owner picked them directly, so the tree is hidden entirely for
+// those two; only 'admin' is actually customizable per-account (see the
+// long note on _defaultPermissionsFor). 2026-07-20, directly requested:
+// "اللعب كله في يوزرات الأدمن".
 function toggleUserAccountFields() {
   const isAdmin = document.getElementById('uaType').value === 'admin';
   document.getElementById('uaBranchOnlyFields').style.display = isAdmin ? 'none' : 'flex';
+  document.getElementById('uaPermsSection').classList.toggle('hidden', !isAdmin);
+  document.getElementById('uaFixedRoleNote').classList.toggle('hidden', isAdmin);
 }
-// Only called from uaType's onchange (a real user action) — resets the
-// matrix to that type's starting template. openUserAccountModal() sets the
-// matrix itself (from the account's saved permissions, or a fresh template
-// for a new user) and must NOT go through this, or editing an existing
-// user would silently wipe their real permissions back to the default.
+// Only called from uaType's/uaRole's onchange (a real user action) —
+// resets the matrix to that type's template. openUserAccountModal() sets
+// the matrix itself (from the account's saved permissions, or a fresh
+// template for a new user) and must NOT go through this, or editing an
+// existing user would silently wipe their real permissions back to the
+// default.
 function onUserTypeChanged() {
   toggleUserAccountFields();
   const isAdmin = document.getElementById('uaType').value === 'admin';

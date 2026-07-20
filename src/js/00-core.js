@@ -212,9 +212,35 @@ const TAB_ICON = {
 // here is the only direction where a mistake just leaves someone with
 // access they already effectively had, instead of quietly taking away
 // something they need mid-shift.
+// 2026-07-20: cashier/manager are FIXED role-appropriate sets the owner
+// picked directly (not a starting point — the matrix is hidden entirely
+// for these two types in the UI, see toggleUserAccountFields() in
+// 60-settings.js; only 'admin' is actually customizable, since only admin-
+// labeled accounts vary enough per-person to need it). Anything not
+// listed for a role defaults to no access.
+const _FIXED_ROLE_GRANTS = {
+  cashier: { helpdesk: { view: true, write: true } },
+  manager: {
+    helpdesk:           { view: true, write: true },
+    reports:            { view: true, write: false }, // branch-locked already (lockBranchFilter) — sees only their own branch
+    hr_attendance:      { view: true, write: true },
+    expenses_requests:  { view: true, write: true },
+    warehouse:           { view: true, write: true },
+    transfers:           { view: true, write: true },
+  },
+};
 function _defaultPermissionsFor(role) {
   const perms = {};
-  TAB_PERMISSIONS.forEach(t => { perms[t.key] = { view: true, write: true }; });
+  TAB_PERMISSIONS.forEach(t => { perms[t.key] = { view: false, write: false }; });
+  if (role === 'admin') {
+    // Admin's matrix is a fully-editable starting point, not a fixed
+    // grant — defaults to everything ON so the owner dials it DOWN
+    // rather than having to hunt for what to turn on (see the long
+    // rationale above this used to sit on, still true for admin).
+    TAB_PERMISSIONS.forEach(t => { perms[t.key] = { view: true, write: true }; });
+  } else {
+    Object.assign(perms, _FIXED_ROLE_GRANTS[role] || {});
+  }
   return perms;
 }
 
