@@ -82,34 +82,111 @@ function onUserTypeChanged() {
   applyPermissionTemplate(isAdmin ? 'admin' : document.getElementById('uaRole').value);
 }
 
-// ── Permissions matrix (view/write per tab) ─────────────────────────
+// ── Permissions tree (Department → Tab → optional sub-item) ─────────
+// Only rows with a data-key hold real permission data (view/write
+// checkboxes read/written by readPermsFromMatrix()/renderPermsMatrix()).
+// Department rows and tab-with-children "parent" rows are pure UI
+// conveniences — checking one cascades to every data-key row under it;
+// their own checked/indeterminate state is always DERIVED from their
+// children afterward (_refreshAllParentStates), never stored itself.
 function renderPermsMatrix(perms) {
   const body = document.getElementById('uaPermsBody');
   if (!body) return;
-  body.innerHTML = TAB_PERMISSIONS.map(t => {
-    const p = (perms && perms[t.key]) || { view: false, write: false };
-    const note = t.enforced ? '' : ' title="التاب ده مالوش تخزين سحابي مخصص لسه — الإخفاء هنا شكلي بس، مش ممنوع فعلياً من قاعدة البيانات"';
-    return `<tr data-tab="${t.key}"${note}>
-      <td style="text-align:right;">${escHtml(t.label)}${t.enforced ? '' : ' ⚠️'}</td>
-      <td style="text-align:center;"><input type="checkbox" class="ua-perm-view" ${p.view ? 'checked' : ''} onchange="_onPermViewChange(this)" /></td>
-      <td style="text-align:center;"><input type="checkbox" class="ua-perm-write" ${p.write ? 'checked' : ''} onchange="_onPermWriteChange(this)" /></td>
-    </tr>`;
-  }).join('');
+  perms = perms || {};
+  const rows = [];
+  DEPARTMENTS.forEach(dept => {
+    rows.push(`<tr class="perm-dept-row" data-dept="${dept.key}" style="background:var(--bg-secondary);">
+      <td style="font-weight:700;">${escHtml(dept.label)}</td>
+      <td style="text-align:center;"><input type="checkbox" class="perm-dept-view" onchange="_onDeptToggle('${dept.key}','view',this.checked)" /></td>
+      <td style="text-align:center;"><input type="checkbox" class="perm-dept-write" onchange="_onDeptToggle('${dept.key}','write',this.checked)" /></td>
+    </tr>`);
+    dept.tabs.forEach(tab => {
+      const warn = tab.enforced ? '' : ' ⚠️';
+      const title = tab.enforced ? '' : ' title="التاب ده مالوش تخزين سحابي مخصص لسه — الإخفاء هنا شكلي بس، مش ممنوع فعلياً من قاعدة البيانات"';
+      if (tab.children) {
+        rows.push(`<tr class="perm-tab-row" data-tab="${tab.key}"${title}>
+          <td style="padding-right:22px;font-weight:600;">${escHtml(tab.label)}${warn}</td>
+          <td style="text-align:center;"><input type="checkbox" class="perm-tab-view" onchange="_onTabToggle('${tab.key}','view',this.checked)" /></td>
+          <td style="text-align:center;"><input type="checkbox" class="perm-tab-write" onchange="_onTabToggle('${tab.key}','write',this.checked)" /></td>
+        </tr>`);
+        tab.children.forEach(child => {
+          const p = perms[child.key] || { view: false, write: false };
+          rows.push(`<tr data-dept="${dept.key}" data-tab="${tab.key}" data-key="${child.key}">
+            <td style="padding-right:40px;color:var(--text-muted);">${escHtml(child.label)}</td>
+            <td style="text-align:center;"><input type="checkbox" class="ua-perm-view" ${p.view ? 'checked' : ''} onchange="_onLeafViewChange(this)" /></td>
+            <td style="text-align:center;"><input type="checkbox" class="ua-perm-write" ${p.write ? 'checked' : ''} onchange="_onLeafWriteChange(this)" /></td>
+          </tr>`);
+        });
+      } else {
+        const p = perms[tab.key] || { view: false, write: false };
+        rows.push(`<tr data-dept="${dept.key}" data-key="${tab.key}"${title}>
+          <td style="padding-right:22px;">${escHtml(tab.label)}${warn}</td>
+          <td style="text-align:center;"><input type="checkbox" class="ua-perm-view" ${p.view ? 'checked' : ''} onchange="_onLeafViewChange(this)" /></td>
+          <td style="text-align:center;"><input type="checkbox" class="ua-perm-write" ${p.write ? 'checked' : ''} onchange="_onLeafWriteChange(this)" /></td>
+        </tr>`);
+      }
+    });
+  });
+  body.innerHTML = rows.join('');
+  _refreshAllParentStates();
 }
-// Write implies view (can't sensibly edit a tab you can't see); unchecking
-// view drops write too — keeps the matrix internally consistent instead of
-// silently saving a write:true/view:false combo firestore.rules would
-// technically honor but makes no operational sense.
-function _onPermViewChange(cb) {
+// Sets every data-key row's checkboxes under `selector` to `checked` for
+// `kind` (view/write) — write implies view (can't sensibly edit a tab you
+// can't see); unchecking view drops write too, same rule the single-row
+// version always enforced, just applied to a whole batch at once.
+function _setLeafCheckboxes(selector, kind, checked) {
+  document.querySelectorAll(selector).forEach(row => {
+    const viewCb = row.querySelector('.ua-perm-view');
+    const writeCb = row.querySelector('.ua-perm-write');
+    if (kind === 'view') { viewCb.checked = checked; if (!checked) writeCb.checked = false; }
+    else { writeCb.checked = checked; if (checked) viewCb.checked = true; }
+  });
+}
+function _onDeptToggle(deptKey, kind, checked) {
+  _setLeafCheckboxes(`#uaPermsBody tr[data-dept="${deptKey}"][data-key]`, kind, checked);
+  _refreshAllParentStates();
+}
+function _onTabToggle(tabKey, kind, checked) {
+  _setLeafCheckboxes(`#uaPermsBody tr[data-tab="${tabKey}"][data-key]`, kind, checked);
+  _refreshAllParentStates();
+}
+function _onLeafViewChange(cb) {
   if (!cb.checked) { const row = cb.closest('tr'); row.querySelector('.ua-perm-write').checked = false; }
+  _refreshAllParentStates();
 }
-function _onPermWriteChange(cb) {
+function _onLeafWriteChange(cb) {
   if (cb.checked) { const row = cb.closest('tr'); row.querySelector('.ua-perm-view').checked = true; }
+  _refreshAllParentStates();
+}
+// Derives every department/tab-parent checkbox's checked/indeterminate
+// state from its actual data-key children — these rows never hold their
+// own value, so this always runs after any change anywhere in the tree.
+function _refreshAllParentStates() {
+  document.querySelectorAll('#uaPermsBody tr.perm-tab-row').forEach(row => {
+    const tabKey = row.dataset.tab;
+    ['view', 'write'].forEach(kind => {
+      const kids = [...document.querySelectorAll(`#uaPermsBody tr[data-tab="${tabKey}"][data-key] .ua-perm-${kind}`)];
+      const checkedCount = kids.filter(c => c.checked).length;
+      const cb = row.querySelector('.perm-tab-' + kind);
+      cb.checked = kids.length > 0 && checkedCount === kids.length;
+      cb.indeterminate = checkedCount > 0 && checkedCount < kids.length;
+    });
+  });
+  document.querySelectorAll('#uaPermsBody tr.perm-dept-row').forEach(row => {
+    const deptKey = row.dataset.dept;
+    ['view', 'write'].forEach(kind => {
+      const leaves = [...document.querySelectorAll(`#uaPermsBody tr[data-dept="${deptKey}"][data-key] .ua-perm-${kind}`)];
+      const checkedCount = leaves.filter(c => c.checked).length;
+      const cb = row.querySelector('.perm-dept-' + kind);
+      cb.checked = leaves.length > 0 && checkedCount === leaves.length;
+      cb.indeterminate = checkedCount > 0 && checkedCount < leaves.length;
+    });
+  });
 }
 function readPermsFromMatrix() {
   const perms = {};
-  document.querySelectorAll('#uaPermsBody tr').forEach(row => {
-    perms[row.dataset.tab] = {
+  document.querySelectorAll('#uaPermsBody tr[data-key]').forEach(row => {
+    perms[row.dataset.key] = {
       view: row.querySelector('.ua-perm-view').checked,
       write: row.querySelector('.ua-perm-write').checked
     };

@@ -1671,79 +1671,35 @@ body.warehouse-mode #cartFab {
                 <span class="app-name">الكاشير</span>
               </div>
 
-              <div class="app-icon" onclick="showPage('dashboard')">
-                <div class="app-tile" style="background:linear-gradient(145deg,#06b6d4,#0891b2);">
-                  <svg viewBox="0 0 48 48" fill="none"><rect x="6" y="28" width="9" height="13" rx="2" fill="white"/><rect x="20" y="18" width="9" height="23" rx="2" fill="white"/><rect x="34" y="8" width="9" height="33" rx="2" fill="white"/></svg>
-                </div>
-                <span class="app-name">الداشبورد</span>
-              </div>
+              <!-- Generated from DEPARTMENTS (00-core.js) — one folder tile
+                   per department with 2+ tabs, a standalone tile for a
+                   department with just one. See renderAdminHomeGrid() in
+                   100-home.js — this keeps navigation and the permissions
+                   tree as a single source of truth instead of two
+                   hand-maintained lists that can drift apart. -->
+              <div id="homeGridDept" style="display:contents;"></div>
 
-              <div class="app-icon" onclick="showPage('sales')">
-                <div class="app-tile" style="background:linear-gradient(145deg,#f59e0b,#d97706);">
-                  <svg viewBox="0 0 48 48" fill="none"><rect x="7" y="10" width="34" height="28" rx="4" stroke="white" stroke-width="2.5"/><path d="M15 22h18M15 28h12" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M27 10V7M21 10V7" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
-                </div>
-                <span class="app-name">المبيعات</span>
-              </div>
-
-              <div class="app-icon" onclick="showPage('suspended')" id="homeAppSuspended">
-                <div class="app-tile" style="background:linear-gradient(145deg,#fbbf24,#92400e);position:relative;">
-                  <svg viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="16" stroke="white" stroke-width="2.5"/><path d="M24 14v11l7 4" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  <span id="homeSuspBadge" style="display:none;position:absolute;top:-5px;right:-5px;background:#ef4444;color:white;border-radius:50%;font-size:10px;min-width:19px;height:19px;line-height:19px;text-align:center;font-weight:800;box-shadow:0 2px 8px rgba(0,0,0,.5);z-index:2;">0</span>
-                </div>
-                <span class="app-name">المعلقة</span>
-              </div>
-
-              <div class="app-icon" onclick="showPage('hr')">
-                <div class="app-tile" style="background:linear-gradient(145deg,#818cf8,#4338ca);">
-                  <svg viewBox="0 0 48 48" fill="none"><circle cx="20" cy="15" r="7" stroke="white" stroke-width="2.5"/><path d="M6 40c0-7.732 6.268-14 14-14" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M32 28l2 2 2-2M36 28v10M30 38h12" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </div>
-                <span class="app-name">الموارد البشرية</span>
-              </div>
-
-              <div class="app-icon" onclick="showPage('manufacturing')">
-                <div class="app-tile" style="background:linear-gradient(145deg,#f59e0b,#b45309);">
-                  <svg viewBox="0 0 48 48" fill="none"><rect x="6" y="28" width="10" height="14" rx="2" stroke="white" stroke-width="2.5"/><rect x="19" y="20" width="10" height="22" rx="2" stroke="white" stroke-width="2.5"/><rect x="32" y="12" width="10" height="30" rx="2" stroke="white" stroke-width="2.5"/><path d="M8 20l6-8 8 4 8-12 8 6" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </div>
-                <span class="app-name">التصنيع</span>
-              </div>
-
-              <!-- Owner-only — hidden for an 'admin'-labeled non-owner account, see renderHomeIcons() in 100-home.js -->
+              <!-- Owner-only tools — not part of the permissions tree at
+                   all (hardcoded isRealOwner gate, see renderHomeIcons()
+                   in 100-home.js), so kept as their own fixed tiles
+                   instead of a department. -->
               <div class="app-icon" onclick="showPage('userperms')" id="homeAppUserPerms">
                 <div class="app-tile" style="background:linear-gradient(145deg,#f59e0b,#b45309);">
                   <svg viewBox="0 0 48 48" fill="none"><circle cx="18" cy="16" r="6" stroke="white" stroke-width="2.5"/><circle cx="32" cy="16" r="6" stroke="white" stroke-width="2.5"/><path d="M6 40c0-6.627 5.373-12 12-12s12 5.373 12 12M22 40c0-6.627 5.373-12 12-12" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>
                 </div>
                 <span class="app-name">المستخدمين والصلاحيات</span>
               </div>
-
-              <!-- Folder tiles — each groups related pages, see HOME_FOLDERS in 100-home.js -->
-              <div class="app-icon" onclick="openHomeFolder('inventory')">
-                <div class="app-tile folder-tile" id="folderPreview_inventory"></div>
-                <span class="app-name">المخزون</span>
+              <div class="app-icon" onclick="showPage('settings')" id="homeAppSettings">
+                <div class="app-tile" style="background:linear-gradient(145deg,#a1a1aa,#3f3f46);">
+                  <svg viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="5" stroke="white" stroke-width="2.5"/><path d="M24 8v4M24 36v4M8 24h4M36 24h4M13.4 13.4l2.8 2.8M31.8 31.8l2.8 2.8M13.4 34.6l2.8-2.8M31.8 16.2l2.8-2.8" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>
+                </div>
+                <span class="app-name">الإعدادات</span>
               </div>
-
-              <div class="app-icon" onclick="openHomeFolder('customers')">
-                <div class="app-tile folder-tile" id="folderPreview_customers"></div>
-                <span class="app-name">العملاء والعروض</span>
-              </div>
-
-              <div class="app-icon" onclick="openHomeFolder('purchases')">
-                <div class="app-tile folder-tile" id="folderPreview_purchases"></div>
-                <span class="app-name">المشتريات</span>
-              </div>
-
-              <div class="app-icon" onclick="openHomeFolder('accounting')">
-                <div class="app-tile folder-tile" id="folderPreview_accounting"></div>
-                <span class="app-name">المحاسبة والمصاريف</span>
-              </div>
-
-              <div class="app-icon" onclick="openHomeFolder('reports')">
-                <div class="app-tile folder-tile" id="folderPreview_reports"></div>
-                <span class="app-name">التقارير والتحليلات</span>
-              </div>
-
-              <div class="app-icon" onclick="openHomeFolder('system')">
-                <div class="app-tile folder-tile" id="folderPreview_system"></div>
-                <span class="app-name">النظام والإدارة</span>
+              <div class="app-icon" onclick="showPage('migration')" id="homeAppMigration">
+                <div class="app-tile" style="background:linear-gradient(145deg,#0ea5a5,#0b7a7a);">
+                  <svg viewBox="0 0 48 48" fill="none"><path d="M24 6v24M24 30l-9-9M24 30l9-9" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="8" y="36" width="32" height="6" rx="2" fill="white"/></svg>
+                </div>
+                <span class="app-name">استيراد بيانات</span>
               </div>
 
             </div><!-- /homeGrid -->
@@ -3395,19 +3351,28 @@ let _pivotFavoritesCache = [];                       // saved pivot-analyzer rep
 let _budgetsCache       = [];                        // monthly company budgets (revenue target + expense budget per category)
 let _sessionsCache      = [];                        // POS cash sessions (shift open/close + variance)
 
-// ══ TAB PERMISSIONS — per-user view/write access per page ══════════════
-// Layered on top of the role/branch checks that already exist (admin/
-// manager/cashier + branchId). 'settings' and 'migration' stay hardcoded
-// admin-only (never shown in the matrix — settings still guards the legacy
-// pos_data/accounts credential doc; migration tools are one-time cutover
-// scripts). 'home' has no permission entry — always visible once logged in.
+// ══ PERMISSIONS TREE — Department → Tab → (optional) Sub-item ══════════
+// Replaces the old flat tab list (2026-07-20) — grouped by department to
+// match how the business is actually organized, with a real (not
+// cosmetic) third level wherever the underlying data already lives in
+// separate Firestore documents rather than one shared blob. Also doubles
+// as the home-screen navigation grouping (100-home.js) — one source of
+// truth for "how the app is organized" instead of two structures that
+// could drift apart.
+//
+// A department's `tabs` entries are either a plain leaf tab
+// ({key,label,enforced}) or a tab with real independently-gateable
+// children ({key,label,enforced,children:[{key,label}]}). Permissions are
+// only ever STORED at the leaf level — a childless tab's own key, or each
+// child's key — never at a parent-with-children's own key. 'settings',
+// 'migration' and 'userperms' aren't in this tree at all (hardcoded
+// owner-only, see isRealOwner). 'home' has no permission entry — always
+// visible once logged in.
 //
 // `enforced:true` means firestore.rules actually checks this (see
-// tabForDoc()/hasTabPermission() there) — a denied user is blocked at the
-// database, not just the UI.
-//
-// `enforced:false` covers TWO different reasons, both meaning "hiding the
-// tab here is the only boundary that exists":
+// tabForDoc() there) — a denied user is blocked at the database, not just
+// the UI. `enforced:false` covers TWO different reasons, both meaning
+// "hiding the tab here is the only boundary that exists":
 //  (a) no dedicated cloud document to gate at all — dashboard/reports are
 //      pure derived views, manufacturing is still localStorage-only.
 //  (b) the tab's document IS synced to Firestore, but the SAME document is
@@ -3424,26 +3389,72 @@ let _sessionsCache      = [];                        // POS cash sessions (shift
 //      designing the rule (see the design notes on this feature), so these
 //      stay UI-only on purpose rather than "mostly enforced with a few
 //      landmines still in it".
-const TAB_PERMISSIONS = [
-  { key: 'dashboard',     label: 'الداشبورد',            enforced: false },
-  { key: 'inventory',     label: 'المخزون',              enforced: false },
-  { key: 'sales',         label: 'المبيعات',             enforced: false },
-  { key: 'suspended',     label: 'الفواتير المعلقة',      enforced: false },
-  { key: 'reports',       label: 'التقارير',              enforced: false },
-  { key: 'customized',    label: 'تقارير مخصصة',          enforced: true  },
-  { key: 'warehouse',     label: 'المخزن الرئيسي',        enforced: true  },
-  { key: 'customers',     label: 'العملاء',               enforced: false },
-  { key: 'promos',        label: 'العروض الترويجية',       enforced: false },
-  { key: 'transfers',     label: 'التحويلات بين الفروع',   enforced: true  },
-  { key: 'purchases',     label: 'المشتريات والموردين',    enforced: true  },
-  { key: 'hr',            label: 'الموارد البشرية',        enforced: true  },
-  { key: 'expenses',      label: 'المصاريف',              enforced: true  },
-  { key: 'audit',         label: 'سجل التغييرات',         enforced: true  },
-  { key: 'accounting',    label: 'المحاسبة',              enforced: true  },
-  { key: 'manufacturing', label: 'التصنيع',               enforced: false },
-  { key: 'helpdesk',      label: 'الدعم الفني',           enforced: true  },
-  { key: 'analytics',     label: 'التحليلات الاستراتيجية', enforced: false },
+const DEPARTMENTS = [
+  { key: 'sales_pos', label: '🛒 المبيعات ونقطة البيع', tabs: [
+    { key: 'sales',     label: 'المبيعات',        enforced: false },
+    { key: 'suspended', label: 'الفواتير المعلقة', enforced: false },
+  ]},
+  { key: 'customers_marketing', label: '👥 العملاء والتسويق', tabs: [
+    { key: 'customers', label: 'العملاء',         enforced: false },
+    { key: 'promos',    label: 'العروض الترويجية', enforced: false },
+  ]},
+  { key: 'inventory_warehouse', label: '📦 المخزون والمخازن', tabs: [
+    { key: 'inventory', label: 'المخزون',       enforced: false },
+    { key: 'warehouse', label: 'المخزن الرئيسي', enforced: true  },
+    { key: 'transfers', label: 'التحويلات',      enforced: true  },
+  ]},
+  { key: 'purchasing', label: '🛍️ المشتريات', tabs: [
+    { key: 'purchases', label: 'المشتريات والموردين', enforced: true, children: [
+      { key: 'purchases_suppliers', label: 'الموردين' },
+      { key: 'purchases_orders',    label: 'أوامر الشراء' },
+      { key: 'purchases_payments',  label: 'مدفوعات الموردين' },
+    ]},
+  ]},
+  { key: 'manufacturing_dept', label: '🏭 التصنيع', tabs: [
+    { key: 'manufacturing', label: 'التصنيع', enforced: false },
+  ]},
+  { key: 'finance', label: '💰 المالية والمحاسبة', tabs: [
+    { key: 'accounting', label: 'المحاسبة', enforced: true },
+    { key: 'expenses',   label: 'المصاريف', enforced: true, children: [
+      { key: 'expenses_main',     label: 'المصاريف' },
+      { key: 'expenses_requests', label: 'طلبات اعتماد المصاريف' },
+    ]},
+  ]},
+  { key: 'hr_dept', label: '👔 الموارد البشرية', tabs: [
+    { key: 'hr', label: 'الموارد البشرية', enforced: true, children: [
+      { key: 'hr_targets',    label: 'الأهداف والعمولات' },
+      { key: 'hr_attendance', label: 'الحضور والانصراف' },
+      { key: 'hr_payroll',    label: 'الرواتب' },
+      { key: 'hr_leaves',     label: 'طلبات الإجازات' },
+    ]},
+  ]},
+  { key: 'reports_analytics', label: '📊 التقارير والتحليلات', tabs: [
+    { key: 'dashboard',  label: 'الداشبورد',            enforced: false },
+    { key: 'reports',    label: 'التقارير',              enforced: false },
+    { key: 'customized', label: 'تقارير مخصصة',          enforced: true  },
+    { key: 'analytics',  label: 'التحليلات الاستراتيجية', enforced: false },
+  ]},
+  { key: 'support_system', label: '🎫 الدعم والنظام', tabs: [
+    { key: 'helpdesk', label: 'الدعم الفني',   enforced: true },
+    { key: 'audit',    label: 'سجل التغييرات', enforced: true },
+  ]},
 ];
+
+// Flat leaf-item list — the only level permissions are actually stored at.
+// Kept under the old name so every existing call site that just needs
+// "the list of {key,label,enforced}" (matrix rendering, defaults
+// computation, the migration tool) keeps working unchanged.
+const TAB_PERMISSIONS = DEPARTMENTS.flatMap(d => d.tabs.flatMap(t =>
+  t.children
+    ? t.children.map(c => ({ key: c.key, label: c.label, enforced: t.enforced }))
+    : [{ key: t.key, label: t.label, enforced: t.enforced }]
+));
+// Parent tab key -> its children's leaf keys, for tabs that have them
+// (purchases/expenses/hr). Used by canViewTab/canWriteTab to aggregate:
+// checking a parent tab key (e.g. showPage('hr')'s gate) means "does this
+// account have access to ANY of its children".
+const TAB_CHILDREN = {};
+DEPARTMENTS.forEach(d => d.tabs.forEach(t => { if (t.children) TAB_CHILDREN[t.key] = t.children.map(c => c.key); }));
 
 // Icon per tab — shared by the admin's HOME_FOLDERS (100-home.js) and the
 // dynamic per-permission grid rendered for non-admin accounts (same file).
@@ -3513,6 +3524,7 @@ function canViewTab(tabKey) {
   if (isRealOwner) return true;
   const perms = getMyPermissions();
   if (!perms) return true;
+  if (TAB_CHILDREN[tabKey]) return TAB_CHILDREN[tabKey].some(ck => perms[ck] && perms[ck].view);
   if (!TAB_PERMISSIONS.some(t => t.key === tabKey)) return true; // untracked tab — always allowed
   return !!(perms[tabKey] && perms[tabKey].view);
 }
@@ -3520,6 +3532,7 @@ function canWriteTab(tabKey) {
   if (isRealOwner) return true;
   const perms = getMyPermissions();
   if (!perms) return true;
+  if (TAB_CHILDREN[tabKey]) return TAB_CHILDREN[tabKey].some(ck => perms[ck] && perms[ck].write);
   return !!(perms[tabKey] && perms[tabKey].write);
 }
 
@@ -5064,8 +5077,11 @@ function renderHomeIcons() {
   if (adminGrid) adminGrid.style.display = isAdmin ? '' : 'none';
   if (branchGrid) branchGrid.style.display = isAdmin ? 'none' : '';
   if (!isAdmin) renderBranchDynamicIcons();
-  const upIcon = document.getElementById('homeAppUserPerms');
-  if (upIcon) upIcon.style.display = isRealOwner ? '' : 'none';
+  else renderAdminHomeGrid();
+  ['homeAppUserPerms', 'homeAppSettings', 'homeAppMigration'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = isRealOwner ? '' : 'none';
+  });
   // Update pending badges on admin home icons
   if (isAdmin) {
     try {
@@ -5077,18 +5093,20 @@ function renderHomeIcons() {
       if (lb) { lb.textContent = leavePending; lb.style.display = leavePending ? 'inline' : 'none'; }
     } catch(e) {}
   }
-  renderFolderPreviews();
 }
 
 // Non-admin home screen: the fixed action icons (POS, expense/leave
-// requests) stay hardcoded in template.html — everything else (any tab
-// this account has been granted `view` on) renders here from
-// TAB_PERMISSIONS, so a branch account's home screen reflects exactly
-// what the admin granted it instead of a fixed manager/cashier split.
+// requests) stay hardcoded in template.html — everything else (any TAB
+// this account has been granted view on, aggregated across its children
+// if it has any — see canViewTab() in 00-core.js) renders here, one icon
+// per tab from DEPARTMENTS (not per department — a branch account's home
+// screen is usually short enough that folders would just add clicks), so
+// a branch account's home screen reflects exactly what the owner granted
+// it instead of a fixed manager/cashier split.
 function renderBranchDynamicIcons() {
   const container = document.getElementById('homeGrid_branch_dynamic');
   if (!container) return;
-  const tabs = TAB_PERMISSIONS.filter(t => canViewTab(t.key) && TAB_ICON[t.key]);
+  const tabs = DEPARTMENTS.flatMap(d => d.tabs).filter(t => canViewTab(t.key) && TAB_ICON[t.key]);
   container.innerHTML = tabs.map(t => {
     const icon = TAB_ICON[t.key];
     return `<div class="app-icon branch-card" onclick="showPage('${t.key}')" style="background:linear-gradient(145deg,${icon.grad.split(',').map(c=>c+'2e').join(',')});border:1px solid ${icon.grad.split(',')[0]}4d;border-radius:20px;padding:20px 12px 16px;gap:10px;">
@@ -5101,57 +5119,54 @@ function renderBranchDynamicIcons() {
 }
 
 /* ═══════════════════════════════════════════════
-   HOME PAGE — FOLDERS
-   Groups related pages behind one home-screen tile (like a phone's app
-   folders) instead of a flat, ever-growing icon list. New features go
-   into an existing folder's `icons` array — the home screen itself never
-   needs a new top-level tile for them.
+   HOME PAGE — DEPARTMENT FOLDERS
+   Generated from DEPARTMENTS (00-core.js) — the SAME tree the permissions
+   matrix uses, so navigation and permissions can never drift apart into
+   two different pictures of "how the app is organized" (2026-07-20, the
+   owner's own words: "التابات جوه التابات" needed to match the
+   department grouping, not be a separate hand-maintained list). A
+   department with only one tab shows as a standalone tile (no point
+   wrapping a single icon in a folder); 2+ tabs become a folder tile
+   (tap → popup grid), same interaction as before.
    ═══════════════════════════════════════════════ */
-const HOME_FOLDERS = {
-  inventory: { name: '📦 المخزون', icons: [
-    { page:'inventory',  label:'المخزون',        grad:'#22c55e,#16a34a', svg:'<rect x="8" y="18" width="32" height="22" rx="3" stroke="white" stroke-width="3"/><path d="M17 18V13a7 7 0 0114 0v5" stroke="white" stroke-width="3" stroke-linecap="round"/><path d="M18 29h12M24 24v10" stroke="white" stroke-width="2.5" stroke-linecap="round"/>' },
-    { page:'warehouse',  label:'المخزن الرئيسي',  grad:'#64748b,#475569', svg:'<path d="M6 21L24 9l18 12v20H6V21z" stroke="white" stroke-width="2.5" stroke-linejoin="round"/><rect x="18" y="28" width="12" height="13" rx="2" fill="white"/><rect x="14" y="20" width="7" height="7" rx="1" fill="white" opacity=".7"/><rect x="27" y="20" width="7" height="7" rx="1" fill="white" opacity=".7"/>' },
-    { page:'transfers',  label:'التحويلات',       grad:'#34d399,#059669', svg:'<path d="M10 18h28M30 10l8 8-8 8" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M38 30H10M18 22l-8 8 8 8" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' },
-  ]},
-  customers: { name: '👥 العملاء والعروض', icons: [
-    { page:'customers', label:'العملاء', grad:'#a855f7,#7c3aed', svg:'<circle cx="24" cy="16" r="8" stroke="white" stroke-width="2.5"/><path d="M8 40c0-8.837 7.163-16 16-16s16 7.163 16 16" stroke="white" stroke-width="2.5" stroke-linecap="round"/>' },
-    { page:'promos',    label:'العروض',  grad:'#fb7185,#dc2626', svg:'<path d="M20 8H10a2 2 0 00-2 2v10l20 20 12-12L20 8z" stroke="white" stroke-width="2.5" stroke-linejoin="round"/><circle cx="15" cy="15" r="2.5" fill="white"/>' },
-  ]},
-  purchases: { name: '🛒 المشتريات', icons: [
-    { page:'purchases', label:'المشتريات', grad:'#fcd34d,#a16207', svg:'<path d="M14 8h20l4 8H10l4-8z" stroke="white" stroke-width="2.5" stroke-linejoin="round"/><rect x="10" y="16" width="28" height="24" rx="3" stroke="white" stroke-width="2.5"/><path d="M20 28h8M24 24v8" stroke="white" stroke-width="2.5" stroke-linecap="round"/>' },
-  ]},
-  accounting: { name: '💰 المحاسبة والمصاريف', icons: [
-    { page:'accounting', label:'المحاسبة', grad:'#34d399,#047857', svg:'<rect x="10" y="6" width="28" height="36" rx="3" stroke="white" stroke-width="2.5"/><path d="M16 16h16M16 22h16M16 28h10" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M28 32l3 3 5-5" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' },
-    { page:'expenses',   label:'المصاريف', grad:'#f87171,#b91c1c', svg:'<circle cx="24" cy="24" r="16" stroke="white" stroke-width="2.5"/><path d="M24 13v22M18 19c0-3.314 2.686-6 6-6s6 2.686 6 6-2.686 4-6 4-6 1.686-6 4 2.686 6 6 6 6-2.686 6-6" stroke="white" stroke-width="2.5" stroke-linecap="round"/>' },
-  ]},
-  reports: { name: '📊 التقارير والتحليلات', icons: [
-    { page:'reports',    label:'التقارير',       grad:'#38bdf8,#0369a1', svg:'<path d="M8 36L18 24l8 6 8-12 6 6" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="6" y="6" width="36" height="36" rx="4" stroke="white" stroke-width="2.5"/>' },
-    { page:'customized', label:'تقارير مخصصة',   grad:'#f472b6,#be185d', svg:'<circle cx="21" cy="21" r="12" stroke="white" stroke-width="2.5"/><path d="M30 30l10 10" stroke="white" stroke-width="3.5" stroke-linecap="round"/><path d="M17 21h8M21 17v8" stroke="white" stroke-width="2.5" stroke-linecap="round"/>' },
-    { page:'analytics',  label:'تحليلات استراتيجية', grad:'#6366f1,#4338ca', svg:'<path d="M8 40V22M18 40V14M28 40V26M38 40V10" stroke="white" stroke-width="4" stroke-linecap="round"/><path d="M8 16l10-8 10 6 10-10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' },
-  ]},
-  system: { name: '⚙️ النظام والإدارة', icons: [
-    { page:'audit',    label:'سجل التغييرات', grad:'#94a3b8,#334155', svg:'<rect x="10" y="6" width="28" height="36" rx="3" stroke="white" stroke-width="2.5"/><path d="M16 16h16M16 22h16M16 28h8" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M30 32l2 2 4-4" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' },
-    { page:'settings', label:'الإعدادات',     grad:'#a1a1aa,#3f3f46', svg:'<circle cx="24" cy="24" r="5" stroke="white" stroke-width="2.5"/><path d="M24 8v4M24 36v4M8 24h4M36 24h4M13.4 13.4l2.8 2.8M31.8 31.8l2.8 2.8M13.4 34.6l2.8-2.8M31.8 16.2l2.8-2.8" stroke="white" stroke-width="2.5" stroke-linecap="round"/>', ownerOnly:true },
-    { page:'helpdesk', label:'الدعم الفني',   grad:'#fb923c,#c2410c', svg:'<path d="M8 34V16a6 6 0 016-6h20a6 6 0 016 6v10a6 6 0 01-6 6H20l-8 8v-6z" stroke="white" stroke-width="2.5" stroke-linejoin="round"/><circle cx="18" cy="21" r="2" fill="white"/><circle cx="24" cy="21" r="2" fill="white"/><circle cx="30" cy="21" r="2" fill="white"/>' },
-    { page:'migration', label:'استيراد بيانات', grad:'#0ea5a5,#0b7a7a', svg:'<path d="M24 6v24M24 30l-9-9M24 30l9-9" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="8" y="36" width="32" height="6" rx="2" fill="white"/>', ownerOnly:true },
-  ]},
-};
-// Icons flagged ownerOnly are hidden from the home screen entirely for an
-// 'admin'-labeled account that isn't the real owner (isRealOwner,
-// 00-core.js) — showing an icon that then bounces with "owner only" is
-// worse than just not showing it.
-function _visibleFolderIcons(icons) {
-  return isRealOwner ? icons : icons.filter(i => !i.ownerOnly);
+function _deptIcons(dept) {
+  return dept.tabs.map(t => Object.assign({ page: t.key, label: t.label }, TAB_ICON[t.key])).filter(i => i.svg);
+}
+
+// Rebuilds the whole admin home grid's department section from scratch —
+// cheap enough to just do on every renderHomeIcons() call rather than try
+// to diff it, and guarantees it never goes stale.
+function renderAdminHomeGrid() {
+  const container = document.getElementById('homeGridDept');
+  if (!container) return;
+  container.innerHTML = DEPARTMENTS.map(dept => {
+    const icons = _deptIcons(dept);
+    if (!icons.length) return '';
+    if (icons.length === 1) {
+      const i = icons[0];
+      return `<div class="app-icon" onclick="showPage('${i.page}')">
+        <div class="app-tile" style="background:linear-gradient(145deg,${i.grad});">
+          <svg viewBox="0 0 48 48" fill="none">${i.svg}</svg>
+        </div>
+        <span class="app-name">${escHtml(dept.label)}</span>
+      </div>`;
+    }
+    return `<div class="app-icon" onclick="openHomeFolder('${dept.key}')">
+      <div class="app-tile folder-tile" id="folderPreview_${dept.key}"></div>
+      <span class="app-name">${escHtml(dept.label)}</span>
+    </div>`;
+  }).join('');
+  renderFolderPreviews();
 }
 
 // Stacked-card preview inside each folder tile — the first item's icon
 // shown full-size and clear, with up to 2 plain color slivers peeking out
 // behind it (from the 2nd/3rd items, if any) signaling "more inside".
 function renderFolderPreviews() {
-  Object.keys(HOME_FOLDERS).forEach(function(id) {
-    const el = document.getElementById('folderPreview_' + id);
+  DEPARTMENTS.forEach(function(dept) {
+    const el = document.getElementById('folderPreview_' + dept.key);
     if (!el) return;
-    const icons = _visibleFolderIcons(HOME_FOLDERS[id].icons);
+    const icons = _deptIcons(dept);
     if (!icons.length) { el.innerHTML = ''; return; }
     let html = '';
     if (icons[2]) html += '<div class="folder-peek p3" style="background:linear-gradient(145deg,' + icons[2].grad + ');"></div>';
@@ -5162,10 +5177,10 @@ function renderFolderPreviews() {
   });
 }
 
-function openHomeFolder(id) {
-  const folder = HOME_FOLDERS[id]; if (!folder) return;
-  document.getElementById('homeFolderTitle').textContent = folder.name;
-  document.getElementById('homeFolderGrid').innerHTML = _visibleFolderIcons(folder.icons).map(function(i) {
+function openHomeFolder(deptKey) {
+  const dept = DEPARTMENTS.find(d => d.key === deptKey); if (!dept) return;
+  document.getElementById('homeFolderTitle').textContent = dept.label;
+  document.getElementById('homeFolderGrid').innerHTML = _deptIcons(dept).map(function(i) {
     return '<div class="app-icon" onclick="closeHomeFolder();showPage(\'' + i.page + '\')">'
       + '<div class="app-tile" style="width:58px;height:58px;background:linear-gradient(145deg,' + i.grad + ');">'
       + '<svg viewBox="0 0 48 48" fill="none" style="width:30px;height:30px;">' + i.svg + '</svg></div>'
@@ -7044,34 +7059,111 @@ function onUserTypeChanged() {
   applyPermissionTemplate(isAdmin ? 'admin' : document.getElementById('uaRole').value);
 }
 
-// ── Permissions matrix (view/write per tab) ─────────────────────────
+// ── Permissions tree (Department → Tab → optional sub-item) ─────────
+// Only rows with a data-key hold real permission data (view/write
+// checkboxes read/written by readPermsFromMatrix()/renderPermsMatrix()).
+// Department rows and tab-with-children "parent" rows are pure UI
+// conveniences — checking one cascades to every data-key row under it;
+// their own checked/indeterminate state is always DERIVED from their
+// children afterward (_refreshAllParentStates), never stored itself.
 function renderPermsMatrix(perms) {
   const body = document.getElementById('uaPermsBody');
   if (!body) return;
-  body.innerHTML = TAB_PERMISSIONS.map(t => {
-    const p = (perms && perms[t.key]) || { view: false, write: false };
-    const note = t.enforced ? '' : ' title="التاب ده مالوش تخزين سحابي مخصص لسه — الإخفاء هنا شكلي بس، مش ممنوع فعلياً من قاعدة البيانات"';
-    return `<tr data-tab="${t.key}"${note}>
-      <td style="text-align:right;">${escHtml(t.label)}${t.enforced ? '' : ' ⚠️'}</td>
-      <td style="text-align:center;"><input type="checkbox" class="ua-perm-view" ${p.view ? 'checked' : ''} onchange="_onPermViewChange(this)" /></td>
-      <td style="text-align:center;"><input type="checkbox" class="ua-perm-write" ${p.write ? 'checked' : ''} onchange="_onPermWriteChange(this)" /></td>
-    </tr>`;
-  }).join('');
+  perms = perms || {};
+  const rows = [];
+  DEPARTMENTS.forEach(dept => {
+    rows.push(`<tr class="perm-dept-row" data-dept="${dept.key}" style="background:var(--bg-secondary);">
+      <td style="font-weight:700;">${escHtml(dept.label)}</td>
+      <td style="text-align:center;"><input type="checkbox" class="perm-dept-view" onchange="_onDeptToggle('${dept.key}','view',this.checked)" /></td>
+      <td style="text-align:center;"><input type="checkbox" class="perm-dept-write" onchange="_onDeptToggle('${dept.key}','write',this.checked)" /></td>
+    </tr>`);
+    dept.tabs.forEach(tab => {
+      const warn = tab.enforced ? '' : ' ⚠️';
+      const title = tab.enforced ? '' : ' title="التاب ده مالوش تخزين سحابي مخصص لسه — الإخفاء هنا شكلي بس، مش ممنوع فعلياً من قاعدة البيانات"';
+      if (tab.children) {
+        rows.push(`<tr class="perm-tab-row" data-tab="${tab.key}"${title}>
+          <td style="padding-right:22px;font-weight:600;">${escHtml(tab.label)}${warn}</td>
+          <td style="text-align:center;"><input type="checkbox" class="perm-tab-view" onchange="_onTabToggle('${tab.key}','view',this.checked)" /></td>
+          <td style="text-align:center;"><input type="checkbox" class="perm-tab-write" onchange="_onTabToggle('${tab.key}','write',this.checked)" /></td>
+        </tr>`);
+        tab.children.forEach(child => {
+          const p = perms[child.key] || { view: false, write: false };
+          rows.push(`<tr data-dept="${dept.key}" data-tab="${tab.key}" data-key="${child.key}">
+            <td style="padding-right:40px;color:var(--text-muted);">${escHtml(child.label)}</td>
+            <td style="text-align:center;"><input type="checkbox" class="ua-perm-view" ${p.view ? 'checked' : ''} onchange="_onLeafViewChange(this)" /></td>
+            <td style="text-align:center;"><input type="checkbox" class="ua-perm-write" ${p.write ? 'checked' : ''} onchange="_onLeafWriteChange(this)" /></td>
+          </tr>`);
+        });
+      } else {
+        const p = perms[tab.key] || { view: false, write: false };
+        rows.push(`<tr data-dept="${dept.key}" data-key="${tab.key}"${title}>
+          <td style="padding-right:22px;">${escHtml(tab.label)}${warn}</td>
+          <td style="text-align:center;"><input type="checkbox" class="ua-perm-view" ${p.view ? 'checked' : ''} onchange="_onLeafViewChange(this)" /></td>
+          <td style="text-align:center;"><input type="checkbox" class="ua-perm-write" ${p.write ? 'checked' : ''} onchange="_onLeafWriteChange(this)" /></td>
+        </tr>`);
+      }
+    });
+  });
+  body.innerHTML = rows.join('');
+  _refreshAllParentStates();
 }
-// Write implies view (can't sensibly edit a tab you can't see); unchecking
-// view drops write too — keeps the matrix internally consistent instead of
-// silently saving a write:true/view:false combo firestore.rules would
-// technically honor but makes no operational sense.
-function _onPermViewChange(cb) {
+// Sets every data-key row's checkboxes under `selector` to `checked` for
+// `kind` (view/write) — write implies view (can't sensibly edit a tab you
+// can't see); unchecking view drops write too, same rule the single-row
+// version always enforced, just applied to a whole batch at once.
+function _setLeafCheckboxes(selector, kind, checked) {
+  document.querySelectorAll(selector).forEach(row => {
+    const viewCb = row.querySelector('.ua-perm-view');
+    const writeCb = row.querySelector('.ua-perm-write');
+    if (kind === 'view') { viewCb.checked = checked; if (!checked) writeCb.checked = false; }
+    else { writeCb.checked = checked; if (checked) viewCb.checked = true; }
+  });
+}
+function _onDeptToggle(deptKey, kind, checked) {
+  _setLeafCheckboxes(`#uaPermsBody tr[data-dept="${deptKey}"][data-key]`, kind, checked);
+  _refreshAllParentStates();
+}
+function _onTabToggle(tabKey, kind, checked) {
+  _setLeafCheckboxes(`#uaPermsBody tr[data-tab="${tabKey}"][data-key]`, kind, checked);
+  _refreshAllParentStates();
+}
+function _onLeafViewChange(cb) {
   if (!cb.checked) { const row = cb.closest('tr'); row.querySelector('.ua-perm-write').checked = false; }
+  _refreshAllParentStates();
 }
-function _onPermWriteChange(cb) {
+function _onLeafWriteChange(cb) {
   if (cb.checked) { const row = cb.closest('tr'); row.querySelector('.ua-perm-view').checked = true; }
+  _refreshAllParentStates();
+}
+// Derives every department/tab-parent checkbox's checked/indeterminate
+// state from its actual data-key children — these rows never hold their
+// own value, so this always runs after any change anywhere in the tree.
+function _refreshAllParentStates() {
+  document.querySelectorAll('#uaPermsBody tr.perm-tab-row').forEach(row => {
+    const tabKey = row.dataset.tab;
+    ['view', 'write'].forEach(kind => {
+      const kids = [...document.querySelectorAll(`#uaPermsBody tr[data-tab="${tabKey}"][data-key] .ua-perm-${kind}`)];
+      const checkedCount = kids.filter(c => c.checked).length;
+      const cb = row.querySelector('.perm-tab-' + kind);
+      cb.checked = kids.length > 0 && checkedCount === kids.length;
+      cb.indeterminate = checkedCount > 0 && checkedCount < kids.length;
+    });
+  });
+  document.querySelectorAll('#uaPermsBody tr.perm-dept-row').forEach(row => {
+    const deptKey = row.dataset.dept;
+    ['view', 'write'].forEach(kind => {
+      const leaves = [...document.querySelectorAll(`#uaPermsBody tr[data-dept="${deptKey}"][data-key] .ua-perm-${kind}`)];
+      const checkedCount = leaves.filter(c => c.checked).length;
+      const cb = row.querySelector('.perm-dept-' + kind);
+      cb.checked = leaves.length > 0 && checkedCount === leaves.length;
+      cb.indeterminate = checkedCount > 0 && checkedCount < leaves.length;
+    });
+  });
 }
 function readPermsFromMatrix() {
   const perms = {};
-  document.querySelectorAll('#uaPermsBody tr').forEach(row => {
-    perms[row.dataset.tab] = {
+  document.querySelectorAll('#uaPermsBody tr[data-key]').forEach(row => {
+    perms[row.dataset.key] = {
       view: row.querySelector('.ua-perm-view').checked,
       write: row.querySelector('.ua-perm-write').checked
     };

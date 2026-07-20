@@ -61,19 +61,28 @@ let _pivotFavoritesCache = [];                       // saved pivot-analyzer rep
 let _budgetsCache       = [];                        // monthly company budgets (revenue target + expense budget per category)
 let _sessionsCache      = [];                        // POS cash sessions (shift open/close + variance)
 
-// ══ TAB PERMISSIONS — per-user view/write access per page ══════════════
-// Layered on top of the role/branch checks that already exist (admin/
-// manager/cashier + branchId). 'settings' and 'migration' stay hardcoded
-// admin-only (never shown in the matrix — settings still guards the legacy
-// pos_data/accounts credential doc; migration tools are one-time cutover
-// scripts). 'home' has no permission entry — always visible once logged in.
+// ══ PERMISSIONS TREE — Department → Tab → (optional) Sub-item ══════════
+// Replaces the old flat tab list (2026-07-20) — grouped by department to
+// match how the business is actually organized, with a real (not
+// cosmetic) third level wherever the underlying data already lives in
+// separate Firestore documents rather than one shared blob. Also doubles
+// as the home-screen navigation grouping (100-home.js) — one source of
+// truth for "how the app is organized" instead of two structures that
+// could drift apart.
+//
+// A department's `tabs` entries are either a plain leaf tab
+// ({key,label,enforced}) or a tab with real independently-gateable
+// children ({key,label,enforced,children:[{key,label}]}). Permissions are
+// only ever STORED at the leaf level — a childless tab's own key, or each
+// child's key — never at a parent-with-children's own key. 'settings',
+// 'migration' and 'userperms' aren't in this tree at all (hardcoded
+// owner-only, see isRealOwner). 'home' has no permission entry — always
+// visible once logged in.
 //
 // `enforced:true` means firestore.rules actually checks this (see
-// tabForDoc()/hasTabPermission() there) — a denied user is blocked at the
-// database, not just the UI.
-//
-// `enforced:false` covers TWO different reasons, both meaning "hiding the
-// tab here is the only boundary that exists":
+// tabForDoc() there) — a denied user is blocked at the database, not just
+// the UI. `enforced:false` covers TWO different reasons, both meaning
+// "hiding the tab here is the only boundary that exists":
 //  (a) no dedicated cloud document to gate at all — dashboard/reports are
 //      pure derived views, manufacturing is still localStorage-only.
 //  (b) the tab's document IS synced to Firestore, but the SAME document is
@@ -90,26 +99,72 @@ let _sessionsCache      = [];                        // POS cash sessions (shift
 //      designing the rule (see the design notes on this feature), so these
 //      stay UI-only on purpose rather than "mostly enforced with a few
 //      landmines still in it".
-const TAB_PERMISSIONS = [
-  { key: 'dashboard',     label: 'الداشبورد',            enforced: false },
-  { key: 'inventory',     label: 'المخزون',              enforced: false },
-  { key: 'sales',         label: 'المبيعات',             enforced: false },
-  { key: 'suspended',     label: 'الفواتير المعلقة',      enforced: false },
-  { key: 'reports',       label: 'التقارير',              enforced: false },
-  { key: 'customized',    label: 'تقارير مخصصة',          enforced: true  },
-  { key: 'warehouse',     label: 'المخزن الرئيسي',        enforced: true  },
-  { key: 'customers',     label: 'العملاء',               enforced: false },
-  { key: 'promos',        label: 'العروض الترويجية',       enforced: false },
-  { key: 'transfers',     label: 'التحويلات بين الفروع',   enforced: true  },
-  { key: 'purchases',     label: 'المشتريات والموردين',    enforced: true  },
-  { key: 'hr',            label: 'الموارد البشرية',        enforced: true  },
-  { key: 'expenses',      label: 'المصاريف',              enforced: true  },
-  { key: 'audit',         label: 'سجل التغييرات',         enforced: true  },
-  { key: 'accounting',    label: 'المحاسبة',              enforced: true  },
-  { key: 'manufacturing', label: 'التصنيع',               enforced: false },
-  { key: 'helpdesk',      label: 'الدعم الفني',           enforced: true  },
-  { key: 'analytics',     label: 'التحليلات الاستراتيجية', enforced: false },
+const DEPARTMENTS = [
+  { key: 'sales_pos', label: '🛒 المبيعات ونقطة البيع', tabs: [
+    { key: 'sales',     label: 'المبيعات',        enforced: false },
+    { key: 'suspended', label: 'الفواتير المعلقة', enforced: false },
+  ]},
+  { key: 'customers_marketing', label: '👥 العملاء والتسويق', tabs: [
+    { key: 'customers', label: 'العملاء',         enforced: false },
+    { key: 'promos',    label: 'العروض الترويجية', enforced: false },
+  ]},
+  { key: 'inventory_warehouse', label: '📦 المخزون والمخازن', tabs: [
+    { key: 'inventory', label: 'المخزون',       enforced: false },
+    { key: 'warehouse', label: 'المخزن الرئيسي', enforced: true  },
+    { key: 'transfers', label: 'التحويلات',      enforced: true  },
+  ]},
+  { key: 'purchasing', label: '🛍️ المشتريات', tabs: [
+    { key: 'purchases', label: 'المشتريات والموردين', enforced: true, children: [
+      { key: 'purchases_suppliers', label: 'الموردين' },
+      { key: 'purchases_orders',    label: 'أوامر الشراء' },
+      { key: 'purchases_payments',  label: 'مدفوعات الموردين' },
+    ]},
+  ]},
+  { key: 'manufacturing_dept', label: '🏭 التصنيع', tabs: [
+    { key: 'manufacturing', label: 'التصنيع', enforced: false },
+  ]},
+  { key: 'finance', label: '💰 المالية والمحاسبة', tabs: [
+    { key: 'accounting', label: 'المحاسبة', enforced: true },
+    { key: 'expenses',   label: 'المصاريف', enforced: true, children: [
+      { key: 'expenses_main',     label: 'المصاريف' },
+      { key: 'expenses_requests', label: 'طلبات اعتماد المصاريف' },
+    ]},
+  ]},
+  { key: 'hr_dept', label: '👔 الموارد البشرية', tabs: [
+    { key: 'hr', label: 'الموارد البشرية', enforced: true, children: [
+      { key: 'hr_targets',    label: 'الأهداف والعمولات' },
+      { key: 'hr_attendance', label: 'الحضور والانصراف' },
+      { key: 'hr_payroll',    label: 'الرواتب' },
+      { key: 'hr_leaves',     label: 'طلبات الإجازات' },
+    ]},
+  ]},
+  { key: 'reports_analytics', label: '📊 التقارير والتحليلات', tabs: [
+    { key: 'dashboard',  label: 'الداشبورد',            enforced: false },
+    { key: 'reports',    label: 'التقارير',              enforced: false },
+    { key: 'customized', label: 'تقارير مخصصة',          enforced: true  },
+    { key: 'analytics',  label: 'التحليلات الاستراتيجية', enforced: false },
+  ]},
+  { key: 'support_system', label: '🎫 الدعم والنظام', tabs: [
+    { key: 'helpdesk', label: 'الدعم الفني',   enforced: true },
+    { key: 'audit',    label: 'سجل التغييرات', enforced: true },
+  ]},
 ];
+
+// Flat leaf-item list — the only level permissions are actually stored at.
+// Kept under the old name so every existing call site that just needs
+// "the list of {key,label,enforced}" (matrix rendering, defaults
+// computation, the migration tool) keeps working unchanged.
+const TAB_PERMISSIONS = DEPARTMENTS.flatMap(d => d.tabs.flatMap(t =>
+  t.children
+    ? t.children.map(c => ({ key: c.key, label: c.label, enforced: t.enforced }))
+    : [{ key: t.key, label: t.label, enforced: t.enforced }]
+));
+// Parent tab key -> its children's leaf keys, for tabs that have them
+// (purchases/expenses/hr). Used by canViewTab/canWriteTab to aggregate:
+// checking a parent tab key (e.g. showPage('hr')'s gate) means "does this
+// account have access to ANY of its children".
+const TAB_CHILDREN = {};
+DEPARTMENTS.forEach(d => d.tabs.forEach(t => { if (t.children) TAB_CHILDREN[t.key] = t.children.map(c => c.key); }));
 
 // Icon per tab — shared by the admin's HOME_FOLDERS (100-home.js) and the
 // dynamic per-permission grid rendered for non-admin accounts (same file).
@@ -179,6 +234,7 @@ function canViewTab(tabKey) {
   if (isRealOwner) return true;
   const perms = getMyPermissions();
   if (!perms) return true;
+  if (TAB_CHILDREN[tabKey]) return TAB_CHILDREN[tabKey].some(ck => perms[ck] && perms[ck].view);
   if (!TAB_PERMISSIONS.some(t => t.key === tabKey)) return true; // untracked tab — always allowed
   return !!(perms[tabKey] && perms[tabKey].view);
 }
@@ -186,6 +242,7 @@ function canWriteTab(tabKey) {
   if (isRealOwner) return true;
   const perms = getMyPermissions();
   if (!perms) return true;
+  if (TAB_CHILDREN[tabKey]) return TAB_CHILDREN[tabKey].some(ck => perms[ck] && perms[ck].write);
   return !!(perms[tabKey] && perms[tabKey].write);
 }
 

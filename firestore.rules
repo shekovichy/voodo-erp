@@ -73,24 +73,29 @@ service cloud.firestore {
       return !('permissions' in roleData)
         || (tab in roleData.permissions && roleData.permissions[tab][action] == true);
     }
-    // pos_data/{doc} → the one tab that doc's access is gated by. Docs not
-    // listed here (settings, accounts, customers, promotions, sessions,
-    // suspended, price_approvals, ...) are untouched by this system — see
-    // the long comment above. 'transfers' isn't in this map on purpose: it
-    // is shared by BOTH the transfers and warehouse tabs, handled as a
-    // special case at the call site instead of a single-tab lookup.
+    // pos_data/{doc} → the leaf permission key that doc's access is gated
+    // by (2026-07-20: hr/purchases/expenses split into their real
+    // sub-items — each already lives in its own document, so each gets
+    // its own independent grant instead of one collapsed tab-wide key;
+    // see DEPARTMENTS in 00-core.js for the full tree these keys belong
+    // to). Docs not listed here (settings, accounts, customers,
+    // promotions, sessions, suspended, price_approvals, ...) are untouched
+    // by this system — see the long comment above. 'transfers' isn't in
+    // this map on purpose: it is shared by BOTH the transfers and
+    // warehouse tabs, handled as a special case at the call site instead
+    // of a single-tab lookup.
     function tabForDoc(doc) {
       return {
         'pivot_favorites':   'customized',
-        'suppliers':         'purchases',
-        'purchases':         'purchases',
-        'supplier_payments': 'purchases',
-        'hr':                'hr',
-        'attendance':        'hr',
-        'payroll':           'hr',
-        'leave_requests':    'hr',
-        'expenses':          'expenses',
-        'expense_requests':  'expenses',
+        'suppliers':         'purchases_suppliers',
+        'purchases':         'purchases_orders',
+        'supplier_payments': 'purchases_payments',
+        'hr':                'hr_targets',
+        'attendance':        'hr_attendance',
+        'payroll':           'hr_payroll',
+        'leave_requests':    'hr_leaves',
+        'expenses':          'expenses_main',
+        'expense_requests':  'expenses_requests',
         'audit':             'audit',
         'budgets':           'accounting',
         'helpdesk':          'helpdesk'
