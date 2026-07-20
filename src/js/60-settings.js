@@ -154,11 +154,13 @@ function openUserAccountModal(uid) {
     renderPermsMatrix(_defaultPermissionsFor('cashier'));
   }
   toggleUserAccountFields();
-  document.getElementById('userAccountModal').classList.remove('hidden');
+  const form = document.getElementById('uaInlineForm');
+  form.classList.remove('hidden');
+  form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function closeUserAccountModal() {
-  document.getElementById('userAccountModal').classList.add('hidden');
+  document.getElementById('uaInlineForm').classList.add('hidden');
 }
 
 async function saveUserAccount() {

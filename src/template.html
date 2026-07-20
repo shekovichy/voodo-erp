@@ -2111,7 +2111,62 @@
             <div class="card-title">المستخدمين</div>
             <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">أنشئ حساب أدمن أو مدير فرع أو كاشير، واختار بالظبط أي تابات يشوفها ويقدر يتصرف فيها من الجدول. لقب "أدمن" مجرد اسم — أنت اللي بتحدد صلاحياته الفعلية.</p>
             <div id="userAccountsContainer" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
-            <button class="btn btn-primary" onclick="openUserAccountModal()">➕ إضافة مستخدم</button>
+            <button class="btn btn-primary" id="uaAddBtn" onclick="openUserAccountModal()">➕ إضافة مستخدم</button>
+
+            <!-- Inline form — appears right here in the page when "إضافة
+                 مستخدم" or "✏️" is clicked, not a floating popup, per direct
+                 feedback that a modal for this screen felt disconnected
+                 from the tab it belongs to. -->
+            <div id="uaInlineForm" class="hidden" style="margin-top:18px;padding-top:18px;border-top:2px solid var(--border);display:flex;flex-direction:column;gap:14px;">
+              <h3 style="margin:0;font-size:16px;" id="uaModalTitle">➕ إضافة مستخدم</h3>
+              <input type="hidden" id="uaEditId" value="" />
+              <div class="grid-2">
+                <div>
+                  <label style="font-size:12px;color:var(--text-muted);">اسم المستخدم</label>
+                  <input class="form-control" id="uaUsername" placeholder="username" style="margin-top:4px;" />
+                </div>
+                <div>
+                  <label style="font-size:12px;color:var(--text-muted);">كلمة المرور</label>
+                  <input class="form-control" id="uaPassword" type="password" placeholder="password" style="margin-top:4px;" />
+                </div>
+              </div>
+              <div>
+                <label style="font-size:12px;color:var(--text-muted);">نوع المستخدم</label>
+                <input type="hidden" id="uaType" value="branch" />
+                <div style="display:flex;gap:4px;margin-top:4px;background:var(--bg-secondary);padding:4px;border-radius:10px;max-width:400px;">
+                  <button type="button" id="uaTypeBtn_branch" class="btn" style="flex:1;font-size:13px;padding:8px 12px;border-radius:7px;" onclick="selectUserType('branch')">🧑‍💻 مستخدم فرع</button>
+                  <button type="button" id="uaTypeBtn_admin" class="btn" style="flex:1;font-size:13px;padding:8px 12px;border-radius:7px;" onclick="selectUserType('admin')">👑 أدمن</button>
+                </div>
+              </div>
+              <div id="uaBranchOnlyFields" style="display:flex;flex-direction:column;gap:14px;">
+                <div>
+                  <label style="font-size:12px;color:var(--text-muted);">الفرع</label>
+                  <select class="form-control" id="uaBranch" style="margin-top:4px;max-width:400px;"></select>
+                </div>
+                <div>
+                  <label style="font-size:12px;color:var(--text-muted);">الصلاحية الأساسية (نقطة بداية بس — عدّل الجدول تحت زي ما تحب)</label>
+                  <input type="hidden" id="uaRole" value="cashier" />
+                  <div style="display:flex;gap:4px;margin-top:4px;background:var(--bg-secondary);padding:4px;border-radius:10px;max-width:400px;">
+                    <button type="button" id="uaRoleBtn_cashier" class="btn" style="flex:1;font-size:13px;padding:8px 12px;border-radius:7px;" onclick="selectUserRole('cashier')">🧑‍💻 كاشير</button>
+                    <button type="button" id="uaRoleBtn_manager" class="btn" style="flex:1;font-size:13px;padding:8px 12px;border-radius:7px;" onclick="selectUserRole('manager')">🧑‍💼 مدير فرع</button>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label style="font-size:12px;color:var(--text-muted);margin-bottom:6px;display:block;">صلاحيات التابات — "أدمن" مجرد اسم، صلاحياته الفعلية هي اللي تحددها هنا. لكل تاب: مشاهدة و/أو كتابة (إضافة/تعديل/حذف)</label>
+                <div class="table-wrap" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
+                  <table style="font-size:12px;">
+                    <thead><tr><th style="text-align:right;">التاب</th><th>مشاهدة</th><th>كتابة</th></tr></thead>
+                    <tbody id="uaPermsBody"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div id="uaMsg"></div>
+              <div style="display:flex;gap:8px;">
+                <button class="btn btn-primary" onclick="saveUserAccount()">💾 حفظ</button>
+                <button class="btn btn-gray" onclick="closeUserAccountModal()">إلغاء</button>
+              </div>
+            </div>
           </div>
           <div class="card" style="grid-column:1/-1;">
             <div class="card-title">🔑 حسابات دخول محلية قديمة</div>
@@ -2445,59 +2500,6 @@
 </div>
 
 <!-- ════════════════ USER ACCOUNT MODAL ════════════════ -->
-<div id="userAccountModal" class="modal-overlay hidden">
-  <div class="modal-box" style="max-width:560px;width:94%;">
-    <div class="modal-header"><h3 style="margin:0;font-size:17px;" id="uaModalTitle">➕ إضافة مستخدم</h3></div>
-    <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:14px;max-height:75vh;overflow-y:auto;">
-      <input type="hidden" id="uaEditId" value="" />
-      <div>
-        <label style="font-size:12px;color:var(--text-muted);">اسم المستخدم</label>
-        <input class="form-control" id="uaUsername" placeholder="username" style="margin-top:4px;" />
-      </div>
-      <div>
-        <label style="font-size:12px;color:var(--text-muted);">كلمة المرور</label>
-        <input class="form-control" id="uaPassword" type="password" placeholder="password" style="margin-top:4px;" />
-      </div>
-      <div>
-        <label style="font-size:12px;color:var(--text-muted);">نوع المستخدم</label>
-        <input type="hidden" id="uaType" value="branch" />
-        <div style="display:flex;gap:4px;margin-top:4px;background:var(--bg-secondary);padding:4px;border-radius:10px;">
-          <button type="button" id="uaTypeBtn_branch" class="btn" style="flex:1;font-size:13px;padding:8px 12px;border-radius:7px;" onclick="selectUserType('branch')">🧑‍💻 مستخدم فرع</button>
-          <button type="button" id="uaTypeBtn_admin" class="btn" style="flex:1;font-size:13px;padding:8px 12px;border-radius:7px;" onclick="selectUserType('admin')">👑 أدمن</button>
-        </div>
-      </div>
-      <div id="uaBranchOnlyFields" style="display:flex;flex-direction:column;gap:14px;">
-        <div>
-          <label style="font-size:12px;color:var(--text-muted);">الفرع</label>
-          <select class="form-control" id="uaBranch" style="margin-top:4px;"></select>
-        </div>
-        <div>
-          <label style="font-size:12px;color:var(--text-muted);">الصلاحية الأساسية (نقطة بداية بس — عدّل الجدول تحت زي ما تحب)</label>
-          <input type="hidden" id="uaRole" value="cashier" />
-          <div style="display:flex;gap:4px;margin-top:4px;background:var(--bg-secondary);padding:4px;border-radius:10px;">
-            <button type="button" id="uaRoleBtn_cashier" class="btn" style="flex:1;font-size:13px;padding:8px 12px;border-radius:7px;" onclick="selectUserRole('cashier')">🧑‍💻 كاشير</button>
-            <button type="button" id="uaRoleBtn_manager" class="btn" style="flex:1;font-size:13px;padding:8px 12px;border-radius:7px;" onclick="selectUserRole('manager')">🧑‍💼 مدير فرع</button>
-          </div>
-        </div>
-      </div>
-      <div>
-        <label style="font-size:12px;color:var(--text-muted);margin-bottom:6px;display:block;">صلاحيات التابات — "أدمن" مجرد اسم، صلاحياته الفعلية هي اللي تحددها هنا. لكل تاب: مشاهدة و/أو كتابة (إضافة/تعديل/حذف)</label>
-        <div class="table-wrap" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
-          <table style="font-size:12px;">
-            <thead><tr><th style="text-align:right;">التاب</th><th>مشاهدة</th><th>كتابة</th></tr></thead>
-            <tbody id="uaPermsBody"></tbody>
-          </table>
-        </div>
-      </div>
-      <div id="uaMsg"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-gray" onclick="closeUserAccountModal()">إلغاء</button>
-      <button class="btn btn-primary" onclick="saveUserAccount()">💾 حفظ</button>
-    </div>
-  </div>
-</div>
-
 <!-- ════════════════ AUDIT DIFF MODAL ════════════════ -->
 <div id="auditDiffModal" class="modal-overlay hidden">
   <div class="modal-box" style="max-width:480px;width:94%;">
