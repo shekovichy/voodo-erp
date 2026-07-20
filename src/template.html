@@ -2460,10 +2460,11 @@
       </div>
       <div>
         <label style="font-size:12px;color:var(--text-muted);">نوع المستخدم</label>
-        <select class="form-control" id="uaType" style="margin-top:4px;" onchange="onUserTypeChanged()">
-          <option value="branch">مستخدم فرع</option>
-          <option value="admin">أدمن</option>
-        </select>
+        <input type="hidden" id="uaType" value="branch" />
+        <div style="display:flex;gap:4px;margin-top:4px;background:var(--bg-secondary);padding:4px;border-radius:10px;">
+          <button type="button" id="uaTypeBtn_branch" class="btn" style="flex:1;font-size:13px;padding:8px 12px;border-radius:7px;" onclick="selectUserType('branch')">🧑‍💻 مستخدم فرع</button>
+          <button type="button" id="uaTypeBtn_admin" class="btn" style="flex:1;font-size:13px;padding:8px 12px;border-radius:7px;" onclick="selectUserType('admin')">👑 أدمن</button>
+        </div>
       </div>
       <div id="uaBranchOnlyFields" style="display:flex;flex-direction:column;gap:14px;">
         <div>
@@ -2472,10 +2473,11 @@
         </div>
         <div>
           <label style="font-size:12px;color:var(--text-muted);">الصلاحية الأساسية (نقطة بداية بس — عدّل الجدول تحت زي ما تحب)</label>
-          <select class="form-control" id="uaRole" style="margin-top:4px;" onchange="applyPermissionTemplate(this.value)">
-            <option value="cashier">كاشير</option>
-            <option value="manager">مدير فرع</option>
-          </select>
+          <input type="hidden" id="uaRole" value="cashier" />
+          <div style="display:flex;gap:4px;margin-top:4px;background:var(--bg-secondary);padding:4px;border-radius:10px;">
+            <button type="button" id="uaRoleBtn_cashier" class="btn" style="flex:1;font-size:13px;padding:8px 12px;border-radius:7px;" onclick="selectUserRole('cashier')">🧑‍💻 كاشير</button>
+            <button type="button" id="uaRoleBtn_manager" class="btn" style="flex:1;font-size:13px;padding:8px 12px;border-radius:7px;" onclick="selectUserRole('manager')">🧑‍💼 مدير فرع</button>
+          </div>
         </div>
       </div>
       <div>

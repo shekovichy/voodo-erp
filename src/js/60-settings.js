@@ -40,6 +40,33 @@ async function renderUserAccountsSettings() {
   }).join('');
 }
 
+// ── Segmented pill selectors (نوع المستخدم / الصلاحية الأساسية) ──────
+// Same visual pattern already used for the HR/Accounting/Purchases page
+// tab switchers (a pill row inside a var(--bg-secondary) track) — reused
+// here instead of a plain <select>, since each is only 2 options and this
+// screen is security-relevant enough to read clearly at a glance instead
+// of hiding the choice behind a dropdown.
+function _setActivePill(prefix, options, value) {
+  options.forEach(v => {
+    const btn = document.getElementById(prefix + '_' + v);
+    if (!btn) return;
+    const active = v === value;
+    btn.style.background = active ? 'white' : '';
+    btn.style.fontWeight = active ? '700' : '400';
+    btn.style.boxShadow = active ? '0 1px 4px rgba(0,0,0,.1)' : '';
+  });
+}
+function setUserTypeValue(v) {
+  document.getElementById('uaType').value = v;
+  _setActivePill('uaTypeBtn', ['branch', 'admin'], v);
+}
+function setUserRoleValue(v) {
+  document.getElementById('uaRole').value = v;
+  _setActivePill('uaRoleBtn', ['cashier', 'manager'], v);
+}
+function selectUserType(v) { setUserTypeValue(v); onUserTypeChanged(); }
+function selectUserRole(v) { setUserRoleValue(v); applyPermissionTemplate(v); }
+
 function toggleUserAccountFields() {
   const isAdmin = document.getElementById('uaType').value === 'admin';
   document.getElementById('uaBranchOnlyFields').style.display = isAdmin ? 'none' : 'flex';
@@ -111,10 +138,10 @@ function openUserAccountModal(uid) {
     userInp.value = acc.username; userInp.disabled = true;
     passInp.value = ''; passInp.disabled = true;
     passInp.placeholder = 'المستخدم يغيّر كلمة سره بنفسه من الإعدادات';
-    document.getElementById('uaType').value = acc.role === 'admin' ? 'admin' : 'branch';
+    setUserTypeValue(acc.role === 'admin' ? 'admin' : 'branch');
     if (acc.role !== 'admin') {
       branchSel.value = acc.branchId || 'b1';
-      document.getElementById('uaRole').value = acc.role === 'manager' ? 'manager' : 'cashier';
+      setUserRoleValue(acc.role === 'manager' ? 'manager' : 'cashier');
     }
     renderPermsMatrix(acc.permissions || _defaultPermissionsFor(acc.role));
   } else {
@@ -122,8 +149,8 @@ function openUserAccountModal(uid) {
     userInp.value = ''; userInp.disabled = false;
     passInp.value = ''; passInp.disabled = false;
     passInp.placeholder = 'كلمة المرور (6 أحرف على الأقل)';
-    document.getElementById('uaType').value = 'branch';
-    document.getElementById('uaRole').value = 'cashier';
+    setUserTypeValue('branch');
+    setUserRoleValue('cashier');
     renderPermsMatrix(_defaultPermissionsFor('cashier'));
   }
   toggleUserAccountFields();
