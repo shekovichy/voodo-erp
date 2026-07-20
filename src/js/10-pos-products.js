@@ -29,14 +29,9 @@ function renderProducts() {
       (inv.length ? 'لم يُعثر على نتائج' : '📦 لا توجد منتجات — استورد ملف Excel من لوحة الإدارة') + '</div>';
     return;
   }
-  const threshold = getThreshold();
   grid.innerHTML = items.map(p => {
     const oos = p.qty <= 0;
-    // Card accent reflects actual stock level (reuses the same low-stock
-    // threshold as the bell/report elsewhere), not a decorative color —
-    // a cashier scanning the grid can read urgency at a glance.
-    const stockLevel = oos ? 'out' : p.qty <= threshold ? 'low' : 'ok';
-    return `<div class="product-card stock-${stockLevel} ${oos ? 'out-of-stock' : ''}" onclick="${oos ? '' : `addToCart('${escJsAttr(p.code)}')`}">
+    return `<div class="product-card ${oos ? 'out-of-stock' : ''}" onclick="${oos ? '' : `addToCart('${escJsAttr(p.code)}')`}">
       <div class="product-code">${escHtml(p.code)}</div>
       <div class="product-name">${escHtml(p.name)}</div>
       <div class="product-price">${fmt(p.priceAfter)} ج</div>
