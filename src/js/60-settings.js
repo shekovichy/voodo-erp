@@ -181,17 +181,108 @@ function deleteUserAccount(uid) {
   const acc = _rolesListCache.find(a => a.uid === uid);
   if (!acc) return;
   showConfirmModal(`حذف المستخدم "${acc.username}"؟ سيفقد كل صلاحيات الوصول فوراً.`, function() {
-    // Removing the roles doc revokes ALL access server-side (see
-    // firestore.rules). The orphaned Firebase Auth account is harmless —
-    // deleting it needs the Admin SDK, which a client app doesn't have.
+    // Removing the roles doc revokes ALL Firebase-based access server-side
+    // (see firestore.rules) — but _legacyLogin() in 05-utils.js also
+    // checks two OLDER, independent credential stores that predate the
+    // Firebase rollout: getAccounts() (synced via pos_data/accounts) and
+    // getBranchUsers() (per-branch, local-only). Neither is touched by
+    // deleting the roles doc, so a username that also has a leftover
+    // entry there (common for staff who predate the Firebase migration)
+    // could still fully log in locally after being "deleted" here —
+    // discovered 2026-07-20 when a removed employee could still log in.
+    // Purge matching entries from both so deletion is actually final.
+    const uname = (acc.username || '').toLowerCase();
+    setAccounts(getAccounts().filter(a => (a.username || '').toLowerCase() !== uname));
+    const bUsers = getBranchUsers();
+    let bChanged = false;
+    Object.keys(bUsers).forEach(b => {
+      if (bUsers[b] && (bUsers[b].username || '').toLowerCase() === uname) {
+        bUsers[b] = { username: '', password: '' };
+        bChanged = true;
+      }
+    });
+    if (bChanged) setBranchUsers(bUsers);
+
     firebase.firestore().collection('roles').doc(uid).delete()
       .then(() => {
         renderUserAccountsSettings();
-        addAuditLog('user.delete', `تم حذف مستخدم: ${acc.username}`, currentBranch);
+        addAuditLog('user.delete', `تم حذف مستخدم: ${acc.username} (شامل أي حساب دخول محلي قديم بنفس الاسم)`, currentBranch);
         showMsg('sSettingsMsg', '✅ تم حذف المستخدم وسحب صلاحياته');
       })
       .catch(e => showMsg('sSettingsMsg', 'تعذّر الحذف: ' + e.message, 'danger'));
   });
+}
+
+// ── LEGACY LOCAL LOGIN CLEANUP ───────────────────────────────────
+// Surfaces every account _legacyLogin() (05-utils.js) would still accept
+// that isn't the new Firebase/roles system — so the admin can see and
+// clear exactly what's letting a "deleted" user keep logging in locally.
+// deleteUserAccount() now purges matches automatically going forward;
+// this is for entries left over from BEFORE that fix existed.
+function renderLegacyLoginCleanup() {
+  const container = document.getElementById('legacyLoginContainer');
+  if (!container) return;
+  const rows = [];
+
+  getAccounts().forEach((a, idx) => {
+    rows.push({
+      label: `${escHtml(a.username || '?')} — ${a.type === 'admin' ? 'أدمن' : (a.role === 'manager' ? 'مدير فرع' : 'كاشير')}${a.branchId ? ' — ' + escHtml(getBranchName(a.branchId)) : ''}`,
+      sub: 'حساب دخول محلي قديم (متزامن)',
+      onDelete: `removeLegacyAccount(${idx})`
+    });
+  });
+
+  const bUsers = getBranchUsers();
+  BRANCH_IDS.forEach(b => {
+    const bu = bUsers[b];
+    // An empty password can never match (checkPass short-circuits on a
+    // falsy stored value) — skip the harmless untouched-default slots so
+    // the list only shows accounts that could actually still log in.
+    if (bu && bu.username && bu.password) {
+      rows.push({
+        label: `${escHtml(bu.username)} — ${escHtml(getBranchName(b))}`,
+        sub: 'حساب دخول محلي قديم (على الجهاز ده بس)',
+        onDelete: `removeLegacyBranchUser('${escJsAttr(b)}')`
+      });
+    }
+  });
+
+  const users = getUsers();
+  if (users.admin) rows.push({ label: 'admin', sub: 'حساب أدمن محلي قديم (على الجهاز ده بس)', onDelete: `removeLegacyFixedUser('admin')` });
+  if (users.cashier) rows.push({ label: 'cashier', sub: 'حساب كاشير محلي قديم (على الجهاز ده بس)', onDelete: `removeLegacyFixedUser('cashier')` });
+
+  container.innerHTML = !rows.length
+    ? '<div style="font-size:13px;color:var(--text-muted);">مفيش حسابات دخول محلية قديمة متبقية 👍</div>'
+    : rows.map(r => `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--border);border-radius:8px;padding:8px 12px;background:var(--bg);">
+        <div style="font-size:13px;"><strong>${r.label}</strong><span style="color:var(--text-muted);"> — ${r.sub}</span></div>
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;color:var(--danger);border-color:var(--danger);" onclick="${r.onDelete}">🗑️ حذف</button>
+      </div>`).join('');
+}
+function removeLegacyAccount(idx) {
+  const list = getAccounts();
+  const acc = list[idx];
+  if (!acc) return;
+  setAccounts(list.filter((_, i) => i !== idx));
+  addAuditLog('user.delete', `حذف حساب دخول محلي قديم: ${acc.username}`, currentBranch);
+  renderLegacyLoginCleanup();
+  showMsg('sSettingsMsg', '✅ اتحذف');
+}
+function removeLegacyBranchUser(b) {
+  const bUsers = getBranchUsers();
+  const uname = bUsers[b] && bUsers[b].username;
+  bUsers[b] = { username: '', password: '' };
+  setBranchUsers(bUsers);
+  addAuditLog('user.delete', `حذف حساب دخول محلي قديم: ${uname} (${getBranchName(b)})`, currentBranch);
+  renderLegacyLoginCleanup();
+  showMsg('sSettingsMsg', '✅ اتحذف');
+}
+function removeLegacyFixedUser(role) {
+  const users = getUsers();
+  users[role] = '';
+  setUsers(users);
+  addAuditLog('user.delete', `حذف حساب دخول محلي قديم: ${role}`, currentBranch);
+  renderLegacyLoginCleanup();
+  showMsg('sSettingsMsg', '✅ اتحذف');
 }
 
 function changePass(role) {
