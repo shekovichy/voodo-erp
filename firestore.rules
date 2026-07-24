@@ -84,6 +84,33 @@ service cloud.firestore {
     // this map on purpose: it is shared by BOTH the transfers and
     // warehouse tabs, handled as a special case at the call site instead
     // of a single-tab lookup.
+    //
+    // isTabGatedDoc()/tabForDoc() are a matched pair: 2026-07-25 Rules
+    // Playground testing found `tabForDoc(doc) == null` unreliable as the
+    // "is this doc gated at all" check — a missing map key can compare
+    // unequal to `null` depending on the rules engine version, which was
+    // silently denying access to ungated docs (customers, sessions,
+    // suspended, promotions...) for any account with a non-empty
+    // `permissions` map. `doc in {...}` membership is unambiguous, so it's
+    // now the actual gate; tabForDoc() is only ever called after that
+    // membership check has already passed.
+    function isTabGatedDoc(doc) {
+      return doc in {
+        'pivot_favorites':   true,
+        'suppliers':         true,
+        'purchases':         true,
+        'supplier_payments': true,
+        'hr':                true,
+        'attendance':        true,
+        'payroll':           true,
+        'leave_requests':    true,
+        'expenses':          true,
+        'expense_requests':  true,
+        'audit':             true,
+        'budgets':           true,
+        'helpdesk':          true
+      };
+    }
     function tabForDoc(doc) {
       return {
         'pivot_favorites':   'customized',
@@ -132,7 +159,7 @@ service cloud.firestore {
           doc == 'transfers'
             ? (_tabOk(get(/databases/$(database)/documents/roles/$(request.auth.uid)).data, 'transfers', 'view') ||
                _tabOk(get(/databases/$(database)/documents/roles/$(request.auth.uid)).data, 'warehouse', 'view'))
-            : (tabForDoc(doc) == null ||
+            : (!isTabGatedDoc(doc) ||
                _tabOk(get(/databases/$(database)/documents/roles/$(request.auth.uid)).data, tabForDoc(doc), 'view'))
         ))
       );
@@ -144,7 +171,7 @@ service cloud.firestore {
            doc == 'transfers'
              ? (_tabOk(get(/databases/$(database)/documents/roles/$(request.auth.uid)).data, 'transfers', 'write') ||
                 _tabOk(get(/databases/$(database)/documents/roles/$(request.auth.uid)).data, 'warehouse', 'write'))
-             : (tabForDoc(doc) == null ||
+             : (!isTabGatedDoc(doc) ||
                 _tabOk(get(/databases/$(database)/documents/roles/$(request.auth.uid)).data, tabForDoc(doc), 'write'))
          ))
       );
