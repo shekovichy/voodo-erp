@@ -142,7 +142,16 @@ function savePromo() {
 
 function deletePromo(id) {
   showConfirmModal('حذف هذا العرض؟', function() {
-    setPromos(getPromos().filter(p => p.id !== id));
+    const p = getPromos().find(x => x.id === id);
+    setPromos(getPromos().filter(x => x.id !== id));
+    if (p) {
+      const changes = buildAuditDiff(
+        { name: p.name, type: p.type, active: p.active ? 'نشط' : 'موقوف' },
+        {},
+        { name: 'الاسم', type: 'النوع', active: 'الحالة' }
+      );
+      addAuditLog('promo.delete', `حذف عرض: ${p.name}`, null, changes);
+    }
     renderPromosPage();
   });
 }

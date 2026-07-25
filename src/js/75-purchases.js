@@ -69,7 +69,16 @@ function saveSupplier() {
 
 function deleteSupplier(id) {
   showConfirmModal('حذف هذا المورد نهائياً؟', function() {
+    const sup = getSuppliers().find(s => s.id === id);
     setSuppliers(getSuppliers().filter(s => s.id !== id));
+    if (sup) {
+      const changes = buildAuditDiff(
+        { name: sup.name, phone: sup.phone || '-', balance: fmt(sup.balance || 0) + ' ج' },
+        {},
+        { name: 'الاسم', phone: 'الهاتف', balance: 'الرصيد وقت الحذف' }
+      );
+      addAuditLog('supplier.delete', `حذف مورد: ${sup.name}`, null, changes);
+    }
     renderSuppliersPage();
   });
 }
@@ -332,10 +341,17 @@ function _receivePOConfirmed(po) {
   // Update supplier balance
   const supList = getSuppliers();
   const supIdx = supList.findIndex(s => s.id === po.supplierId);
+  const balanceBefore = supIdx >= 0 ? (supList[supIdx].balance || 0) : 0;
   if (supIdx >= 0) { supList[supIdx].balance = (supList[supIdx].balance || 0) + po.total; }
   setSuppliers(supList);
 
-  addAuditLog('po.receive', `استلام أمر شراء #${po.id.slice(-6)} — ${getBranchName(po.branchId)} — ${fmt(po.total)} ج`, po.branchId);
+  const receiveChanges = po.items.map(item => ({
+    label: item.name,
+    before: '—',
+    after: `${item.qty} وحدة @ ${fmt(item.cost)} ج`
+  }));
+  receiveChanges.push({ label: 'رصيد المورّد', before: fmt(balanceBefore) + ' ج', after: fmt(balanceBefore + po.total) + ' ج' });
+  addAuditLog('po.receive', `استلام أمر شراء #${po.id.slice(-6)} — ${getBranchName(po.branchId)} — ${fmt(po.total)} ج`, po.branchId, receiveChanges);
   closeModal('poDetailsModal');
   renderPurchasesPage();
   showToast(`✅ تم الاستلام بنجاح!\nتم تحديث مخزون ${getBranchName(po.branchId)} وتكاليف الأصناف.`);
@@ -388,19 +404,26 @@ function saveSupplierPayment() {
 
   const supList = getSuppliers();
   const supIdx = supList.findIndex(s => s.id === supplierId);
+  const balanceBefore = supIdx >= 0 ? (supList[supIdx].balance || 0) : 0;
   if (supIdx >= 0) supList[supIdx].balance = Math.max(0, (supList[supIdx].balance || 0) - amount);
   setSuppliers(supList);
 
+  const notes = document.getElementById('spNotes').value.trim();
   const payments = getSupplierPayments();
   payments.push({
     id: 'pay_' + Date.now(), supplierId, supplierName: sup.name,
     amount, date, allocations,
-    notes: document.getElementById('spNotes').value.trim(),
+    notes,
     by: currentUser, createdAt: Date.now(),
   });
   setSupplierPayments(payments);
 
-  addAuditLog('supplier.payment', `دفعة لمورد ${sup.name} — ${fmt(amount)} ج`, null);
+  const paymentChanges = [
+    { label: 'رصيد المورّد', before: fmt(balanceBefore) + ' ج', after: fmt(Math.max(0, balanceBefore - amount)) + ' ج' },
+    { label: 'موزّعة على', before: '—', after: allocations.map(a => `PO#${a.poId.slice(-6)}: ${fmt(a.amount)} ج`).join('، ') || '—' },
+  ];
+  if (notes) paymentChanges.push({ label: 'ملاحظات', before: '—', after: notes });
+  addAuditLog('supplier.payment', `دفعة لمورد ${sup.name} — ${fmt(amount)} ج`, null, paymentChanges);
   closeSupplierPaymentModal();
   renderPurchasesPage();
   showToast('✅ تم تسجيل الدفعة');
@@ -408,7 +431,16 @@ function saveSupplierPayment() {
 
 function deletePO(id) {
   showConfirmModal('حذف أمر الشراء هذا؟', function() {
+    const po = getPurchases().find(p => p.id === id);
     setPurchases(getPurchases().filter(p => p.id !== id));
+    if (po) {
+      const changes = buildAuditDiff(
+        { supplier: po.supplierName || po.supplierId, status: po.status, total: fmt(po.total) + ' ج', items: po.items.map(i => `${i.name} ×${i.qty}`).join('، ') },
+        {},
+        { supplier: 'المورّد', status: 'الحالة', total: 'الإجمالي', items: 'الأصناف' }
+      );
+      addAuditLog('po.delete', `حذف أمر شراء #${id.slice(-6)}`, po.branchId, changes);
+    }
     renderPurchasesPage();
   });
 }

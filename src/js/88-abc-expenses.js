@@ -61,10 +61,25 @@ function saveExpense() {
     by:       currentUser,
     createdAt: editId ? (list.find(e=>e.id===editId)?.createdAt||Date.now()) : Date.now()
   };
-  if (editId) { const idx=list.findIndex(e=>e.id===editId); if(idx>=0) list[idx]=rec; else list.push(rec); }
-  else list.push(rec);
-  setExpenses(list);
-  addAuditLog('expense.add', `مصروف: ${EXP_CATS[rec.category]} — ${fmt(rec.amount)} ج ${rec.type==='company'?'(إداري)':'('+(rec.branchId?getBranchName(rec.branchId):'')+')'}`, null);
+  const fieldLabels = { category: 'الفئة', amount: 'المبلغ', date: 'التاريخ', note: 'ملاحظة' };
+  const displayRec = { category: EXP_CATS[rec.category], amount: fmt(rec.amount) + ' ج', date: rec.date, note: rec.note || '-' };
+  if (editId) {
+    const idx = list.findIndex(e => e.id === editId);
+    const oldRec = idx >= 0 ? list[idx] : null;
+    if (idx >= 0) list[idx] = rec; else list.push(rec);
+    setExpenses(list);
+    const changes = buildAuditDiff(
+      oldRec ? { category: EXP_CATS[oldRec.category], amount: fmt(oldRec.amount) + ' ج', date: oldRec.date, note: oldRec.note || '-' } : null,
+      displayRec,
+      fieldLabels
+    );
+    addAuditLog('expense.edit', `تعديل مصروف: ${EXP_CATS[rec.category]} — ${fmt(rec.amount)} ج`, null, changes);
+  } else {
+    list.push(rec);
+    setExpenses(list);
+    const changes = buildAuditDiff(null, displayRec, fieldLabels);
+    addAuditLog('expense.add', `مصروف: ${EXP_CATS[rec.category]} — ${fmt(rec.amount)} ج ${rec.type==='company'?'(إداري)':'('+(rec.branchId?getBranchName(rec.branchId):'')+')'}`, null, changes);
+  }
   closeModal('expenseModal');
   renderExpensesPage();
   buildDashboard();
@@ -72,7 +87,16 @@ function saveExpense() {
 
 function deleteExpense(id) {
   showConfirmModal('حذف هذا المصروف؟', function() {
+    const rec = getExpenses().find(e => e.id === id);
     setExpenses(getExpenses().filter(e => e.id !== id));
+    if (rec) {
+      const changes = buildAuditDiff(
+        { category: EXP_CATS[rec.category], amount: fmt(rec.amount) + ' ج', date: rec.date, note: rec.note || '-' },
+        {},
+        { category: 'الفئة', amount: 'المبلغ', date: 'التاريخ', note: 'ملاحظة' }
+      );
+      addAuditLog('expense.delete', `حذف مصروف: ${EXP_CATS[rec.category]} — ${fmt(rec.amount)} ج`, null, changes);
+    }
     renderExpensesPage();
     buildDashboard();
   });
@@ -252,8 +276,12 @@ function renderAuditPage() {
   const actionLabels = {
     'inv.add':'➕ إضافة صنف', 'inv.edit':'✏️ تعديل صنف', 'inv.delete':'🗑️ حذف صنف',
     'price.change':'🏷️ تغيير سعر', 'sale.complete':'💰 فاتورة مكتملة', 'sale.return':'↩️ مرتجع',
-    'po.receive':'📦 استلام بضاعة', 'po.create':'🛒 أمر شراء', 'transfer.done':'🔄 تحويل',
-    'expense.add':'💸 مصروف', 'settings.change':'⚙️ تغيير إعداد',
+    'po.receive':'📦 استلام بضاعة', 'po.create':'🛒 أمر شراء', 'po.delete':'🗑️ حذف أمر شراء',
+    'supplier.delete':'🗑️ حذف مورّد', 'supplier.payment':'💵 دفعة لمورّد',
+    'customer.delete':'🗑️ حذف عميل', 'promo.delete':'🗑️ حذف عرض',
+    'transfer.done':'🔄 تحويل',
+    'expense.add':'💸 إضافة مصروف', 'expense.edit':'✏️ تعديل مصروف', 'expense.delete':'🗑️ حذف مصروف',
+    'settings.change':'⚙️ تغيير إعداد', 'user.save':'👤 حفظ مستخدم', 'user.delete':'🗑️ حذف مستخدم',
     'auth.login':'🔐 تسجيل دخول', 'auth.logout':'🚪 تسجيل خروج'
   };
 

@@ -256,6 +256,18 @@ function getMyPermissions() {
   if (!rec) return null; // no cloud role at all (legacy local account) — nothing to restrict
   return rec.permissions || _defaultPermissionsFor(rec.role);
 }
+
+// Turns a raw permissions map into a readable Arabic one-liner for the
+// audit log (e.g. "المخزون (عرض+تعديل)، المشتريات (عرض)") — used when
+// creating/deleting a user so the log shows what access they actually had,
+// not just their role label. Only lists tabs with at least view granted.
+function summarizePermissions(perms) {
+  if (!perms) return 'كل الصلاحيات (بدون قيود)';
+  const parts = TAB_PERMISSIONS
+    .filter(t => perms[t.key] && perms[t.key].view)
+    .map(t => `${t.label}${perms[t.key].write ? ' (عرض+تعديل)' : ' (عرض فقط)'}`);
+  return parts.length ? parts.join('، ') : 'بدون أي صلاحيات ظاهرة';
+}
 function canViewTab(tabKey) {
   if (isRealOwner) return true;
   const perms = getMyPermissions();

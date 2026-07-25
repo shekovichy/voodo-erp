@@ -3547,6 +3547,18 @@ function getMyPermissions() {
   if (!rec) return null; // no cloud role at all (legacy local account) — nothing to restrict
   return rec.permissions || _defaultPermissionsFor(rec.role);
 }
+
+// Turns a raw permissions map into a readable Arabic one-liner for the
+// audit log (e.g. "المخزون (عرض+تعديل)، المشتريات (عرض)") — used when
+// creating/deleting a user so the log shows what access they actually had,
+// not just their role label. Only lists tabs with at least view granted.
+function summarizePermissions(perms) {
+  if (!perms) return 'كل الصلاحيات (بدون قيود)';
+  const parts = TAB_PERMISSIONS
+    .filter(t => perms[t.key] && perms[t.key].view)
+    .map(t => `${t.label}${perms[t.key].write ? ' (عرض+تعديل)' : ' (عرض فقط)'}`);
+  return parts.length ? parts.join('، ') : 'بدون أي صلاحيات ظاهرة';
+}
 function canViewTab(tabKey) {
   if (isRealOwner) return true;
   const perms = getMyPermissions();
@@ -6157,7 +6169,13 @@ function saveProduct() {
   } else {
     if (inv.find(x => x.code === code)) { showToast('هذا الكود موجود مسبقاً'); return; }
     adjustStock([{ code: prod.code, insert: prod, set: prod }]);
-    addAuditLog('inv.add', `إضافة: ${prod.name} (${prod.code}) — سعر: ${fmt(prod.priceAfter)} ج`, null);
+    const addFieldLabels = { code:'الكود', name:'الاسم', cost:'التكلفة', priceBefore:'السعر قبل الخصم', priceAfter:'السعر', qty:'الكمية', category:'الفئة', family:'العائلة' };
+    const addedChanges = buildAuditDiff(
+      null,
+      { code: prod.code, name: prod.name, cost: fmt(prod.cost), priceBefore: fmt(prod.priceBefore), priceAfter: fmt(prod.priceAfter), qty: prod.qty, category: prod.category, family: prod.family },
+      addFieldLabels
+    );
+    addAuditLog('inv.add', `إضافة: ${prod.name} (${prod.code}) — سعر: ${fmt(prod.priceAfter)} ج`, null, addedChanges);
   }
   document.getElementById('productModal').classList.add('hidden');
   renderInventory();
@@ -6167,7 +6185,15 @@ function deleteProduct(code) {
   showConfirmModal('حذف هذا المنتج؟', function() {
     const prod = getInv().find(x => x.code === code);
     adjustStock([{ code, remove: true }]);
-    if (prod) addAuditLog('inv.delete', `حذف: ${prod.name} (${prod.code})`, null);
+    if (prod) {
+      const delFieldLabels = { code:'الكود', name:'الاسم', cost:'التكلفة', priceBefore:'السعر قبل الخصم', priceAfter:'السعر', qty:'الكمية', category:'الفئة', family:'العائلة' };
+      const deletedChanges = buildAuditDiff(
+        { code: prod.code, name: prod.name, cost: fmt(prod.cost), priceBefore: fmt(prod.priceBefore), priceAfter: fmt(prod.priceAfter), qty: prod.qty, category: prod.category, family: prod.family },
+        {},
+        delFieldLabels
+      );
+      addAuditLog('inv.delete', `حذف: ${prod.name} (${prod.code})`, null, deletedChanges);
+    }
     renderInventory();
   });
 }
@@ -7252,6 +7278,10 @@ function closeUserAccountModal() {
   document.getElementById('uaInlineForm').classList.add('hidden');
 }
 
+// Shared by save/delete so the audit log can label a role consistently
+// regardless of which action touched the account.
+const roleLabel = r => r === 'admin' ? 'أدمن' : (r === 'manager' ? 'مدير فرع' : 'كاشير');
+
 async function saveUserAccount() {
   const uid      = document.getElementById('uaEditId').value;
   const username = document.getElementById('uaUsername').value.trim().toLowerCase();
@@ -7263,7 +7293,6 @@ async function saveUserAccount() {
   const showErr  = t => { msg.innerHTML = `<div style="color:var(--danger);font-size:12px;">${t}</div>`; };
 
   const roleValue = type === 'admin' ? 'admin' : (role === 'manager' ? 'manager' : 'cashier');
-  const roleLabel = r => r === 'admin' ? 'أدمن' : (r === 'manager' ? 'مدير فرع' : 'كاشير');
   // 'admin' is just a label now — everyone's real access comes from this
   // matrix, the owner alone (isOwner()/isRealOwner) is the true bypass.
   const permissions = readPermsFromMatrix();
@@ -7280,9 +7309,9 @@ async function saveUserAccount() {
       }, { merge: true });
     } catch (e) { showErr('تعذّر الحفظ: ' + e.message); return; }
     const changes = buildAuditDiff(
-      { role: roleLabel(existing.role), branch: existing.branchId ? getBranchName(existing.branchId) : '-' },
-      { role: roleLabel(roleValue), branch: roleValue !== 'admin' ? getBranchName(branchId) : '-' },
-      { role: 'النوع/الصلاحية', branch: 'الفرع' }
+      { role: roleLabel(existing.role), branch: existing.branchId ? getBranchName(existing.branchId) : '-', perms: summarizePermissions(existing.permissions) },
+      { role: roleLabel(roleValue), branch: roleValue !== 'admin' ? getBranchName(branchId) : '-', perms: summarizePermissions(permissions) },
+      { role: 'النوع/الصلاحية', branch: 'الفرع', perms: 'الصلاحيات' }
     );
     addAuditLog('user.save', `تعديل صلاحيات: ${existing.username} (${roleLabel(roleValue)})`, currentBranch, changes);
   } else {
@@ -7298,7 +7327,12 @@ async function saveUserAccount() {
       else showErr('تعذّر إنشاء الحساب: ' + (e.message || e));
       return;
     }
-    addAuditLog('user.save', `إنشاء مستخدم: ${username} (${roleLabel(roleValue)})`, currentBranch);
+    const createdChanges = buildAuditDiff(
+      null,
+      { username, role: roleLabel(roleValue), branch: roleValue !== 'admin' ? getBranchName(branchId) : '-', perms: summarizePermissions(permissions) },
+      { username: 'اسم المستخدم', role: 'النوع/الصلاحية', branch: 'الفرع', perms: 'الصلاحيات' }
+    );
+    addAuditLog('user.save', `إنشاء مستخدم: ${username} (${roleLabel(roleValue)})`, currentBranch, createdChanges);
   }
 
   renderUserAccountsSettings();
@@ -7335,7 +7369,12 @@ function deleteUserAccount(uid) {
     firebase.firestore().collection('roles').doc(uid).delete()
       .then(() => {
         renderUserAccountsSettings();
-        addAuditLog('user.delete', `تم حذف مستخدم: ${acc.username} (شامل أي حساب دخول محلي قديم بنفس الاسم)`, currentBranch);
+        const deletedChanges = buildAuditDiff(
+          { role: roleLabel(acc.role), branch: acc.branchId ? getBranchName(acc.branchId) : '-', perms: summarizePermissions(acc.permissions) },
+          {},
+          { role: 'النوع/الصلاحية', branch: 'الفرع', perms: 'الصلاحيات' }
+        );
+        addAuditLog('user.delete', `تم حذف مستخدم: ${acc.username} (شامل أي حساب دخول محلي قديم بنفس الاسم)`, currentBranch, deletedChanges);
         showMsg('sSettingsMsg', '✅ تم حذف المستخدم وسحب صلاحياته');
       })
       .catch(e => showMsg('sSettingsMsg', 'تعذّر الحذف: ' + e.message, 'danger'));
@@ -9084,7 +9123,16 @@ function savePromo() {
 
 function deletePromo(id) {
   showConfirmModal('حذف هذا العرض؟', function() {
-    setPromos(getPromos().filter(p => p.id !== id));
+    const p = getPromos().find(x => x.id === id);
+    setPromos(getPromos().filter(x => x.id !== id));
+    if (p) {
+      const changes = buildAuditDiff(
+        { name: p.name, type: p.type, active: p.active ? 'نشط' : 'موقوف' },
+        {},
+        { name: 'الاسم', type: 'النوع', active: 'الحالة' }
+      );
+      addAuditLog('promo.delete', `حذف عرض: ${p.name}`, null, changes);
+    }
     renderPromosPage();
   });
 }
@@ -9352,7 +9400,16 @@ function saveCustomer() {
 
 function deleteCustomer(id) {
   showConfirmModal('حذف هذا العميل؟', function() {
-    setCustomers(getCustomers().filter(c => c.id !== id));
+    const c = getCustomers().find(x => x.id === id);
+    setCustomers(getCustomers().filter(x => x.id !== id));
+    if (c) {
+      const changes = buildAuditDiff(
+        { name: c.name, phone: c.phone || '-', totalSpent: fmt(c.totalSpent || 0) + ' ج', points: c.points || 0 },
+        {},
+        { name: 'الاسم', phone: 'الهاتف', totalSpent: 'إجمالي الإنفاق', points: 'نقاط الولاء' }
+      );
+      addAuditLog('customer.delete', `حذف عميل: ${c.name}`, null, changes);
+    }
     renderCustomers();
   });
 }
@@ -9699,10 +9756,25 @@ function saveExpense() {
     by:       currentUser,
     createdAt: editId ? (list.find(e=>e.id===editId)?.createdAt||Date.now()) : Date.now()
   };
-  if (editId) { const idx=list.findIndex(e=>e.id===editId); if(idx>=0) list[idx]=rec; else list.push(rec); }
-  else list.push(rec);
-  setExpenses(list);
-  addAuditLog('expense.add', `مصروف: ${EXP_CATS[rec.category]} — ${fmt(rec.amount)} ج ${rec.type==='company'?'(إداري)':'('+(rec.branchId?getBranchName(rec.branchId):'')+')'}`, null);
+  const fieldLabels = { category: 'الفئة', amount: 'المبلغ', date: 'التاريخ', note: 'ملاحظة' };
+  const displayRec = { category: EXP_CATS[rec.category], amount: fmt(rec.amount) + ' ج', date: rec.date, note: rec.note || '-' };
+  if (editId) {
+    const idx = list.findIndex(e => e.id === editId);
+    const oldRec = idx >= 0 ? list[idx] : null;
+    if (idx >= 0) list[idx] = rec; else list.push(rec);
+    setExpenses(list);
+    const changes = buildAuditDiff(
+      oldRec ? { category: EXP_CATS[oldRec.category], amount: fmt(oldRec.amount) + ' ج', date: oldRec.date, note: oldRec.note || '-' } : null,
+      displayRec,
+      fieldLabels
+    );
+    addAuditLog('expense.edit', `تعديل مصروف: ${EXP_CATS[rec.category]} — ${fmt(rec.amount)} ج`, null, changes);
+  } else {
+    list.push(rec);
+    setExpenses(list);
+    const changes = buildAuditDiff(null, displayRec, fieldLabels);
+    addAuditLog('expense.add', `مصروف: ${EXP_CATS[rec.category]} — ${fmt(rec.amount)} ج ${rec.type==='company'?'(إداري)':'('+(rec.branchId?getBranchName(rec.branchId):'')+')'}`, null, changes);
+  }
   closeModal('expenseModal');
   renderExpensesPage();
   buildDashboard();
@@ -9710,7 +9782,16 @@ function saveExpense() {
 
 function deleteExpense(id) {
   showConfirmModal('حذف هذا المصروف؟', function() {
+    const rec = getExpenses().find(e => e.id === id);
     setExpenses(getExpenses().filter(e => e.id !== id));
+    if (rec) {
+      const changes = buildAuditDiff(
+        { category: EXP_CATS[rec.category], amount: fmt(rec.amount) + ' ج', date: rec.date, note: rec.note || '-' },
+        {},
+        { category: 'الفئة', amount: 'المبلغ', date: 'التاريخ', note: 'ملاحظة' }
+      );
+      addAuditLog('expense.delete', `حذف مصروف: ${EXP_CATS[rec.category]} — ${fmt(rec.amount)} ج`, null, changes);
+    }
     renderExpensesPage();
     buildDashboard();
   });
@@ -9890,8 +9971,12 @@ function renderAuditPage() {
   const actionLabels = {
     'inv.add':'➕ إضافة صنف', 'inv.edit':'✏️ تعديل صنف', 'inv.delete':'🗑️ حذف صنف',
     'price.change':'🏷️ تغيير سعر', 'sale.complete':'💰 فاتورة مكتملة', 'sale.return':'↩️ مرتجع',
-    'po.receive':'📦 استلام بضاعة', 'po.create':'🛒 أمر شراء', 'transfer.done':'🔄 تحويل',
-    'expense.add':'💸 مصروف', 'settings.change':'⚙️ تغيير إعداد',
+    'po.receive':'📦 استلام بضاعة', 'po.create':'🛒 أمر شراء', 'po.delete':'🗑️ حذف أمر شراء',
+    'supplier.delete':'🗑️ حذف مورّد', 'supplier.payment':'💵 دفعة لمورّد',
+    'customer.delete':'🗑️ حذف عميل', 'promo.delete':'🗑️ حذف عرض',
+    'transfer.done':'🔄 تحويل',
+    'expense.add':'💸 إضافة مصروف', 'expense.edit':'✏️ تعديل مصروف', 'expense.delete':'🗑️ حذف مصروف',
+    'settings.change':'⚙️ تغيير إعداد', 'user.save':'👤 حفظ مستخدم', 'user.delete':'🗑️ حذف مستخدم',
     'auth.login':'🔐 تسجيل دخول', 'auth.logout':'🚪 تسجيل خروج'
   };
 

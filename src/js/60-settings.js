@@ -248,6 +248,10 @@ function closeUserAccountModal() {
   document.getElementById('uaInlineForm').classList.add('hidden');
 }
 
+// Shared by save/delete so the audit log can label a role consistently
+// regardless of which action touched the account.
+const roleLabel = r => r === 'admin' ? 'أدمن' : (r === 'manager' ? 'مدير فرع' : 'كاشير');
+
 async function saveUserAccount() {
   const uid      = document.getElementById('uaEditId').value;
   const username = document.getElementById('uaUsername').value.trim().toLowerCase();
@@ -259,7 +263,6 @@ async function saveUserAccount() {
   const showErr  = t => { msg.innerHTML = `<div style="color:var(--danger);font-size:12px;">${t}</div>`; };
 
   const roleValue = type === 'admin' ? 'admin' : (role === 'manager' ? 'manager' : 'cashier');
-  const roleLabel = r => r === 'admin' ? 'أدمن' : (r === 'manager' ? 'مدير فرع' : 'كاشير');
   // 'admin' is just a label now — everyone's real access comes from this
   // matrix, the owner alone (isOwner()/isRealOwner) is the true bypass.
   const permissions = readPermsFromMatrix();
@@ -276,9 +279,9 @@ async function saveUserAccount() {
       }, { merge: true });
     } catch (e) { showErr('تعذّر الحفظ: ' + e.message); return; }
     const changes = buildAuditDiff(
-      { role: roleLabel(existing.role), branch: existing.branchId ? getBranchName(existing.branchId) : '-' },
-      { role: roleLabel(roleValue), branch: roleValue !== 'admin' ? getBranchName(branchId) : '-' },
-      { role: 'النوع/الصلاحية', branch: 'الفرع' }
+      { role: roleLabel(existing.role), branch: existing.branchId ? getBranchName(existing.branchId) : '-', perms: summarizePermissions(existing.permissions) },
+      { role: roleLabel(roleValue), branch: roleValue !== 'admin' ? getBranchName(branchId) : '-', perms: summarizePermissions(permissions) },
+      { role: 'النوع/الصلاحية', branch: 'الفرع', perms: 'الصلاحيات' }
     );
     addAuditLog('user.save', `تعديل صلاحيات: ${existing.username} (${roleLabel(roleValue)})`, currentBranch, changes);
   } else {
@@ -294,7 +297,12 @@ async function saveUserAccount() {
       else showErr('تعذّر إنشاء الحساب: ' + (e.message || e));
       return;
     }
-    addAuditLog('user.save', `إنشاء مستخدم: ${username} (${roleLabel(roleValue)})`, currentBranch);
+    const createdChanges = buildAuditDiff(
+      null,
+      { username, role: roleLabel(roleValue), branch: roleValue !== 'admin' ? getBranchName(branchId) : '-', perms: summarizePermissions(permissions) },
+      { username: 'اسم المستخدم', role: 'النوع/الصلاحية', branch: 'الفرع', perms: 'الصلاحيات' }
+    );
+    addAuditLog('user.save', `إنشاء مستخدم: ${username} (${roleLabel(roleValue)})`, currentBranch, createdChanges);
   }
 
   renderUserAccountsSettings();
@@ -331,7 +339,12 @@ function deleteUserAccount(uid) {
     firebase.firestore().collection('roles').doc(uid).delete()
       .then(() => {
         renderUserAccountsSettings();
-        addAuditLog('user.delete', `تم حذف مستخدم: ${acc.username} (شامل أي حساب دخول محلي قديم بنفس الاسم)`, currentBranch);
+        const deletedChanges = buildAuditDiff(
+          { role: roleLabel(acc.role), branch: acc.branchId ? getBranchName(acc.branchId) : '-', perms: summarizePermissions(acc.permissions) },
+          {},
+          { role: 'النوع/الصلاحية', branch: 'الفرع', perms: 'الصلاحيات' }
+        );
+        addAuditLog('user.delete', `تم حذف مستخدم: ${acc.username} (شامل أي حساب دخول محلي قديم بنفس الاسم)`, currentBranch, deletedChanges);
         showMsg('sSettingsMsg', '✅ تم حذف المستخدم وسحب صلاحياته');
       })
       .catch(e => showMsg('sSettingsMsg', 'تعذّر الحذف: ' + e.message, 'danger'));

@@ -98,7 +98,16 @@ function saveCustomer() {
 
 function deleteCustomer(id) {
   showConfirmModal('حذف هذا العميل؟', function() {
-    setCustomers(getCustomers().filter(c => c.id !== id));
+    const c = getCustomers().find(x => x.id === id);
+    setCustomers(getCustomers().filter(x => x.id !== id));
+    if (c) {
+      const changes = buildAuditDiff(
+        { name: c.name, phone: c.phone || '-', totalSpent: fmt(c.totalSpent || 0) + ' ج', points: c.points || 0 },
+        {},
+        { name: 'الاسم', phone: 'الهاتف', totalSpent: 'إجمالي الإنفاق', points: 'نقاط الولاء' }
+      );
+      addAuditLog('customer.delete', `حذف عميل: ${c.name}`, null, changes);
+    }
     renderCustomers();
   });
 }

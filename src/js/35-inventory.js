@@ -122,7 +122,13 @@ function saveProduct() {
   } else {
     if (inv.find(x => x.code === code)) { showToast('هذا الكود موجود مسبقاً'); return; }
     adjustStock([{ code: prod.code, insert: prod, set: prod }]);
-    addAuditLog('inv.add', `إضافة: ${prod.name} (${prod.code}) — سعر: ${fmt(prod.priceAfter)} ج`, null);
+    const addFieldLabels = { code:'الكود', name:'الاسم', cost:'التكلفة', priceBefore:'السعر قبل الخصم', priceAfter:'السعر', qty:'الكمية', category:'الفئة', family:'العائلة' };
+    const addedChanges = buildAuditDiff(
+      null,
+      { code: prod.code, name: prod.name, cost: fmt(prod.cost), priceBefore: fmt(prod.priceBefore), priceAfter: fmt(prod.priceAfter), qty: prod.qty, category: prod.category, family: prod.family },
+      addFieldLabels
+    );
+    addAuditLog('inv.add', `إضافة: ${prod.name} (${prod.code}) — سعر: ${fmt(prod.priceAfter)} ج`, null, addedChanges);
   }
   document.getElementById('productModal').classList.add('hidden');
   renderInventory();
@@ -132,7 +138,15 @@ function deleteProduct(code) {
   showConfirmModal('حذف هذا المنتج؟', function() {
     const prod = getInv().find(x => x.code === code);
     adjustStock([{ code, remove: true }]);
-    if (prod) addAuditLog('inv.delete', `حذف: ${prod.name} (${prod.code})`, null);
+    if (prod) {
+      const delFieldLabels = { code:'الكود', name:'الاسم', cost:'التكلفة', priceBefore:'السعر قبل الخصم', priceAfter:'السعر', qty:'الكمية', category:'الفئة', family:'العائلة' };
+      const deletedChanges = buildAuditDiff(
+        { code: prod.code, name: prod.name, cost: fmt(prod.cost), priceBefore: fmt(prod.priceBefore), priceAfter: fmt(prod.priceAfter), qty: prod.qty, category: prod.category, family: prod.family },
+        {},
+        delFieldLabels
+      );
+      addAuditLog('inv.delete', `حذف: ${prod.name} (${prod.code})`, null, deletedChanges);
+    }
     renderInventory();
   });
 }
