@@ -178,34 +178,19 @@ service cloud.firestore {
     }
 
     // ── LEGACY FLAT INVENTORY (pos_data/inv_b1, inv_wh, ...) ────────
-    // ⚠️⚠️ DO NOT TIGHTEN/REMOVE until the inventory migration tool
-    // (Settings → "🔀 ترحيل المخزون لهيكل معزول لكل فرع",
-    // 04-inventory-migration.js) has been run and verified — see the long
-    // comment above setInv() in 00-core.js. Admin-only from here on (kept
-    // readable so an admin can verify/clean up old data after migrating;
-    // no branch device ever needs to read it again once migrated). This is
-    // the SAME gap the sales rule above closed, applied to inventory: each
-    // branch's stock already lived in its OWN document (no array-mixing
-    // like sales had), but the general pos_data/{doc} rule above didn't
-    // check WHICH branch's doc was being read/written — any role could
-    // read or silently edit any OTHER branch's stock counts/costs, not
-    // just their own.
+    // Inventory migration (04-inventory-migration.js) confirmed run and
+    // verified 2026-07-25 — no branch device or admin workflow reads this
+    // path anymore. Owner-only now (was previously any 'admin'-role
+    // account, kept open only for post-migration cleanup/verification);
+    // narrowing this closes an unnecessary read/write surface on stale
+    // data now that the branch-isolated replacement below is live.
     match /pos_data/{invDoc} {
-      allow read, write: if invDoc.matches('inv_.*') && (
-        isOwner() || (
-          signedIn() &&
-          exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
-          get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin'
-        )
-      );
+      allow read, write: if invDoc.matches('inv_.*') && isOwner();
     }
 
     // ── INVENTORY — branch-isolated ─────────────────────────────────
-    // ⚠️⚠️ DO NOT PUBLISH until the inventory migration tool has run and
-    // been verified (same caveat as the legacy block above and the sales
-    // section below — do not publish any of these three together before
-    // migrating both sales AND inventory, or publish separately per
-    // resource once each is individually migrated and confirmed).
+    // Migration confirmed run and verified 2026-07-25 — this is the live
+    // path every branch device reads/writes.
     // The 'wh' (warehouse) role additionally gets write access to EVERY
     // branch's inventory — not a gap, a real designed workflow: warehouse→
     // branch transfers write to the destination branch's stock (see
@@ -225,32 +210,22 @@ service cloud.firestore {
     }
 
     // ── SALES ────────────────────────────────────────────────────
-    // ⚠️⚠️ DO NOT PUBLISH THE "branches" SUB-RULE BELOW until the sales
-    // migration tool (Settings → "🔀 ترحيل المبيعات لهيكل معزول لكل فرع",
-    // src/js/03-sales-migration.js) has been run and verified. See the full
-    // sequence in the long comment above addSale() in 00-core.js. Publishing
-    // early makes every branch device's sales listener find nothing (it
-    // already looks for the NEW branch-scoped path in the client code —
-    // that part IS live — but the rule below is what actually restricts who
-    // can read it, and until data exists there, an early-published
-    // restrictive rule just means "correctly denied access to nothing").
+    // Sales migration (03-sales-migration.js) confirmed run and verified —
+    // every branch device reads exclusively from the branch-isolated
+    // sub-collection below. This closes the gap the 2026-07-17 security
+    // review flagged: Firestore rules can only allow/deny a whole document,
+    // never filter which array elements a reader may see — so a shared
+    // document mixing every branch's invoices could never be branch-isolated
+    // no matter how the rule was written. Splitting storage by branch (see
+    // addSale) is what makes real isolation possible at all.
     //
     // The old flat pos_sales/{month} doc (all branches mixed in one array)
-    // is demoted to admin-only here rather than removed outright — kept
-    // readable so an admin can verify/clean up old data after migrating,
-    // but no branch device ever needs to read it again once migrated. This
-    // closes the actual gap the 2026-07-17 security review flagged:
-    // Firestore rules can only allow/deny a whole document, never filter
-    // which array elements a reader may see — so a shared document mixing
-    // every branch's invoices could never be branch-isolated no matter how
-    // the rule was written. Splitting storage by branch (see addSale) is
-    // what makes real isolation possible at all.
+    // is owner-only now (was previously any 'admin'-role account, kept open
+    // only for post-migration cleanup/verification) — narrowing this closes
+    // an unnecessary read/write surface on stale data now that migration is
+    // confirmed complete.
     match /pos_sales/{month} {
-      allow read, write: if isOwner() || (
-        signedIn() &&
-        exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin'
-      );
+      allow read, write: if isOwner();
       match /branches/{branchId} {
         allow read, write: if isOwner() || (
           signedIn() &&
