@@ -440,7 +440,10 @@ function renderAPAging() {
 function renderAccSummary() {
   const pane = document.getElementById('accPane_summary');
   if (!pane) return;
-  const allSales = getSales().filter(s=>!s.isReturn);
+  // المرتجعات مدموجة مع المبيعات هنا (إجماليها وكمياتها سالبة) فبتتخصم من
+  // الإيراد والتكلفة مع بعض — زي renderPnL والداشبورد بالظبط. استبعادها كان
+  // بيخلي التبويب ده يعرض صافي ربح مختلف عن قائمة الدخل في نفس الصفحة.
+  const allSales = getSales();
   const allExp   = getExpenses();
   const months   = [...new Set(allSales.map(s=>s.date?.slice(0,7)).filter(Boolean))].sort().reverse();
   const totalRev = allSales.reduce((s,x)=>s+x.total,0);
