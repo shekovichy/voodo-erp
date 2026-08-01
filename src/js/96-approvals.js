@@ -59,7 +59,11 @@ function sendForApproval() {
     var list = getApprovals();
     list.unshift(request);
     setApprovals(list);
-    clearCart();
+    // _clearCartConfirmed مباشرة مش clearCart: التانية بتسأل "مسح الفاتورة؟"
+    // وده سؤال غلط في السياق ده — الفاتورة اتبعتت للمدير خلاص. ولو الكاشير
+    // رد بـ"لا" كانت السلة تفضل بالسعر المعدّل، فيضغط دفع تاني ويتبعت طلب
+    // مكرر لنفس الفاتورة (اتأكد عملياً: طلبين بنفس الإجمالي عند المدير).
+    _clearCartConfirmed();
     updateApprovalBadge();
     showToast('✅ تم إرسال الفاتورة للمدير\nسيتم إشعارك عند الموافقة');
   });
