@@ -8817,7 +8817,11 @@ function detectEligiblePromos() {
 }
 
 function applyPromo(id) {
-  const promo = getPromos().find(p => p.id === id); if (!promo) return;
+  // مقارنة نصية زي removeAppliedPromo: الـ id بييجي من onclick كنص دايماً
+  // بينما المحفوظ رقم (Date.now())، فالمقارنة الصارمة كانت هتفشل. كان الـ
+  // onclick قبل كده بيمرّر الرقم من غير تنصيص — شغال بالصدفة طالما كل الـ
+  // ids أرقام، وبيموت صامت لأول id نصي.
+  const promo = getPromos().find(p => String(p.id) === String(id)); if (!promo) return;
   const discAmt = calcPromoDiscount(promo);
   if (discAmt <= 0) { showToast('هذا العرض لا يوفر خصماً على الفاتورة الحالية'); return; }
   if (!cart._appliedPromos) cart._appliedPromos = [];
@@ -8842,7 +8846,7 @@ function renderEligiblePromos() {
     return `<div style="background:#faf5ff; border:1px dashed #7c3aed; border-radius:8px; padding:8px 10px; margin-bottom:6px; font-size:12px;">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
         <span>${badge} <strong>${escHtml(promo.name)}</strong> — وفر ${fmt(disc)} ج</span>
-        <button class="btn btn-sm btn-primary" style="padding:3px 10px; font-size:11px;" onclick="applyPromo(${promo.id})">تطبيق</button>
+        <button class="btn btn-sm btn-primary" style="padding:3px 10px; font-size:11px;" onclick="applyPromo('${escJsAttr(promo.id)}')">تطبيق</button>
       </div>
     </div>`;
   }).join('');
