@@ -4796,7 +4796,13 @@ function addToCart(code) {
     if (ex.qty >= p.qty) { showToast('لا يوجد مخزون كافٍ'); return; }
     ex.qty++;
   } else {
-    cart.push({ code: p.code, name: p.name, price: p.priceAfter, cost: p.cost || 0, qty: 1 });
+    // category/family محمولين مع الصنف عشان عروض الفئة (calcPromoDiscount
+    // في 82-promotions.js) بتفلتر على i.category — من غيرهم كانت بتقع على
+    // i.name وتقارن اسم عربي بكود فئة إنجليزي، فالنتيجة صفر دايماً: نوع
+    // العرض ده كان موجود في الواجهة ومش شغال خالص. التقارير مش متأثرة —
+    // بتجيب الفئة من المخزون (شوف buildSalesLines).
+    cart.push({ code: p.code, name: p.name, price: p.priceAfter, cost: p.cost || 0, qty: 1,
+                category: p.category || '', family: p.family || '' });
   }
   renderCart();
 }
