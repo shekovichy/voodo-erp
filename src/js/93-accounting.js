@@ -53,7 +53,12 @@ function renderPnL() {
   const revenue  = sales.reduce((s,x)=>s+x.total,0);
   const returnAmt= rets.reduce((s,x)=>s+Math.abs(x.total||0),0);
   const netRev   = revenue - returnAmt;
-  const cogs     = sales.reduce((s,x)=>s+(x.items||[]).reduce((ss,i)=>ss+(i.cost||0)*i.qty,0),0);
+  // المرتجعات لازم تتخصم من التكلفة زي ما اتخصمت من الإيراد: البضاعة رجعت
+  // للمخزن فعلاً (شوف _processCashierReturnConfirmed) فتكلفتها مش مصروف.
+  // من غير كده الإيراد بينقص والتكلفة تفضل زي ما هي، فالربح يقل بمقدار تكلفة
+  // المرتجع بالظبط. سطور المرتجع كمياتها سالبة، فدمجها هنا بيخصم لوحده —
+  // نفس أسلوب الداشبورد (30-dashboard.js) اللي كان بيحسبها صح أصلاً.
+  const cogs     = [...sales, ...rets].reduce((s,x)=>s+(x.items||[]).reduce((ss,i)=>ss+(i.cost||0)*i.qty,0),0);
   const grossP   = netRev - cogs;
   const salaries = typeof calcMonthlyPayroll==='function' ? calcMonthlyPayroll(month).reduce((s,p)=>s+p.net,0) : 0;
   const opExp    = exps.reduce((s,e)=>s+(e.amount||0),0);
