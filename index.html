@@ -5680,7 +5680,12 @@ function saveProduct() {
   };
 
   if (editCode) {
-    const oldProd = inv.find(x => x.code === editCode);
+    // نسخة مستقلة، مش مرجع: adjustStock بيعمل Object.assign على نفس الكائن
+    // اللي جوه الكاش، فلو سِبنا المرجع زي ما هو كانت القيم "القديمة" بتتحدّث
+    // للجديدة قبل ما نقارن — يعني الفرق بيطلع فاضي دايماً وتغيير السعر عمره
+    // ما بيتسجل كـ price.change. لازم الالتقاط يحصل قبل adjustStock.
+    const found = inv.find(x => x.code === editCode);
+    const oldProd = found ? Object.assign({}, found) : null;
     // Upsert this ONE product transactionally (see adjustStock) — the old
     // whole-array setInv() clobbered concurrent sales of other products.
     // If the admin changed the product code, remove the old entry first.
