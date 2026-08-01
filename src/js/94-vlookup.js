@@ -193,7 +193,9 @@ function handleVlFile(input) {
   var reader = new FileReader();
   reader.onload = function(e) {
     try {
-      var wb   = XLSX.read(e.target.result, {type:'binary'});
+      // نفس إصلاح الترميز اللي في importExcel (35-inventory.js): القراءة
+      // كـ binary string بتشوّه أي عربي في ملفات CSV.
+      var wb   = XLSX.read(new Uint8Array(e.target.result), {type:'array', codepage:65001});
       var ws   = wb.Sheets[wb.SheetNames[0]];
       var rows = XLSX.utils.sheet_to_json(ws, {defval:''});
       if (!rows.length) { showToast('الملف فارغ أو غير مقروء'); return; }
@@ -202,7 +204,7 @@ function handleVlFile(input) {
       buildVlMappingUI();
     } catch(ex) { showToast('خطأ في قراءة الملف: ' + ex.message); }
   };
-  reader.readAsBinaryString(file);
+  reader.readAsArrayBuffer(file);
 }
 
 function buildVlMappingUI() {

@@ -179,7 +179,12 @@ function importExcel(e) {
   const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = ev => {
-    const wb   = XLSX.read(ev.target.result, { type:'binary' });
+    // 'array' + readAsArrayBuffer (مش 'binary' + readAsBinaryString): القراءة
+    // كـ binary string بتفك البايتات على أنها latin1، فأي اسم عربي في ملف
+    // CSV بيترجع مشوّه ("ÙÙØªØ¬" بدل "منتج"). ملفات xlsx مكانتش بتتأثر
+    // لأنها ZIP والمكتبة بتفك ترميزها بنفسها — عشان كده البج عاش من غير ما
+    // يتلاحظ. codepage 65001 = UTF-8 لملفات الـ CSV اللي من غير BOM.
+    const wb   = XLSX.read(new Uint8Array(ev.target.result), { type:'array', codepage:65001 });
     const ws   = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { defval:'' });
     const impBranch = invPageBranch();
@@ -225,7 +230,7 @@ function importExcel(e) {
     setTimeout(() => document.getElementById('importAlert').innerHTML='', 6000);
     renderInventory();
   };
-  reader.readAsBinaryString(file);
+  reader.readAsArrayBuffer(file);
 }
 
 function exportInventoryExcel() {
