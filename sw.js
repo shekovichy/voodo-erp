@@ -3,7 +3,7 @@
 // both at a domain root (Vercel: /) and under a subpath (GitHub Pages:
 // /voodo-erp/). v5 used absolute '/...' paths, which silently broke
 // caching — and therefore offline mode — on GitHub Pages.
-const CACHE_NAME = 'voodo-erp-v6';
+const CACHE_NAME = 'voodo-erp-v7';
 
 // Lazy-loaded admin pages (see LAZY_CHUNKS in build.py) — precached so they
 // still work offline after the first successful load, same as everything
@@ -11,7 +11,6 @@ const CACHE_NAME = 'voodo-erp-v6';
 const LAZY_CHUNKS = [
   'chunk-accounting.js',
   'chunk-warehouse.js',
-  'chunk-manufacturing.js',
   'chunk-purchases.js',
   'chunk-helpdesk.js',
   'chunk-pivot.js',

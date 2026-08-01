@@ -31,7 +31,6 @@ JS_PLACEHOLDER  = '<!-- BUILD:JS -->'
 LAZY_CHUNKS = {
     '93-accounting.js':     'chunk-accounting.js',
     '95-warehouse.js':      'chunk-warehouse.js',
-    '105-manufacturing.js': 'chunk-manufacturing.js',
     '75-purchases.js':      'chunk-purchases.js',
     '110-helpdesk.js':      'chunk-helpdesk.js',
     '115-pivot-reports.js': 'chunk-pivot.js',

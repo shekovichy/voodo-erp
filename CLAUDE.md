@@ -31,7 +31,7 @@ git add -A && git commit -m "..." && git push
 GitHub Actions تنشر تلقائياً على https://shekovichy.github.io/voodo-erp/
 
 ### تحميل كسول (Lazy chunks)
-4 صفحات مستقلة تماماً (`93-accounting.js`, `95-warehouse.js`, `105-manufacturing.js`, `75-purchases.js`) بتتبني كملفات `chunk-*.js` منفصلة بدل ما تتلزق جوه `index.html` — `showPage()` في `25-navigation.js` بيحمّلها ديناميكياً أول مرة المستخدم يدخل الصفحة (شوف `_loadChunk`/`_CHUNK_FILES` في `00-core.js`).
+3 صفحات مستقلة تماماً (`93-accounting.js`, `95-warehouse.js`, `75-purchases.js`) بتتبني كملفات `chunk-*.js` منفصلة بدل ما تتلزق جوه `index.html` — `showPage()` في `25-navigation.js` بيحمّلها ديناميكياً أول مرة المستخدم يدخل الصفحة (شوف `_loadChunk`/`_CHUNK_FILES` في `00-core.js`).
 
 ⚠️ **لو هتضيف ملف جديد للتحميل الكسول**: لازم تتأكد أولاً إن مفيش ملف "أساسي" (مش هو نفسه) بينادي على أي دالة فيه بشكل غير مشروط (يعني من غير `visRefresh`/فحص `!hidden` قبلها) — لأن ده هيبوّظ لو الملف لسه ماتحمّلش. افحص بـ:
 ```
@@ -79,7 +79,6 @@ grep -oE '^function [a-zA-Z0-9_]+|^const [a-zA-Z0-9_]+ = ' src/js/الملف.js
 | `src/js/97-expense-requests.js` | expense approval requests | 99 |
 | `src/js/98-leave-requests.js` | leave & permission requests | 120 |
 | `src/js/100-home.js` | home page، renderHomeIcons، fingerprint import | 181 |
-| `src/js/105-manufacturing.js` | التصنيع — raw materials، lines، orders، quality | 506 |
 
 ---
 
@@ -96,7 +95,6 @@ grep -oE '^function [a-zA-Z0-9_]+|^const [a-zA-Z0-9_]+ = ' src/js/الملف.js
 | الفروع والتحويلات | `70-branches.js` |
 | المشتريات والموردين | `75-purchases.js` |
 | HR / رواتب / حضور | `80-hr-targets.js` + `92-hr-attendance.js` |
-| التصنيع | `105-manufacturing.js` |
 | التقارير | `45-reports.js` + `50-kpi.js` + `94-vlookup.js` |
 | المحاسبة | `93-accounting.js` |
 | الإعدادات | `60-settings.js` |
