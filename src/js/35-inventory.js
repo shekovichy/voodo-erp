@@ -1,6 +1,20 @@
 // ══════════════════════════════════════════════
 // INVENTORY
 // ══════════════════════════════════════════════
+
+// The branch this page is currently SHOWING (the #invBranchFilter dropdown),
+// which is not necessarily currentBranch — an admin can view any branch here.
+// EVERY read and write on this page must go through this, not the
+// getInv()/adjustStock() default: those fall back to currentBranch, so with
+// the filter pointing anywhere else the page read one branch while writing
+// another. That silently sent an entire Excel import to the wrong branch
+// (looked like "32 products imported" then nothing in the table), and made
+// qty edits/deletes hit a different branch's stock than the row shown.
+function invPageBranch() {
+  const ibf = document.getElementById('invBranchFilter');
+  return (ibf && ibf.value) || currentBranch;
+}
+
 function renderInventory() {
   // Populate branch filter if empty
   var ibf = document.getElementById('invBranchFilter');
@@ -13,6 +27,13 @@ function renderInventory() {
     });
     ibf.value = currentBranch;
   }
+  // Lock the filter to the user's OWN branch for non-admins — same pattern as
+  // the sales/reports pages (see lockBranchFilter in 05-utils.js). Must run
+  // after the options exist and before the value is read. Without it a branch
+  // cashier could point this page at another branch; firestore.rules would
+  // still deny the actual write, but the optimistic local cache would show
+  // phantom edits that silently never persist.
+  lockBranchFilter('invBranchFilter');
   var selBranch = ibf ? ibf.value : currentBranch;
   const q = (document.getElementById('invSearch')?.value || '').toLowerCase();
   const inv = getInv(selBranch), thresh = getThreshold();
@@ -51,13 +72,14 @@ function renderInventory() {
 }
 
 function updateQty(code, val) {
-  const p = getInv().find(x => x.code === code);
+  const b = invPageBranch();
+  const p = getInv(b).find(x => x.code === code);
   if (!p) return;
   // Absolute correction of ONE product's count — routed through adjustStock so
   // it no longer rewrites the whole array (which clobbered concurrent sales of
   // OTHER products). The corrected product itself is intentionally last-write-
   // wins: the admin is overriding the count on purpose.
-  adjustStock([{ code, set: { qty: parseInt(val) || 0 } }]);
+  adjustStock([{ code, set: { qty: parseInt(val) || 0 } }], b);
   renderInventory();
 }
 
@@ -76,7 +98,7 @@ function openProductModal(p) {
 }
 
 function editProduct(code) {
-  const p = getInv().find(x => x.code === code);
+  const p = getInv(invPageBranch()).find(x => x.code === code);
   if (p) openProductModal(p);
 }
 
@@ -86,7 +108,8 @@ function saveProduct() {
   const priceAfter = parseFloat(document.getElementById('pm-priceAfter').value);
   if (!code || !name || isNaN(priceAfter)) { showToast('الكود والاسم والسعر مطلوبون'); return; }
 
-  const inv = getInv();
+  const invBranch = invPageBranch();
+  const inv = getInv(invBranch);
   const editCode = document.getElementById('pmEditCode').value;
   const prod = {
     code, name,
@@ -106,7 +129,7 @@ function saveProduct() {
     const deltas = [];
     if (editCode !== prod.code) deltas.push({ code: editCode, remove: true });
     deltas.push({ code: prod.code, insert: prod, set: prod });
-    adjustStock(deltas);
+    adjustStock(deltas, invBranch);
     // Audit: price change?
     const fieldLabels = { name:'الاسم', cost:'التكلفة', priceBefore:'السعر قبل الخصم', priceAfter:'السعر', qty:'الكمية', category:'الفئة', family:'العائلة' };
     const changes = oldProd ? buildAuditDiff(
@@ -115,20 +138,20 @@ function saveProduct() {
       fieldLabels
     ) : null;
     if (oldProd && oldProd.priceAfter !== prod.priceAfter) {
-      addAuditLog('price.change', `${prod.name}: سعر ${fmt(oldProd.priceAfter)} ← ${fmt(prod.priceAfter)} ج`, null, changes);
+      addAuditLog('price.change', `${prod.name}: سعر ${fmt(oldProd.priceAfter)} ← ${fmt(prod.priceAfter)} ج`, invBranch, changes);
     } else {
-      addAuditLog('inv.edit', `تعديل: ${prod.name} (${prod.code}) — كمية: ${prod.qty}`, null, changes);
+      addAuditLog('inv.edit', `تعديل: ${prod.name} (${prod.code}) — كمية: ${prod.qty}`, invBranch, changes);
     }
   } else {
     if (inv.find(x => x.code === code)) { showToast('هذا الكود موجود مسبقاً'); return; }
-    adjustStock([{ code: prod.code, insert: prod, set: prod }]);
+    adjustStock([{ code: prod.code, insert: prod, set: prod }], invBranch);
     const addFieldLabels = { code:'الكود', name:'الاسم', cost:'التكلفة', priceBefore:'السعر قبل الخصم', priceAfter:'السعر', qty:'الكمية', category:'الفئة', family:'العائلة' };
     const addedChanges = buildAuditDiff(
       null,
       { code: prod.code, name: prod.name, cost: fmt(prod.cost), priceBefore: fmt(prod.priceBefore), priceAfter: fmt(prod.priceAfter), qty: prod.qty, category: prod.category, family: prod.family },
       addFieldLabels
     );
-    addAuditLog('inv.add', `إضافة: ${prod.name} (${prod.code}) — سعر: ${fmt(prod.priceAfter)} ج`, null, addedChanges);
+    addAuditLog('inv.add', `إضافة: ${prod.name} (${prod.code}) — سعر: ${fmt(prod.priceAfter)} ج`, invBranch, addedChanges);
   }
   document.getElementById('productModal').classList.add('hidden');
   renderInventory();
@@ -136,8 +159,9 @@ function saveProduct() {
 
 function deleteProduct(code) {
   showConfirmModal('حذف هذا المنتج؟', function() {
-    const prod = getInv().find(x => x.code === code);
-    adjustStock([{ code, remove: true }]);
+    const b = invPageBranch();
+    const prod = getInv(b).find(x => x.code === code);
+    adjustStock([{ code, remove: true }], b);
     if (prod) {
       const delFieldLabels = { code:'الكود', name:'الاسم', cost:'التكلفة', priceBefore:'السعر قبل الخصم', priceAfter:'السعر', qty:'الكمية', category:'الفئة', family:'العائلة' };
       const deletedChanges = buildAuditDiff(
@@ -145,7 +169,7 @@ function deleteProduct(code) {
         {},
         delFieldLabels
       );
-      addAuditLog('inv.delete', `حذف: ${prod.name} (${prod.code})`, null, deletedChanges);
+      addAuditLog('inv.delete', `حذف: ${prod.name} (${prod.code})`, b, deletedChanges);
     }
     renderInventory();
   });
@@ -158,7 +182,8 @@ function importExcel(e) {
     const wb   = XLSX.read(ev.target.result, { type:'binary' });
     const ws   = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { defval:'' });
-    const inv  = getInv();
+    const impBranch = invPageBranch();
+    const inv  = getInv(impBranch);
     let added=0, updated=0, errors=[];
     const upserts = [];
 
@@ -190,9 +215,12 @@ function importExcel(e) {
 
     // One transactional bulk upsert (see adjustStock) — the old whole-array
     // setInv() clobbered any sale that happened during the import.
-    if (upserts.length) adjustStock(upserts);
+    if (upserts.length) adjustStock(upserts, impBranch);
     e.target.value = '';
-    const msg = `✅ تم الاستيراد: ${added} منتج جديد · ${updated} تم تحديثه${errors.length ? `<br>⚠️ ${errors.slice(0,3).join(' | ')}` : ''}`;
+    // Name the branch explicitly — an admin importing while the branch filter
+    // points somewhere other than their own branch has no other way to tell
+    // where the rows actually landed.
+    const msg = `✅ تم الاستيراد لفرع "${escHtml(getBranchName(impBranch))}": ${added} منتج جديد · ${updated} تم تحديثه${errors.length ? `<br>⚠️ ${errors.slice(0,3).join(' | ')}` : ''}`;
     document.getElementById('importAlert').innerHTML = `<div class="alert alert-success">${msg}</div>`;
     setTimeout(() => document.getElementById('importAlert').innerHTML='', 6000);
     renderInventory();
@@ -201,7 +229,7 @@ function importExcel(e) {
 }
 
 function exportInventoryExcel() {
-  const data = getInv().map(p => ({
+  const data = getInv(invPageBranch()).map(p => ({
     'الكود':p.code,'الاسم':p.name,'التكلفة':p.cost||0,
     'السعر قبل':p.priceBefore||0,'السعر بعد':p.priceAfter,'الكمية':p.qty
   }));
