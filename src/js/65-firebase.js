@@ -669,7 +669,18 @@ function activateSuspended(id) {
   const bill = getSuspended().find(b => b.id === id); if (!bill) return;
 
   // Prices are already modified by admin — no need for extra _adminDiscount
-  cart = bill.items.map(i => ({...i}));
+  // ⚠️ الكمية بتتفحص هنا تاني: الفاتورة اتعلّقت من وقت، وممكن يكون اتباع من
+  // نفس الصنف لعميل تاني في الوقت ده. addToCart بتمنع تجاوز المخزون وقت
+  // الإضافة، لكن الاستئناف كان بيرجّع السلة المحفوظة مباشرة فبيعدّي من غير
+  // الفحص ده — وcompleteSale بتخصم من غير ما تسأل، فالمخزون كان بيبقى سالب.
+  const inv = getInv();
+  const shortages = [];
+  cart = bill.items.map(i => {
+    const p = inv.find(x => x.code === i.code);
+    const available = p ? (p.qty || 0) : 0;
+    if (available < i.qty) shortages.push(`${i.name}: طلب ${i.qty} · متاح ${available}`);
+    return { ...i, qty: Math.min(i.qty, available) };
+  }).filter(i => i.qty > 0);
   cart._adminDiscount     = 0;
   cart._adminDiscountNote = bill.adminDiscountNote || '';
 
@@ -678,7 +689,11 @@ function activateSuspended(id) {
 
   renderCart(); renderProducts();
   document.getElementById('adminDiscountRow').classList.add('hidden');
-  showToast('تم تحميل الفاتورة — يمكن الآن الدفع من الكاشير');
+  if (shortages.length) {
+    showToast('⚠️ المخزون اتغيّر من وقت التعليق — الكميات اتعدّلت:\n' + shortages.join('\n'));
+  } else {
+    showToast('تم تحميل الفاتورة — يمكن الآن الدفع من الكاشير');
+  }
 }
 
 function deleteSuspended(id) {
