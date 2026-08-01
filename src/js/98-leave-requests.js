@@ -57,7 +57,12 @@ function approveLeaveRequest(id) {
     req.status = 'approved'; req.reviewedBy = currentUser; req.reviewedAt = Date.now();
     setLeaveRequests(list);
     if (req.type === 'leave') {
-      saveAttendanceRecord(req.empName, req.date, 'absent', '', '', 'إجازة معتمدة');
+      // 'excused' مش 'absent': الإجازة المعتمدة مالهاش علاقة بالغياب بدون
+      // إذن — تسجيلها absent كان بيخليها تظهر ❌ غياب في ملخص الحضور
+      // وتتعد في absentDays في الرواتب، والملاحظة "إجازة معتمدة" محدش
+      // بيقراها. الحالة دي كانت معرّفة في SC/SL (92-hr-attendance.js) من
+      // غير ما حاجة تكتبها.
+      saveAttendanceRecord(req.empName, req.date, 'excused', '', '', 'إجازة معتمدة');
     } else {
       const notes = (req.fromTime && req.toTime) ? 'إذن انصراف '+req.fromTime+' - '+req.toTime : 'إذن انصراف معتمد';
       saveAttendanceRecord(req.empName, req.date, 'late', req.fromTime||'', req.toTime||'', notes);

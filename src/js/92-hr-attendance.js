@@ -61,11 +61,14 @@ function calcMonthlyPayroll(month) {
     const commPct   = hrRec.targets?.[name]?.commission ?? 0;
     const commission = Math.round(empSales * commPct / 100);
     const workDays  = attMonth.filter(a => a.empName===name && a.status==='present').length;
+    // الإجازات المعتمدة ('excused') مقصودة إنها مش داخلة في absentDays ولا
+    // في workDays — بتتعد لوحدها، عشان يوم إجازة موافَق عليه ميظهرش كغياب.
     const absentDays= attMonth.filter(a => a.empName===name && a.status==='absent').length;
     const lateDays  = attMonth.filter(a => a.empName===name && a.status==='late').length;
+    const leaveDays = attMonth.filter(a => a.empName===name && a.status==='excused').length;
     const sr = stored.find(p => p.empName===name) || {};
     const bonus = sr.bonus||0; const deduction = sr.deduction||0;
-    return { name, base, empSales, commPct, commission, workDays, absentDays, lateDays, bonus, deduction, net: base+commission+bonus-deduction, isPaid: sr.isPaid||false };
+    return { name, base, empSales, commPct, commission, workDays, absentDays, lateDays, leaveDays, bonus, deduction, net: base+commission+bonus-deduction, isPaid: sr.isPaid||false };
   });
 }
 
@@ -101,11 +104,13 @@ function renderAttendancePane() {
     const p = Object.values(attMap).filter(a=>a.empName===name&&a.status==='present').length;
     const ab= Object.values(attMap).filter(a=>a.empName===name&&a.status==='absent').length;
     const lt= Object.values(attMap).filter(a=>a.empName===name&&a.status==='late').length;
+    const ex= Object.values(attMap).filter(a=>a.empName===name&&a.status==='excused').length;
     return `<div style="background:var(--bg-secondary);border-radius:8px;padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
       <span style="font-weight:700;min-width:70px;">${escHtml(name)}</span>
       <span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:12px;font-size:12px;">✅ ${p} حضور</span>
       <span style="background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:12px;font-size:12px;">❌ ${ab} غياب</span>
       <span style="background:#fef9c3;color:#854d0e;padding:2px 8px;border-radius:12px;font-size:12px;">⏰ ${lt} تأخير</span>
+      <span style="background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:12px;font-size:12px;">🔵 ${ex} إجازة</span>
     </div>`;
   }).join('');
 
