@@ -5622,6 +5622,25 @@ function updateQty(code, val) {
   renderInventory();
 }
 
+// الفئة/المجموعة عبارة عن <select> بخيارات ثابتة، لكن استيراد الإكسيل
+// بيقبل أي نص — فمنتج جاي من ملف بمجموعة "ahram" (حرف صغير) مكانش بيلاقي
+// الخيار "Ahram" (حرف كبير)، فالقايمة كانت تفضل فاضية، وأول ما الأدمن
+// يحفظ أي تعديل تاني كانت المجموعة تتمسح من غير ما حد ياخد باله.
+// الحل: أي قيمة مش موجودة في القايمة تتضاف ليها مؤقتاً بدل ما تضيع —
+// بنحافظ على القيمة الأصلية زي ما هي بدل ما نغيّر حالة حروفها.
+function _setSelectPreserving(id, val) {
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  Array.from(sel.querySelectorAll('option[data-injected]')).forEach(o => o.remove());
+  val = val || '';
+  if (val && !Array.from(sel.options).some(o => o.value === val)) {
+    const o = document.createElement('option');
+    o.value = val; o.textContent = val; o.dataset.injected = '1';
+    sel.appendChild(o);
+  }
+  sel.value = val;
+}
+
 function openProductModal(p) {
   document.getElementById('pmTitle').textContent = p ? 'تعديل منتج' : 'إضافة منتج جديد';
   document.getElementById('pmEditCode').value    = p ? p.code : '';
@@ -5631,8 +5650,8 @@ function openProductModal(p) {
   document.getElementById('pm-priceBefore').value = p ? (p.priceBefore||'') : '';
   document.getElementById('pm-priceAfter').value  = p ? p.priceAfter : '';
   document.getElementById('pm-qty').value         = p ? p.qty : '';
-  document.getElementById('pm-category').value    = p ? (p.category||'') : '';
-  document.getElementById('pm-family').value      = p ? (p.family||'') : '';
+  _setSelectPreserving('pm-category', p ? p.category : '');
+  _setSelectPreserving('pm-family',   p ? p.family   : '');
   document.getElementById('productModal').classList.remove('hidden');
 }
 
