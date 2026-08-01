@@ -13,6 +13,10 @@ const FIREBASE_CONFIG = {
 let _db            = null;
 let _fbReady       = false;
 let _suspendCache  = [];
+// بيتحطوا جوه initFirebase — بيسمحوا لمستمع الإعدادات إنه يشترك في مخزون
+// فرع اتضاف من جهاز تاني بعد ما التشغيل خلص (شوف _syncExtraBranchIds).
+let _subscribedInvBranches   = new Set();
+let _subscribeNewBranchInventory = () => {};
 
 // ═══════════════════════════════════════════════════════════════
 // REAL AUTHENTICATION — Firebase email/password + roles/{uid}
@@ -197,8 +201,16 @@ function initFirebase() {
     // role only ever reads its own inventory; cross-branch stock MOVEMENT
     // during a transfer is a write, handled separately by the rule's 'wh'
     // bypass, not a live read subscription).
-    const _invBranches = currentUser === 'admin' ? BRANCH_IDS : [currentBranch];
-    _invBranches.forEach(b => {
+    // اتحوّلت لدالة عشان الفروع اللي بتتكتشف بعد التشغيل (من مستمع
+    // الإعدادات — شوف _syncExtraBranchIds) تقدر تشترك هي كمان. القايمة
+    // بتتحسب مرة واحدة هنا، فمن غير كده الفرع المضاف من جهاز تاني كان
+    // مخزونه عمره ما يتحمّل على الجهاز ده.
+    _subscribedInvBranches = new Set();
+    const _invBranches = currentUser === 'admin' ? [...BRANCH_IDS] : [currentBranch];
+    _invBranches.forEach(b => _subscribeBranchInventory(b));
+    function _subscribeBranchInventory(b) {
+      if (_subscribedInvBranches.has(b)) return;
+      _subscribedInvBranches.add(b);
       _db.collection('pos_data').doc('inventory').collection('branches').doc(b)
         .onSnapshot(snap => {
           if (snap.exists) {
@@ -256,7 +268,11 @@ function initFirebase() {
             }
           }
         });
-    });
+    }
+    _subscribeNewBranchInventory = (ids) => {
+      if (currentUser !== 'admin') return;   // غير الأدمن بيتابع فرعه بس
+      ids.forEach(b => _subscribeBranchInventory(b));
+    };
 
     _db.collection('pos_data').doc('settings')
       .onSnapshot(snap => {
@@ -269,6 +285,19 @@ function initFirebase() {
           const localSalespeople = DB.g('salespeople', ['محمد','الاء']);
           _settingsCache = { threshold: localThresh, salespeople: localSalespeople };
           _db.collection('pos_data').doc('settings').set(_settingsCache);
+        }
+        // أي فرع إضافي موجود في الإعدادات المتزامنة ومش في BRANCH_IDS يتضاف
+        // هنا. confirmAddBranch() بتحفظ اسم الفرع في السحابة لكن قايمة الـ
+        // ids في localStorage بس (extraBranchIds) — يعني فرع زي b5 كان موجود
+        // على الجهاز اللي اتعمل عليه بس، وأي جهاز تاني (أو نفس الجهاز بعد
+        // مسح البيانات) عمره ما يعرفه: مش هيظهر في قوايم الفروع، ومستمع
+        // مخزونه مش هيشتغل، والتقارير المجمّعة هتستبعده — وأخطرها إن النسخة
+        // الاحتياطية (_buildFullBackup) بتلف على BRANCH_IDS فكانت تسيبه بره
+        // النسخة بالكامل.
+        const _newBranches = _syncExtraBranchIds(_settingsCache.branches);
+        if (_newBranches.length) {
+          _newBranches.forEach(b => { if (!(b in _invCacheByBranch)) _invCacheByBranch[b] = DB.g(`pos_inv_${b}`, []); });
+          _subscribeNewBranchInventory(_newBranches);
         }
         const thEl = document.getElementById('sLowThreshold');
         if (thEl) thEl.value = _settingsCache.threshold || 5;

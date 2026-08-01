@@ -40,6 +40,23 @@ function _loadChunk(page, cb) {
 const BASE_BRANCH_IDS = ['wh','b1','b2','b3','b4'];
 const BRANCH_IDS      = [...BASE_BRANCH_IDS, ...DB.g('extraBranchIds', [])];
 const BRANCH_DEFAULTS = { wh:'🏭 المخزن الرئيسي', b1:'الفرع الأول', b2:'الفرع الثاني', b3:'الفرع الثالث', b4:'الفرع الرابع' };
+
+// الفروع الإضافية مصدرها الحقيقي هو pos_data/settings.branches المتزامن،
+// مش localStorage: confirmAddBranch() بتكتب الاسم في السحابة وقايمة الـ ids
+// محلياً بس، فالفرع كان بيبان على جهاز إنشائه لوحده. بينادى من مستمع
+// الإعدادات (65-firebase.js) أول ما البيانات توصل.
+// ⚠️ push على نفس المصفوفة عن قصد — كل الملفات ماسكة نفس المرجع، فالتعديل
+// في المكان بيوصلهم كلهم؛ إعادة الإسناد كانت هتسيبهم على النسخة القديمة.
+function _syncExtraBranchIds(branchesMap) {
+  if (!branchesMap) return [];
+  const added = Object.keys(branchesMap)
+    .filter(id => /^b\d+$/.test(id) && !BRANCH_IDS.includes(id))
+    .sort((a, b) => parseInt(a.slice(1), 10) - parseInt(b.slice(1), 10));
+  if (!added.length) return [];
+  added.forEach(id => BRANCH_IDS.push(id));
+  DB.s('extraBranchIds', BRANCH_IDS.filter(id => !BASE_BRANCH_IDS.includes(id)));
+  return added;
+}
 let currentBranch       = DB.g('currentBranch', 'b1');
 let _invCacheByBranch   = {};                        // { b1:[], b2:[], b3:[], b4:[] }
 let _salesCache         = [];                        // filled by Firebase listeners — each sale has .branchId
