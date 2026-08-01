@@ -210,7 +210,11 @@ function buildJournalEntries(from, to) {
     const ref = '#'+String(sale.id).slice(-6);
     if (sale.isReturn) {
       push(sale.date, `مرتجع فاتورة ${ref}`, 'returns', 'cash', Math.abs(sale.total), {type:'sale-return', id:sale.id});
-      if (cogsAmt) push(sale.date, `عكس تكلفة مرتجع ${ref}`, 'inventory', 'cogs', cogsAmt, {type:'sale-return-cogs', id:sale.id});
+      // Math.abs مقصودة: سطور المرتجع كمياتها سالبة فـ cogsAmt بيطلع سالب،
+      // والقيد هنا أصلاً بيقلب الحسابات (مخزون مدين / تكلفة دائن) عشان يعكس
+      // البيع. تمرير المبلغ سالب كان بيعكس العكس — فالمخزون ينقص تاني بدل ما
+      // البضاعة ترجع، والرصيد يبان أقل بضعف تكلفة المرتجع.
+      if (cogsAmt) push(sale.date, `عكس تكلفة مرتجع ${ref}`, 'inventory', 'cogs', Math.abs(cogsAmt), {type:'sale-return-cogs', id:sale.id});
     } else {
       push(sale.date, `فاتورة مبيعات ${ref}`, 'cash', 'revenue', sale.total, {type:'sale', id:sale.id});
       if (cogsAmt) push(sale.date, `تكلفة البضاعة ${ref}`, 'cogs', 'inventory', cogsAmt, {type:'sale-cogs', id:sale.id});
