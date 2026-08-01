@@ -2785,13 +2785,14 @@ const DB = {
 
 // ══ LAZY-LOADED PAGES ══════════════════════════════════════════════
 // A handful of independent, heavy pages (accounting, warehouse,
-// purchases — see LAZY_CHUNKS in build.py) ship as separate .js files
-// instead of being inlined into index.html, so a cashier who never opens
-// them never downloads them. showPage() in 25-navigation.js calls
-// _loadChunk() before rendering one of these pages.
+// manufacturing, purchases — see LAZY_CHUNKS in build.py) ship as separate
+// .js files instead of being inlined into index.html, so a cashier who
+// never opens them never downloads them. showPage() in 25-navigation.js
+// calls _loadChunk() before rendering one of these pages.
 const _CHUNK_FILES = {
   accounting:    'chunk-accounting.js',
   warehouse:     'chunk-warehouse.js',
+  manufacturing: 'chunk-manufacturing.js',
   purchases:     'chunk-purchases.js',
   helpdesk:      'chunk-helpdesk.js',
   pivot:         'chunk-pivot.js',
@@ -2860,7 +2861,7 @@ let _sessionsCache      = [];                        // POS cash sessions (shift
 // the UI. `enforced:false` covers TWO different reasons, both meaning
 // "hiding the tab here is the only boundary that exists":
 //  (a) no dedicated cloud document to gate at all — dashboard/reports are
-//      pure derived views.
+//      pure derived views, manufacturing is still localStorage-only.
 //  (b) the tab's document IS synced to Firestore, but the SAME document is
 //      also read/written as a routine part of completing a sale or a cash
 //      shift — inventory/sales (obviously), suspended (a cashier suspends/
@@ -2895,6 +2896,9 @@ const DEPARTMENTS = [
       { key: 'purchases_orders',    label: 'أوامر الشراء' },
       { key: 'purchases_payments',  label: 'مدفوعات الموردين' },
     ]},
+  ]},
+  { key: 'manufacturing_dept', label: '🏭 التصنيع', tabs: [
+    { key: 'manufacturing', label: 'التصنيع', enforced: false },
   ]},
   { key: 'finance', label: '💰 المالية والمحاسبة', tabs: [
     { key: 'accounting', label: 'المحاسبة', enforced: true },
@@ -2957,6 +2961,7 @@ const TAB_ICON = {
   expenses:      { grad:'#f87171,#b91c1c', svg:'<circle cx="24" cy="24" r="16" stroke="white" stroke-width="2.5"/><path d="M24 13v22M18 19c0-3.314 2.686-6 6-6s6 2.686 6 6-2.686 4-6 4-6 1.686-6 4 2.686 6 6 6 6-2.686 6-6" stroke="white" stroke-width="2.5" stroke-linecap="round"/>' },
   audit:         { grad:'#94a3b8,#334155', svg:'<rect x="10" y="6" width="28" height="36" rx="3" stroke="white" stroke-width="2.5"/><path d="M16 16h16M16 22h16M16 28h8" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M30 32l2 2 4-4" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' },
   accounting:    { grad:'#34d399,#047857', svg:'<rect x="10" y="6" width="28" height="36" rx="3" stroke="white" stroke-width="2.5"/><path d="M16 16h16M16 22h16M16 28h10" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M28 32l3 3 5-5" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' },
+  manufacturing: { grad:'#f59e0b,#92400e', svg:'<circle cx="18" cy="30" r="7" stroke="white" stroke-width="2.5"/><circle cx="32" cy="30" r="7" stroke="white" stroke-width="2.5"/><path d="M18 23V12h10l6 8" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' },
   helpdesk:      { grad:'#fb923c,#c2410c', svg:'<path d="M8 34V16a6 6 0 016-6h20a6 6 0 016 6v10a6 6 0 01-6 6H20l-8 8v-6z" stroke="white" stroke-width="2.5" stroke-linejoin="round"/><circle cx="18" cy="21" r="2" fill="white"/><circle cx="24" cy="21" r="2" fill="white"/><circle cx="30" cy="21" r="2" fill="white"/>' },
   analytics:     { grad:'#6366f1,#4338ca', svg:'<path d="M8 40V22M18 40V14M28 40V26M38 40V10" stroke="white" stroke-width="4" stroke-linecap="round"/><path d="M8 16l10-8 10 6 10-10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' },
 };
@@ -5217,7 +5222,7 @@ function _showPageImpl(page) {
     showToast('🚫 الصفحة دي للمالك فقط');
     return;
   }
-  ['home','dashboard','inventory','sales','suspended','reports','customized','warehouse','settings','customers','promos','transfers','purchases','hr','expenses','audit','accounting','helpdesk','migration','analytics','userperms'].forEach(p => {
+  ['home','dashboard','inventory','sales','suspended','reports','customized','warehouse','settings','customers','promos','transfers','purchases','hr','expenses','audit','accounting','manufacturing','helpdesk','migration','analytics','userperms'].forEach(p => {
     document.getElementById('page-'+p)?.classList.add('hidden');
   });
   document.getElementById('page-'+page).classList.remove('hidden');
