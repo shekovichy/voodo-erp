@@ -5197,6 +5197,13 @@ function showPage(page) {
   _showPageImpl(page);
 }
 
+// Pages that render their own branch filter (see the branch-select audit in
+// template.html). Keep in sync if a page gains or loses one — the header
+// switcher is hidden on exactly these.
+const _PAGES_WITH_OWN_BRANCH_FILTER = [
+  'dashboard', 'inventory', 'sales', 'reports', 'purchases', 'expenses', 'helpdesk'
+];
+
 function _showPageImpl(page) {
   if (window._whMode && !['warehouse','transfers'].includes(page)) return;
   // Real enforcement lives in firestore.rules (see tabForDoc() there) —
@@ -5221,6 +5228,15 @@ function _showPageImpl(page) {
     document.getElementById('page-'+p)?.classList.add('hidden');
   });
   document.getElementById('page-'+page).classList.remove('hidden');
+  // Exactly ONE branch selector per page. These pages carry their own
+  // branch filter (which also offers "كل الفروع", something the header
+  // switcher can't express), so the global header switcher is hidden while
+  // they're open — showing both was confusing and was the root cause of an
+  // Excel import landing in a different branch than the one on screen.
+  // Every other page (cashier, home, settings, ...) keeps the header
+  // switcher, since that's what sets the branch a sale is recorded to.
+  var hdr = document.getElementById('branchSwitcherWrap');
+  if (hdr) hdr.style.display = _PAGES_WITH_OWN_BRANCH_FILTER.includes(page) ? 'none' : 'flex';
   var content = document.querySelector('.main-content');
   if (content) content.classList.toggle('home-mode', page === 'home');
   if (page === 'home') { updateHomeClock(); updateSuspendedBadge(); }
