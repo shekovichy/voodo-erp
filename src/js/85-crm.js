@@ -253,6 +253,17 @@ function updateCustomerAfterReturn(customerId, amount) {
   const list = getCustomers();
   const c    = list.find(x => x.id === customerId); if (!c) return;
   c.totalSpent = Math.max(0, (c.totalSpent||0) - amount);
+  // اسحب كمان النقاط اللي اتاخدت على المبلغ المرتجع — awardLoyaltyPoints
+  // (91-loyalty.js) بتديها عند البيع، وده كان الاتجاه المقابل الناقص: العميل
+  // كان بيرجّع البضاعة وياخد فلوسه ويفضل محتفظ بنقاطها، والنقاط بتتحول لخصم
+  // (pointValue) فبتبقى خسارة فعلية. نفس معادلة المنح بالظبط.
+  // ملاحظة: التقريب لأسفل يخلي الاسترجاع مش معكوس تماماً لو الفاتورة اترجّعت
+  // على دفعات صغيرة — الفرق نقطة أو اتنين لصالح العميل، ومحكوم بحد أدنى صفر.
+  const cfg = (typeof getLoyalty === 'function') ? getLoyalty() : null;
+  if (cfg && cfg.enabled && cfg.pointsPerEGP > 0) {
+    const pts = Math.floor(amount / cfg.pointsPerEGP);
+    if (pts > 0) c.loyaltyPoints = Math.max(0, (c.loyaltyPoints||0) - pts);
+  }
   setCustomers(list);
 }
 
