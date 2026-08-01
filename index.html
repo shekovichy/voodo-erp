@@ -4602,17 +4602,12 @@ function renderHomeIcons() {
     const el = document.getElementById(id);
     if (el) el.style.display = isRealOwner ? '' : 'none';
   });
-  // Update pending badges on admin home icons
-  if (isAdmin) {
-    try {
-      const expPending = getExpenseRequests().filter(r => r.status === 'pending').length;
-      const leavePending = getLeaveRequests().filter(r => r.status === 'pending').length;
-      const eb = document.getElementById('homeExpReqBadge');
-      const lb = document.getElementById('homeLeaveReqBadge');
-      if (eb) { eb.textContent = expPending; eb.style.display = expPending ? 'inline' : 'none'; }
-      if (lb) { lb.textContent = leavePending; lb.style.display = leavePending ? 'inline' : 'none'; }
-    } catch(e) {}
-  }
+  // (كان هنا كود بيحدّث badges على أيقونات الهوم: #homeExpReqBadge و
+  // #homeLeaveReqBadge — العنصرين دول اتشالوا لما الهوم بقى بيتولد من
+  // DEPARTMENTS بدل ما يكون ثابت في الـ HTML، فالكود فضل بيدوّر عليهم
+  // ومبيلاقيهمش وبيفشل صامت. عدّاد الطلبات المعلّقة لسه شغال في مكانه
+  // الطبيعي — badges التابات جوه صفحتَي المصاريف والموارد البشرية، عن
+  // طريق updateExpReqBadge()/updateLeaveReqBadge().)
 }
 
 // Non-admin home screen: the fixed action icons (POS, expense/leave
