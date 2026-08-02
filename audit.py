@@ -96,6 +96,40 @@ for pg, sels in sorted(per_page.items()):
         detail = '، '.join(f'#{i} (سطر {n})' for n, i in sels)
         errors.append(f'صفحة "{pg}" فيها {len(sels)} فلاتر فروع: {detail}')
 
+# ── 5. ملفات البناء ناقصة من الـ commit أو قديمة ────────────────────
+# الصفحات الكسولة بتتبني في ملفات chunk-*.js منفصلة، مش جوه index.html.
+# في 2026-08-01 اتعملت 3 إصلاحات في 93-accounting.js واتعمل commit لـ
+# index.html بس — فالإصلاحات فضلت في الريبو من غير ما توصل للتطبيق أصلاً،
+# لأن صفحة المحاسبة بتتحمّل من الشنك. الفحص ده بيمسك الحالتين: نسيان
+# البناء بعد تعديل المصدر، ونسيان الـ commit بعد البناء.
+import subprocess
+
+def _git(*args):
+    try:
+        return subprocess.run(['git', *args], cwd=ROOT, capture_output=True,
+                              text=True, timeout=15).stdout.strip()
+    except Exception:
+        return None
+
+_lazy = dict(re.findall(r"'([\w.-]+\.js)':\s*'(chunk-[\w-]+\.js)'", rd('build.py')))
+for srcname, chunkname in _lazy.items():
+    srcp   = os.path.join(ROOT, 'src/js', srcname)
+    chunkp = os.path.join(ROOT, chunkname)
+    if not os.path.exists(srcp) or not os.path.exists(chunkp):
+        continue
+    if os.path.getmtime(srcp) > os.path.getmtime(chunkp):
+        errors.append(f'{chunkname} أقدم من {srcname} — شغّل build.py')
+
+if _git('rev-parse', '--git-dir') is not None:
+    artifacts = ['index.html'] + sorted(_lazy.values())
+    for art in artifacts:
+        if not os.path.exists(os.path.join(ROOT, art)):
+            continue
+        on_disk   = _git('hash-object', art)
+        committed = _git('rev-parse', f'HEAD:{art}')
+        if on_disk and committed and on_disk != committed:
+            errors.append(f'{art} اتبنى بس ماتعملّهوش commit — التعديل مش هيوصل للتطبيق')
+
 # ── التقرير ─────────────────────────────────────────────────────────
 print('=' * 66)
 print('  VOODO ERP — فاحص التناسق')
