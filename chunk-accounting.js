@@ -53,7 +53,12 @@ function renderPnL() {
   const revenue  = sales.reduce((s,x)=>s+x.total,0);
   const returnAmt= rets.reduce((s,x)=>s+Math.abs(x.total||0),0);
   const netRev   = revenue - returnAmt;
-  const cogs     = sales.reduce((s,x)=>s+(x.items||[]).reduce((ss,i)=>ss+(i.cost||0)*i.qty,0),0);
+  // المرتجعات لازم تتخصم من التكلفة زي ما اتخصمت من الإيراد: البضاعة رجعت
+  // للمخزن فعلاً (شوف _processCashierReturnConfirmed) فتكلفتها مش مصروف.
+  // من غير كده الإيراد بينقص والتكلفة تفضل زي ما هي، فالربح يقل بمقدار تكلفة
+  // المرتجع بالظبط. سطور المرتجع كمياتها سالبة، فدمجها هنا بيخصم لوحده —
+  // نفس أسلوب الداشبورد (30-dashboard.js) اللي كان بيحسبها صح أصلاً.
+  const cogs     = [...sales, ...rets].reduce((s,x)=>s+(x.items||[]).reduce((ss,i)=>ss+(i.cost||0)*i.qty,0),0);
   const grossP   = netRev - cogs;
   const salaries = typeof calcMonthlyPayroll==='function' ? calcMonthlyPayroll(month).reduce((s,p)=>s+p.net,0) : 0;
   const opExp    = exps.reduce((s,e)=>s+(e.amount||0),0);
@@ -205,7 +210,11 @@ function buildJournalEntries(from, to) {
     const ref = '#'+String(sale.id).slice(-6);
     if (sale.isReturn) {
       push(sale.date, `مرتجع فاتورة ${ref}`, 'returns', 'cash', Math.abs(sale.total), {type:'sale-return', id:sale.id});
-      if (cogsAmt) push(sale.date, `عكس تكلفة مرتجع ${ref}`, 'inventory', 'cogs', cogsAmt, {type:'sale-return-cogs', id:sale.id});
+      // Math.abs مقصودة: سطور المرتجع كمياتها سالبة فـ cogsAmt بيطلع سالب،
+      // والقيد هنا أصلاً بيقلب الحسابات (مخزون مدين / تكلفة دائن) عشان يعكس
+      // البيع. تمرير المبلغ سالب كان بيعكس العكس — فالمخزون ينقص تاني بدل ما
+      // البضاعة ترجع، والرصيد يبان أقل بضعف تكلفة المرتجع.
+      if (cogsAmt) push(sale.date, `عكس تكلفة مرتجع ${ref}`, 'inventory', 'cogs', Math.abs(cogsAmt), {type:'sale-return-cogs', id:sale.id});
     } else {
       push(sale.date, `فاتورة مبيعات ${ref}`, 'cash', 'revenue', sale.total, {type:'sale', id:sale.id});
       if (cogsAmt) push(sale.date, `تكلفة البضاعة ${ref}`, 'cogs', 'inventory', cogsAmt, {type:'sale-cogs', id:sale.id});
@@ -435,7 +444,10 @@ function renderAPAging() {
 function renderAccSummary() {
   const pane = document.getElementById('accPane_summary');
   if (!pane) return;
-  const allSales = getSales().filter(s=>!s.isReturn);
+  // المرتجعات مدموجة مع المبيعات هنا (إجماليها وكمياتها سالبة) فبتتخصم من
+  // الإيراد والتكلفة مع بعض — زي renderPnL والداشبورد بالظبط. استبعادها كان
+  // بيخلي التبويب ده يعرض صافي ربح مختلف عن قائمة الدخل في نفس الصفحة.
+  const allSales = getSales();
   const allExp   = getExpenses();
   const months   = [...new Set(allSales.map(s=>s.date?.slice(0,7)).filter(Boolean))].sort().reverse();
   const totalRev = allSales.reduce((s,x)=>s+x.total,0);
