@@ -50,6 +50,7 @@ function _clearCartConfirmed() {
 }
 
 function renderCart() {
+  _persistCart();
   const el = document.getElementById('cartItems');
   if (!cart.length) { el.innerHTML = '<div class="cart-empty">أضف منتجات للفاتورة</div>'; updateCartUI(); return; }
   el.innerHTML = cart.map(i => {

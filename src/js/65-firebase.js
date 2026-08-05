@@ -993,6 +993,14 @@ function resumeFromModal(id) {
   if (!FIREBASE_CONFIG.projectId || typeof firebase === 'undefined') return;
   try {
     if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    // الاحتفاظ بالجلسة كان معتمد على الإعداد الافتراضي لـ Firebase SDK بدل
+    // ما يتحدد صراحة — الافتراضي غالبًا LOCAL (يفضل بعد الريفريش)، لكن ده
+    // مش مضمون في كل سياقات المتصفح، وتحديدًا في تطبيق PWA مسطّب على
+    // الموبايل (WebView مختلف عن تبويب المتصفح العادي). ضبطه صراحة بيشيل
+    // الاحتمال ده تمامًا بدل ما نعتمد على سلوك افتراضي مش موثّق صراحة هنا.
+    firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(e => {
+      console.error('Auth setPersistence error:', e);
+    });
     firebase.auth().onAuthStateChanged(fbUser => {
       if (!fbUser || currentUser) return; // not signed in, or already in a session
       const cached = DB.g('pos_role_cache', null);

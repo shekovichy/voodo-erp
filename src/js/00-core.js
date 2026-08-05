@@ -561,6 +561,36 @@ let isBranchManager = false;
 let isRealOwner = false;
 let cart = [];
 let payMethod = 'cash';
+
+// السلة كانت موجودة في الذاكرة بس (متغير JS عادي) — أي ريفريش عرضي (أو
+// PWA مسطّبة اتقفلت من النظام وفتحت تاني) كان بيمسحها بالكامل حتى لو فيها
+// فاتورة نص مكتوبة، من غير أي تحذير. بتتحفظ دلوقتي لكل فرع لوحده (جهاز ممكن
+// يشتغل كذا فرع بمرور الوقت) وترجع تلقائي أول ما الجلسة تبدأ. مش بديل عن
+// "تعليق الفاتورة" الرسمي — ده بس بيمنع ضياع السلة بسبب حادثة تقنية.
+function _persistCart() {
+  DB.s(`pos_cart_${currentBranch}`, {
+    items: cart,
+    adminDiscount: cart._adminDiscount || 0,
+    adminDiscountNote: cart._adminDiscountNote || '',
+    appliedPromos: cart._appliedPromos || [],
+  });
+}
+function _restoreCart() {
+  const saved = DB.g(`pos_cart_${currentBranch}`, null);
+  if (!saved || !Array.isArray(saved.items) || !saved.items.length) return;
+  // بتترجع دايماً على أول دخول للجلسة — يعني قبل ما initFirebase() يجيب
+  // المخزون (بيتنادى بعد السطر ده في كل نقاط الدخول). لو فلترنا هنا على
+  // مخزون لسه فاضي، هنمسح الفاتورة كلها ونحفظ النسخة الفاضية دي فوراً
+  // (renderCart بيعمل _persistCart أول حاجة) — يعني نضيع الفاتورة الأصلية
+  // نهائياً بدل ما نحميها. فلترة "الأصناف الملغاة" بتتعمل بس لو المخزون
+  // فعلاً وصل، وإلا بترجع الفاتورة زي ما هي وتتنضف من نفسها أول ما
+  // المستخدم يلمسها (تعديل كمية، دفع، ...إلخ).
+  const inv = getInv();
+  cart = inv.length ? saved.items.filter(i => inv.some(p => p.code === i.code)) : saved.items.slice();
+  cart._adminDiscount = saved.adminDiscount || 0;
+  cart._adminDiscountNote = saved.adminDiscountNote || '';
+  cart._appliedPromos = saved.appliedPromos || [];
+}
 let chartWeekly = null, chartTop = null, chartRptSales = null, chartProfit = null;
 let chartTrend = null, chartBranches = null, chartCmpTrend = null, chartCmpBranches = null;
 let _dashRange = 30; // default 30 days

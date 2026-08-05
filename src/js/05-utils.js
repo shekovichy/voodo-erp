@@ -181,6 +181,7 @@ function _enterAdminSession(auditLabel) {
   isBranchManager = false;
   document.getElementById('loginPage').classList.add('hidden');
   document.getElementById('managerView').classList.remove('hidden');
+  _restoreCart(); renderCart();
   document.getElementById('todayDate').textContent =
     new Date().toLocaleDateString('ar-EG', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
   document.getElementById('sLowThreshold').value = getThreshold();
@@ -198,6 +199,7 @@ function _enterBranchSession(branchId, role, username) {
   isBranchManager = role === 'manager';
   currentBranch = branchId;
   DB.s('currentBranch', branchId);
+  _restoreCart(); renderCart();
   document.getElementById('loginPage').classList.add('hidden');
   if (branchId === 'wh') {
     // Warehouse-only mode: restricted to warehouse & transfers pages
@@ -290,6 +292,7 @@ async function _legacyLogin(user, pass) {
     currentUser = 'cashier';
     currentUsername = user;
     isBranchManager = false;
+    _restoreCart(); renderCart();
     document.getElementById('loginPage').classList.add('hidden');
     document.getElementById('cashierView').classList.remove('hidden');
     initFirebase();

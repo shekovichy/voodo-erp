@@ -3354,6 +3354,36 @@ let isBranchManager = false;
 let isRealOwner = false;
 let cart = [];
 let payMethod = 'cash';
+
+// السلة كانت موجودة في الذاكرة بس (متغير JS عادي) — أي ريفريش عرضي (أو
+// PWA مسطّبة اتقفلت من النظام وفتحت تاني) كان بيمسحها بالكامل حتى لو فيها
+// فاتورة نص مكتوبة، من غير أي تحذير. بتتحفظ دلوقتي لكل فرع لوحده (جهاز ممكن
+// يشتغل كذا فرع بمرور الوقت) وترجع تلقائي أول ما الجلسة تبدأ. مش بديل عن
+// "تعليق الفاتورة" الرسمي — ده بس بيمنع ضياع السلة بسبب حادثة تقنية.
+function _persistCart() {
+  DB.s(`pos_cart_${currentBranch}`, {
+    items: cart,
+    adminDiscount: cart._adminDiscount || 0,
+    adminDiscountNote: cart._adminDiscountNote || '',
+    appliedPromos: cart._appliedPromos || [],
+  });
+}
+function _restoreCart() {
+  const saved = DB.g(`pos_cart_${currentBranch}`, null);
+  if (!saved || !Array.isArray(saved.items) || !saved.items.length) return;
+  // بتترجع دايماً على أول دخول للجلسة — يعني قبل ما initFirebase() يجيب
+  // المخزون (بيتنادى بعد السطر ده في كل نقاط الدخول). لو فلترنا هنا على
+  // مخزون لسه فاضي، هنمسح الفاتورة كلها ونحفظ النسخة الفاضية دي فوراً
+  // (renderCart بيعمل _persistCart أول حاجة) — يعني نضيع الفاتورة الأصلية
+  // نهائياً بدل ما نحميها. فلترة "الأصناف الملغاة" بتتعمل بس لو المخزون
+  // فعلاً وصل، وإلا بترجع الفاتورة زي ما هي وتتنضف من نفسها أول ما
+  // المستخدم يلمسها (تعديل كمية، دفع، ...إلخ).
+  const inv = getInv();
+  cart = inv.length ? saved.items.filter(i => inv.some(p => p.code === i.code)) : saved.items.slice();
+  cart._adminDiscount = saved.adminDiscount || 0;
+  cart._adminDiscountNote = saved.adminDiscountNote || '';
+  cart._appliedPromos = saved.appliedPromos || [];
+}
 let chartWeekly = null, chartTop = null, chartRptSales = null, chartProfit = null;
 let chartTrend = null, chartBranches = null, chartCmpTrend = null, chartCmpBranches = null;
 let _dashRange = 30; // default 30 days
@@ -3927,6 +3957,7 @@ function _enterAdminSession(auditLabel) {
   isBranchManager = false;
   document.getElementById('loginPage').classList.add('hidden');
   document.getElementById('managerView').classList.remove('hidden');
+  _restoreCart(); renderCart();
   document.getElementById('todayDate').textContent =
     new Date().toLocaleDateString('ar-EG', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
   document.getElementById('sLowThreshold').value = getThreshold();
@@ -3944,6 +3975,7 @@ function _enterBranchSession(branchId, role, username) {
   isBranchManager = role === 'manager';
   currentBranch = branchId;
   DB.s('currentBranch', branchId);
+  _restoreCart(); renderCart();
   document.getElementById('loginPage').classList.add('hidden');
   if (branchId === 'wh') {
     // Warehouse-only mode: restricted to warehouse & transfers pages
@@ -4036,6 +4068,7 @@ async function _legacyLogin(user, pass) {
     currentUser = 'cashier';
     currentUsername = user;
     isBranchManager = false;
+    _restoreCart(); renderCart();
     document.getElementById('loginPage').classList.add('hidden');
     document.getElementById('cashierView').classList.remove('hidden');
     initFirebase();
@@ -4869,6 +4902,7 @@ function _clearCartConfirmed() {
 }
 
 function renderCart() {
+  _persistCart();
   const el = document.getElementById('cartItems');
   if (!cart.length) { el.innerHTML = '<div class="cart-empty">أضف منتجات للفاتورة</div>'; updateCartUI(); return; }
   el.innerHTML = cart.map(i => {
@@ -8188,6 +8222,14 @@ function resumeFromModal(id) {
   if (!FIREBASE_CONFIG.projectId || typeof firebase === 'undefined') return;
   try {
     if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    // الاحتفاظ بالجلسة كان معتمد على الإعداد الافتراضي لـ Firebase SDK بدل
+    // ما يتحدد صراحة — الافتراضي غالبًا LOCAL (يفضل بعد الريفريش)، لكن ده
+    // مش مضمون في كل سياقات المتصفح، وتحديدًا في تطبيق PWA مسطّب على
+    // الموبايل (WebView مختلف عن تبويب المتصفح العادي). ضبطه صراحة بيشيل
+    // الاحتمال ده تمامًا بدل ما نعتمد على سلوك افتراضي مش موثّق صراحة هنا.
+    firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(e => {
+      console.error('Auth setPersistence error:', e);
+    });
     firebase.auth().onAuthStateChanged(fbUser => {
       if (!fbUser || currentUser) return; // not signed in, or already in a session
       const cached = DB.g('pos_role_cache', null);
