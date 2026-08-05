@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="VOODO ERP">
   <link rel="apple-touch-icon" href="/icon-192.png">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>VOODO ERP — نظام الكاشير</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;600;700;800&display=swap" rel="stylesheet">
@@ -114,7 +114,15 @@
 [data-theme="dark"] ::-webkit-scrollbar-thumb { background: var(--border); }
 [data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Jost', 'Segoe UI', Tahoma, Arial, sans-serif; background: var(--bg); color: var(--text); direction: rtl; transition: background .3s, color .3s; }
+/* حماية عامة: أي عنصر بيهرب بره عرض الشاشة (زي .low-stock-panel قبل الإصلاح)
+   كان بيوسّع الصفحة كلها ويظهر كفراغ تقدر تزحلق له يمين أو شمال على الموبايل —
+   العرض ده وقف الظاهرة نفسها حتى لو ظهر عنصر تاني بنفس المشكلة مستقبلاً. */
+html, body { overflow-x: hidden; }
+body {
+  font-family: 'Jost', 'Segoe UI', Tahoma, Arial, sans-serif; background: var(--bg); color: var(--text); direction: rtl; transition: background .3s, color .3s;
+  padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right);
+}
 
 /* ---- LOGIN ---- */
 .login-wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; background:linear-gradient(160deg,#0d1b35 0%,#1a5faf 60%,#2472cc 100%); }
@@ -453,6 +461,7 @@ input[type=number] { -moz-appearance:textfield; }
   .stat-value { font-size:20px; }
   .stat-card { padding:14px; }
 
+
   /* ── Inventory action row ── */
   .inv-actions { flex-wrap:wrap !important; }
   .inv-actions .btn { font-size:12px; padding:7px 12px; }
@@ -529,6 +538,13 @@ input[type=number] { -moz-appearance:textfield; }
   border:1px solid var(--border); z-index:500; display:none; overflow:hidden;
 }
 .low-stock-panel.open { display:block; }
+/* عرض ثابت 340px + left:20px على شاشة أضيق من 360px كان بيخرج بره حدود
+   الشاشة — العنصر ده fixed فبيوسّع عرض الصفحة كلها القابل للتزحليق، وده
+   أخطر سبب فعلي وراء "الزيادات يمين وشمال" وقت الموبايل. لازم تيجي بعد
+   القاعدة الأساسية فوق دي عشان الترتيب في الملف يغلب (نفس درجة التحديد). */
+@media (max-width:768px) {
+  .low-stock-panel { left:12px; right:12px; width:auto; top:60px; }
+}
 .low-stock-panel-header {
   background:var(--primary); color:white; padding:12px 16px;
   display:flex; justify-content:space-between; align-items:center; font-weight:700;
