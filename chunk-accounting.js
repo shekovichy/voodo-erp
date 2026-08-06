@@ -198,6 +198,25 @@ const ACCT_TYPE_LABEL = { asset:'أصول', liability:'التزامات', equity
 // applies to every lazy-chunk-owned cache read in this function.
 function buildJournalEntries(from, to) {
   const entries = [];
+  // calcMonthlyPayroll() (92-hr-attendance.js) always adds the CURRENT
+  // staff list's base salary for any month it's asked about, attendance
+  // or not — it has no concept of "this employee didn't exist yet". The
+  // payroll loop below walks every month from `from`, and renderBalanceSheet()
+  // passes `from = new Date(0)` (epoch) to get all-time cumulative cash.
+  // Left unbounded, that posts a phantom payroll expense for every one of
+  // the ~650 months since 1970, wrecking the derived cash balance (and
+  // wastefully recomputing payroll that many times on every render).
+  // Real transactions never predate actual business activity anyway, so
+  // clamping the payroll loop's start to the earliest recorded
+  // sale/expense/purchase only affects this phantom-month case.
+  const payrollFrom = (() => {
+    const dates = [...getSales(), ...getExpenses()].map(x => x.date)
+      .concat(_purchaseCache.map(po => po.receivedAt))
+      .filter(Boolean).map(d => new Date(d));
+    if (!dates.length) return from;
+    const earliest = new Date(Math.min(...dates));
+    return earliest > from ? earliest : from;
+  })();
   const push = (date, desc, debit, credit, amount, source) => {
     if (!amount) return;
     entries.push({ date, desc, debit, credit, amount, source });
@@ -244,7 +263,7 @@ function buildJournalEntries(from, to) {
   // transaction — post one entry per covered month, dated to that month.
   if (typeof calcMonthlyPayroll === 'function') {
     const seen = new Set();
-    const cursor = new Date(from.getFullYear(), from.getMonth(), 1);
+    const cursor = new Date(payrollFrom.getFullYear(), payrollFrom.getMonth(), 1);
     while (cursor <= to) {
       const m = cursor.toISOString().slice(0,7);
       if (!seen.has(m)) {
