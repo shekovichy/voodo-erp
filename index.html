@@ -7224,7 +7224,6 @@ function _resetAllConfirmed() {
     });
     _db.collection('pos_data').doc('inv').delete().catch(()=>{});
     _db.collection('pos_data').doc('suspended').delete().catch(()=>{});
-    _db.collection('pos_data').doc('settings').delete().catch(()=>{});
     _db.collection('pos_data').doc('transfers').delete().catch(()=>{});
   }
   // Sales: setSales([]) already deletes both the legacy flat month docs and
@@ -7233,7 +7232,15 @@ function _resetAllConfirmed() {
   setSales([]);
   _invCacheByBranch = {}; BRANCH_IDS.forEach(b => _invCacheByBranch[b] = []);
   _suspendCache = []; _transfersCache = [];
-  _settingsCache = { threshold: 5 };
+  // كان بيمسح doc الإعدادات بالكامل من Firestore ويستبدل _settingsCache
+  // كله بـ {threshold:5} — يعني "حذف كل البيانات (المخزون + المبيعات)"
+  // (نص الرسالتين اللي المستخدم بيأكدهم) كان فعليًا بيمسح كمان أسماء
+  // الفروع، قايمة البائعين، توزيعهم على الفروع، وحد الـ VIP، من غير أي
+  // تحذير عن كده. threshold بس هو اللي مفروض يترجع للافتراضي هنا —
+  // saveSettingsCache() بتحفظ نسخة الـ cache زي ما هي دلوقتي (بعد تعديل
+  // threshold بس) بدل ما تمسح الدوك كله.
+  _settingsCache.threshold = 5;
+  saveSettingsCache();
   showMsg('sSettingsMsg','تم حذف كل البيانات','danger');
 }
 
