@@ -359,6 +359,13 @@ function renderBalanceSheet() {
   const entries = buildJournalEntries(new Date(0), asOf);
 
   const cash = accountBalance('cash', entries);
+  // مفيش تتبّع تاريخي لقيمة المخزون في أي مكان في السيستم — الرقم ده دايمًا
+  // قيمة المخزون الحالية (النهاردة)، حتى لو المستخدم اختار شهر فات من فلتر
+  // الشهر فوق. لو مقارناها بـ "النقدية" اللي فعلاً بتتحسب كما في نهاية الشهر
+  // المختار (من قيود buildJournalEntries)، الميزانية بتبقى مزيج غير متسق:
+  // نقدية تاريخية + مخزون حالي، ومعروضة كأنها كلها "كما في نهاية {الشهر}" —
+  // ده غلط لأي شهر غير الشهر الحالي فعليًا.
+  const isCurrentMonth = month === new Date().toISOString().slice(0,7);
   const inventoryValue = Object.values(_invCacheByBranch).flat().reduce((s,p)=>s+(p.cost||0)*(p.qty||0),0);
   const ar = 0; // no credit-sale feature exists — every POS sale is fully paid at checkout
   const totalAssets = cash + inventoryValue + ar;
@@ -376,6 +383,7 @@ function renderBalanceSheet() {
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">
       💡 "النقدية" رقم مُشتق من كل العمليات المسجلة في النظام من بداية استخدامه (إيرادات - مصروفات - مشتريات مدفوعة) وليس رصيد بنكي فعلي مُطابَق.
       "الذمم المدينة" = صفر لأن كل بيع في السيستم يُدفع بالكامل وقت البيع.
+      ${!isCurrentMonth ? '<br>⚠️ "المخزون" دايمًا بقيمته الحالية النهاردة (مفيش تتبّع تاريخي لقيمة المخزون في السيستم) — مش قيمته الفعلية وقت نهاية الشهر المختار، فإجمالي الأصول هنا مش دقيق لشهر فات. اختار الشهر الحالي للرقم الدقيق.' : ''}
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:760px;">
       <div style="background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,.07);">
