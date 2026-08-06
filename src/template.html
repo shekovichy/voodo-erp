@@ -1206,10 +1206,11 @@
         <div id="hrPane_targets">
         <div class="card" style="margin-bottom:16px;">
           <div class="card-title">👤 إدارة البائعين</div>
-          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">الأسماء دي هتظهر في نافذة الدفع عشان تختار البائع لكل فاتورة.</p>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">الأسماء دي هتظهر في نافذة الدفع عشان تختار البائع لكل فاتورة. الراتب الأساسي بيتضاف للعمولة والمكافأة في تبويب "الرواتب" — من غيره صافي راتب الموظف بيبقى عمولته بس.</p>
           <div id="sellersListWrap" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;"></div>
           <div class="flex gap-8">
             <input class="form-control" id="sNewSeller" placeholder="اسم البائع الجديد" style="max-width:220px;" onkeydown="if(event.key==='Enter')addSeller()" />
+            <input class="form-control" id="sNewSellerBaseSalary" type="number" min="0" placeholder="الراتب الأساسي" style="max-width:140px;" onkeydown="if(event.key==='Enter')addSeller()" />
             <select class="form-control" id="sNewSellerBranch" style="max-width:160px;"></select>
             <button class="btn btn-primary" onclick="addSeller()">➕ إضافة</button>
           </div>

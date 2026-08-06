@@ -18,7 +18,7 @@ function switchReport(name, tab) {
 function populateSellerFilter(selId) {
   const sel = document.getElementById(selId); if (!sel) return;
   const cur = sel.value;
-  const people = getSalespeople();
+  const people = getSalespeople().map(salespersonName);
   // Include 'غير محدد' if any sale lacks salesperson
   const all = getSales().map(s => s.salesperson || '');
   const hasBlank = all.some(x => !x);

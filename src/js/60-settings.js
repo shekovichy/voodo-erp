@@ -490,14 +490,20 @@ function renderSellersSettings() {
   const wrap = document.getElementById('sellersListWrap');
   if (!wrap) return;
   const people = getSalespeople();
-  wrap.innerHTML = people.map((n,i) => `
+  wrap.innerHTML = people.map((sp,i) => {
+    const n = salespersonName(sp);
+    return `
     <div style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:20px;padding:5px 6px 5px 12px;font-size:13px;font-weight:600;">
       <span>👤 ${escHtml(n)}</span>
+      <input type="number" min="0" value="${salespersonBaseSalary(sp) || ''}" placeholder="راتب أساسي" title="الراتب الأساسي"
+        onchange="changeSellerBaseSalary('${escHtml(n).replace(/'/g,"\\'")}', this.value)"
+        style="width:88px;border:1px solid var(--border);border-radius:12px;font-size:11px;padding:2px 6px;background:white;" />
       <select onchange="changeSellerBranch('${escHtml(n).replace(/'/g,"\\'")}', this.value)" style="border:1px solid var(--border);border-radius:12px;font-size:11px;padding:2px 6px;background:white;">
         ${_sellerBranchOptionsHtml(getSellerBranch(n))}
       </select>
       <button onclick="removeSeller(${i})" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:14px;line-height:1;padding:0 2px;" title="حذف">×</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   const newBranchSel = document.getElementById('sNewSellerBranch');
   if (newBranchSel && newBranchSel.options.length <= 1) newBranchSel.innerHTML = _sellerBranchOptionsHtml('');
 }
@@ -507,17 +513,34 @@ function changeSellerBranch(name, branchId) {
   showMsg('sSellersMsg', branchId ? `تم نقل ${name} إلى ${getBranchName(branchId)}` : `${name} بقى شغال في كل الفروع`);
 }
 
+// Upgrades a plain-string entry to {name, baseSalary} in place the first
+// time its base salary is set — every other consumer of getSalespeople()
+// already tolerates both shapes (see salespersonName/salespersonBaseSalary
+// in 00-core.js), so this doesn't require touching them.
+function changeSellerBaseSalary(name, val) {
+  const amount = Math.max(0, parseFloat(val) || 0);
+  const arr = [...getSalespeople()];
+  const idx = arr.findIndex(sp => salespersonName(sp) === name);
+  if (idx < 0) return;
+  arr[idx] = { name, baseSalary: amount };
+  setSalespeople(arr);
+  showMsg('sSellersMsg', amount > 0 ? `تم ضبط الراتب الأساسي لـ ${name}: ${fmt(amount)} ج` : `تم مسح الراتب الأساسي لـ ${name}`);
+}
+
 function addSeller() {
   const inp = document.getElementById('sNewSeller');
   const name = inp.value.trim();
   if (!name) return;
   const arr = [...getSalespeople()];
-  if (arr.includes(name)) { showMsg('sSellersMsg','الاسم موجود بالفعل','danger'); return; }
-  arr.push(name);
+  if (arr.some(sp => salespersonName(sp) === name)) { showMsg('sSellersMsg','الاسم موجود بالفعل','danger'); return; }
+  const baseSalaryInp = document.getElementById('sNewSellerBaseSalary');
+  const baseSalary = Math.max(0, parseFloat(baseSalaryInp?.value) || 0);
+  arr.push(baseSalary > 0 ? { name, baseSalary } : name);
   const branchSel = document.getElementById('sNewSellerBranch');
   if (branchSel && branchSel.value) setSellerBranch(name, branchSel.value);
   setSalespeople(arr);
   inp.value = '';
+  if (baseSalaryInp) baseSalaryInp.value = '';
   if (branchSel) branchSel.value = '';
   showMsg('sSellersMsg','تمت الإضافة');
 }
@@ -525,7 +548,7 @@ function addSeller() {
 function removeSeller(idx) {
   const arr = [...getSalespeople()];
   if (arr.length <= 1) { showMsg('sSellersMsg','لازم يكون فيه بائع واحد على الأقل','danger'); return; }
-  const removedName = arr[idx];
+  const removedName = salespersonName(arr[idx]);
   arr.splice(idx, 1);
   setSalespeople(arr);
   setSellerBranch(removedName, null);

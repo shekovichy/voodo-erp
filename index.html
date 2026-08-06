@@ -1917,10 +1917,11 @@ body.warehouse-mode #cartFab {
         <div id="hrPane_targets">
         <div class="card" style="margin-bottom:16px;">
           <div class="card-title">👤 إدارة البائعين</div>
-          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">الأسماء دي هتظهر في نافذة الدفع عشان تختار البائع لكل فاتورة.</p>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">الأسماء دي هتظهر في نافذة الدفع عشان تختار البائع لكل فاتورة. الراتب الأساسي بيتضاف للعمولة والمكافأة في تبويب "الرواتب" — من غيره صافي راتب الموظف بيبقى عمولته بس.</p>
           <div id="sellersListWrap" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;"></div>
           <div class="flex gap-8">
             <input class="form-control" id="sNewSeller" placeholder="اسم البائع الجديد" style="max-width:220px;" onkeydown="if(event.key==='Enter')addSeller()" />
+            <input class="form-control" id="sNewSellerBaseSalary" type="number" min="0" placeholder="الراتب الأساسي" style="max-width:140px;" onkeydown="if(event.key==='Enter')addSeller()" />
             <select class="form-control" id="sNewSellerBranch" style="max-width:160px;"></select>
             <button class="btn btn-primary" onclick="addSeller()">➕ إضافة</button>
           </div>
@@ -3318,6 +3319,14 @@ function setSessions(list) {
 // SETTINGS
 const getThreshold    = () => _settingsCache.threshold || 5;
 const getSalespeople  = () => _settingsCache.salespeople && _settingsCache.salespeople.length ? _settingsCache.salespeople : ['محمد','الاء'];
+// A salespeople-array entry is either a plain string name (legacy — every
+// seller added before base salaries existed) or {name, baseSalary}. Every
+// consumer across the app already re-implements `typeof sp==='string' ?
+// sp : sp.name` inline to read the name; these two helpers exist so new
+// code (the base-salary UI in 60-settings.js) doesn't add a ninth copy of
+// that check, without having to touch the ~8 already-working call sites.
+const salespersonName       = (sp) => typeof sp === 'string' ? sp : sp.name;
+const salespersonBaseSalary = (sp) => (typeof sp === 'object' && sp) ? (sp.baseSalary || 0) : 0;
 // Seller → branch assignment. A seller with no entry (or branchId === null)
 // works across all branches; kept as a separate map (not baked into the
 // salespeople array) so every existing consumer that expects plain name
@@ -5038,7 +5047,11 @@ function openPayment() {
   // (plus any unassigned "all branches" sellers); falls back to everyone
   // if that filter would leave the list empty.
   const sel = document.getElementById('paymentSalesperson');
-  const allPeople = getSalespeople();
+  // getSalespeople() entries are plain name strings OR {name, baseSalary}
+  // (see salespersonName() in 00-core.js) — used to be read straight off
+  // as the name here, which would have shown "[object Object]" for any
+  // seller with a base salary set.
+  const allPeople = getSalespeople().map(salespersonName);
   const branchPeople = allPeople.filter(n => !getSellerBranch(n) || getSellerBranch(n) === currentBranch);
   const people = branchPeople.length ? branchPeople : allPeople;
   sel.innerHTML = people.map(n => `<option value="${escHtml(n)}">${escHtml(n)}</option>`).join('');
@@ -6025,7 +6038,7 @@ function switchReport(name, tab) {
 function populateSellerFilter(selId) {
   const sel = document.getElementById(selId); if (!sel) return;
   const cur = sel.value;
-  const people = getSalespeople();
+  const people = getSalespeople().map(salespersonName);
   // Include 'غير محدد' if any sale lacks salesperson
   const all = getSales().map(s => s.salesperson || '');
   const hasBlank = all.some(x => !x);
@@ -7223,14 +7236,20 @@ function renderSellersSettings() {
   const wrap = document.getElementById('sellersListWrap');
   if (!wrap) return;
   const people = getSalespeople();
-  wrap.innerHTML = people.map((n,i) => `
+  wrap.innerHTML = people.map((sp,i) => {
+    const n = salespersonName(sp);
+    return `
     <div style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:20px;padding:5px 6px 5px 12px;font-size:13px;font-weight:600;">
       <span>👤 ${escHtml(n)}</span>
+      <input type="number" min="0" value="${salespersonBaseSalary(sp) || ''}" placeholder="راتب أساسي" title="الراتب الأساسي"
+        onchange="changeSellerBaseSalary('${escHtml(n).replace(/'/g,"\\'")}', this.value)"
+        style="width:88px;border:1px solid var(--border);border-radius:12px;font-size:11px;padding:2px 6px;background:white;" />
       <select onchange="changeSellerBranch('${escHtml(n).replace(/'/g,"\\'")}', this.value)" style="border:1px solid var(--border);border-radius:12px;font-size:11px;padding:2px 6px;background:white;">
         ${_sellerBranchOptionsHtml(getSellerBranch(n))}
       </select>
       <button onclick="removeSeller(${i})" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:14px;line-height:1;padding:0 2px;" title="حذف">×</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   const newBranchSel = document.getElementById('sNewSellerBranch');
   if (newBranchSel && newBranchSel.options.length <= 1) newBranchSel.innerHTML = _sellerBranchOptionsHtml('');
 }
@@ -7240,17 +7259,34 @@ function changeSellerBranch(name, branchId) {
   showMsg('sSellersMsg', branchId ? `تم نقل ${name} إلى ${getBranchName(branchId)}` : `${name} بقى شغال في كل الفروع`);
 }
 
+// Upgrades a plain-string entry to {name, baseSalary} in place the first
+// time its base salary is set — every other consumer of getSalespeople()
+// already tolerates both shapes (see salespersonName/salespersonBaseSalary
+// in 00-core.js), so this doesn't require touching them.
+function changeSellerBaseSalary(name, val) {
+  const amount = Math.max(0, parseFloat(val) || 0);
+  const arr = [...getSalespeople()];
+  const idx = arr.findIndex(sp => salespersonName(sp) === name);
+  if (idx < 0) return;
+  arr[idx] = { name, baseSalary: amount };
+  setSalespeople(arr);
+  showMsg('sSellersMsg', amount > 0 ? `تم ضبط الراتب الأساسي لـ ${name}: ${fmt(amount)} ج` : `تم مسح الراتب الأساسي لـ ${name}`);
+}
+
 function addSeller() {
   const inp = document.getElementById('sNewSeller');
   const name = inp.value.trim();
   if (!name) return;
   const arr = [...getSalespeople()];
-  if (arr.includes(name)) { showMsg('sSellersMsg','الاسم موجود بالفعل','danger'); return; }
-  arr.push(name);
+  if (arr.some(sp => salespersonName(sp) === name)) { showMsg('sSellersMsg','الاسم موجود بالفعل','danger'); return; }
+  const baseSalaryInp = document.getElementById('sNewSellerBaseSalary');
+  const baseSalary = Math.max(0, parseFloat(baseSalaryInp?.value) || 0);
+  arr.push(baseSalary > 0 ? { name, baseSalary } : name);
   const branchSel = document.getElementById('sNewSellerBranch');
   if (branchSel && branchSel.value) setSellerBranch(name, branchSel.value);
   setSalespeople(arr);
   inp.value = '';
+  if (baseSalaryInp) baseSalaryInp.value = '';
   if (branchSel) branchSel.value = '';
   showMsg('sSellersMsg','تمت الإضافة');
 }
@@ -7258,7 +7294,7 @@ function addSeller() {
 function removeSeller(idx) {
   const arr = [...getSalespeople()];
   if (arr.length <= 1) { showMsg('sSellersMsg','لازم يكون فيه بائع واحد على الأقل','danger'); return; }
-  const removedName = arr[idx];
+  const removedName = salespersonName(arr[idx]);
   arr.splice(idx, 1);
   setSalespeople(arr);
   setSellerBranch(removedName, null);

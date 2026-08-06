@@ -11,7 +11,11 @@ function openPayment() {
   // (plus any unassigned "all branches" sellers); falls back to everyone
   // if that filter would leave the list empty.
   const sel = document.getElementById('paymentSalesperson');
-  const allPeople = getSalespeople();
+  // getSalespeople() entries are plain name strings OR {name, baseSalary}
+  // (see salespersonName() in 00-core.js) — used to be read straight off
+  // as the name here, which would have shown "[object Object]" for any
+  // seller with a base salary set.
+  const allPeople = getSalespeople().map(salespersonName);
   const branchPeople = allPeople.filter(n => !getSellerBranch(n) || getSellerBranch(n) === currentBranch);
   const people = branchPeople.length ? branchPeople : allPeople;
   sel.innerHTML = people.map(n => `<option value="${escHtml(n)}">${escHtml(n)}</option>`).join('');

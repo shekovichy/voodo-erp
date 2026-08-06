@@ -525,6 +525,14 @@ function setSessions(list) {
 // SETTINGS
 const getThreshold    = () => _settingsCache.threshold || 5;
 const getSalespeople  = () => _settingsCache.salespeople && _settingsCache.salespeople.length ? _settingsCache.salespeople : ['محمد','الاء'];
+// A salespeople-array entry is either a plain string name (legacy — every
+// seller added before base salaries existed) or {name, baseSalary}. Every
+// consumer across the app already re-implements `typeof sp==='string' ?
+// sp : sp.name` inline to read the name; these two helpers exist so new
+// code (the base-salary UI in 60-settings.js) doesn't add a ninth copy of
+// that check, without having to touch the ~8 already-working call sites.
+const salespersonName       = (sp) => typeof sp === 'string' ? sp : sp.name;
+const salespersonBaseSalary = (sp) => (typeof sp === 'object' && sp) ? (sp.baseSalary || 0) : 0;
 // Seller → branch assignment. A seller with no entry (or branchId === null)
 // works across all branches; kept as a separate map (not baked into the
 // salespeople array) so every existing consumer that expects plain name
