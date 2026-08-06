@@ -6357,12 +6357,20 @@ function buildKPIReport() {
   const sales = getSales()
     .filter(s => branchFilter === 'all' || s.branchId === branchFilter)
     .filter(s => { const d=new Date(s.date); return d>=from&&d<=to; });
+  // Per-transaction stats (avg ticket, units/ticket, card%) shouldn't count
+  // a return as if it were another purchase transaction — a return isn't a
+  // new sale, it's a reversal of a prior one, so leaving it in `count`
+  // understates ATV/UPT/card% every time a return happens in the period.
+  // Revenue/cost below deliberately keep returns IN `sales` — return items
+  // carry negative qty/total, so combining them nets those figures
+  // correctly, same convention as buildProfitReport()/93-accounting.js.
+  const purchaseSales = sales.filter(s => !s.isReturn);
 
-  const count      = sales.length;
+  const count      = purchaseSales.length;
   const revenue    = sales.reduce((s,x)=>s+x.total,0);
-  const totalUnits = sales.reduce((s,x)=>s+x.items.reduce((a,i)=>a+i.qty,0),0);
+  const totalUnits = purchaseSales.reduce((s,x)=>s+x.items.reduce((a,i)=>a+i.qty,0),0);
   const totalDisc  = sales.reduce((s,x)=>s+(x.disc||0),0);
-  const cardCount  = sales.filter(s=>s.payMethod==='card').length;
+  const cardCount  = purchaseSales.filter(s=>s.payMethod==='card').length;
 
   let totalCost = 0;
   sales.forEach(s => s.items.forEach(i => {
@@ -6411,7 +6419,7 @@ function buildKPIReport() {
     options:{ plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}}, responsive:true }
   });
 
-  buildHeatmap(sales);
+  buildHeatmap(purchaseSales);
 }
 
 
