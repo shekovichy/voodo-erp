@@ -492,7 +492,11 @@ function buildVendorPerformance() {
     const pos = purchases.filter(p => p.supplierId === sup.id);
     const received = pos.filter(p => p.status === 'received' && p.receivedAt);
     const totalValue = pos.reduce((s,p) => s + (p.total||0), 0);
-    const leadTimes = received.map(p => (p.receivedAt - new Date(p.date).getTime()) / 86400000).filter(d => d >= 0);
+    // po.date never existed (75-purchases.js's savePO() only sets createdAt,
+    // a Date.now() number) — new Date(p.date).getTime() was always NaN,
+    // which always failed the `d >= 0` filter below, so "متوسط مدة التوريد"
+    // silently showed "—" for every supplier regardless of real PO data.
+    const leadTimes = received.map(p => (p.receivedAt - p.createdAt) / 86400000).filter(d => d >= 0);
     const avgLead = leadTimes.length ? leadTimes.reduce((a,b)=>a+b,0)/leadTimes.length : null;
     const overdue = pos.filter(p => p.status==='received' && (p.payStatus||'unpaid')!=='paid' && p.dueDate && p.dueDate < now);
     const overdueAmt = overdue.reduce((s,p) => s + (p.total - (p.paidAmount||0)), 0);
