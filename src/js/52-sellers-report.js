@@ -11,7 +11,12 @@ function buildSellersReport() {
   sales.forEach(s => {
     const name = s.salesperson || 'غير محدد';
     if (!bd[name]) bd[name] = { name, count:0, units:0, revenue:0, disc:0 };
-    bd[name].count++;
+    // مفيش فلترة للمرتجعات فوق — دمجها هنا مقصود عشان الإيراد/الوحدات
+    // يتصفوا صح (المرتجع بيحمل كمية وإجمالي بالسالب، فبيتخصم لوحده). لكن
+    // العدّاد لازم يستثنيها: مرتجع مش فاتورة بيع جديدة للبائع، وعدّه كان
+    // بيقلّل متوسط الفاتورة (ATV) لأي بائع ترجّع له بيع، بنفس مشكلة تقرير
+    // الـ KPI (50-kpi.js).
+    if (!s.isReturn) bd[name].count++;
     bd[name].units   += s.items.reduce((a,i)=>a+i.qty,0);
     bd[name].revenue += s.total;
     bd[name].disc    += s.disc||0;
