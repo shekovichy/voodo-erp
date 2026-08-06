@@ -128,8 +128,13 @@ function renderExpensesPage() {
   const totalBr    = list.filter(e=>e.type==='branch').reduce((s,e)=>s+e.amount,0);
   const totalCo    = list.filter(e=>e.type==='company').reduce((s,e)=>s+e.amount,0);
 
-  // Net profit = month gross profit - expenses
-  const monthSales  = getSales().filter(s=>!s.isReturn && s.date && s.date.slice(0,7)===selMonth);
+  // Net profit = month gross profit - expenses. Includes returns (not just
+  // !isReturn sales) the same way 93-accounting.js's P&L and 30-dashboard.js's
+  // calcProfit() already do — a return's items carry negative qty, which
+  // nets its profit back out automatically. Excluding returns here (as this
+  // used to) overstated "صافي الربح" by the profit on every returned item,
+  // the exact same bug already fixed in the accounting page's P&L.
+  const monthSales  = getSales().filter(s=>s.date && s.date.slice(0,7)===selMonth);
   const inv = Object.values(_invCacheByBranch).flat();
   const grossProfit = monthSales.reduce((acc,s)=>acc+s.items.reduce((a,i)=>{
     const c=i.cost>0?i.cost:(inv.find(x=>x.code===i.code)?.cost||0); return a+(i.price-c)*i.qty; },0)-s.disc, 0);

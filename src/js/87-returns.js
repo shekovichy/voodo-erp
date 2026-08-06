@@ -101,6 +101,10 @@ function _processReturnConfirmed(sale, reason, returnItems, returnTotal) {
   };
   addSale(returnSale);
   updateCustomerAfterReturn(returnSale.customerId, returnTotal);
+  // 89-cashier-return.js بتسجّل نفس الحدث ده في سجل التدقيق، لكن مسار
+  // الإرجاع هنا (زر "إرجاع" في تفاصيل الفاتورة) مكانش بيسجّله خالص —
+  // يعني مرتجع كامل من غير أي أثر في الـ audit log.
+  addAuditLog('return', `مرتجع من فاتورة #${String(sale.id).slice(-6)} — ${fmt(returnTotal)} ج`, branchId);
 
   document.getElementById('returnModal').classList.add('hidden');
   document.getElementById('saleDetailModal').classList.add('hidden');
