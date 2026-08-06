@@ -6636,6 +6636,33 @@ function exportBackup() {
   renderLastBackupInfo();
 }
 
+// Every OTHER restored field goes through a set*() helper that actually
+// syncs to Firestore (setInv/setCustomers/setTransfers/setSuspended) —
+// sales alone used to just set _salesCache in memory and stop when online,
+// with no write to Firestore at all. The restore reported success with the
+// right invoice count, but the moment the page reloaded (or any Firestore
+// listener fired) the "restored" sales silently vanished, since the cloud
+// never actually got them. setSales() can't be reused here — it's
+// documented as reset-only (v=[]) — so this groups the imported sales by
+// month+branch and merge-writes each into the same
+// pos_sales/{month}/branches/{branchId} structure addSale() uses.
+function _restoreSalesToCloud(sales) {
+  if (!_fbReady) { DB.s('sales', sales); return; }
+  const byMonthBranch = {};
+  sales.forEach(s => {
+    const month = (s.date || '').slice(0, 7);
+    const b = s.branchId || currentBranch;
+    if (!month) return;
+    const key = month + '|' + b;
+    (byMonthBranch[key] || (byMonthBranch[key] = { month, b, items: [] })).items.push(s);
+  });
+  Object.values(byMonthBranch).forEach(({ month, b, items }) => {
+    _db.collection('pos_sales').doc(month).collection('branches').doc(b)
+       .set({ items: firebase.firestore.FieldValue.arrayUnion(...items), updatedAt: Date.now(), month, branchId: b }, { merge: true })
+       .catch(e => console.error('Firestore restore sales:', e));
+  });
+}
+
 function importBackup(e) {
   const file = e.target.files[0]; if (!file) return;
   showConfirmModal('استعادة النسخة الاحتياطية ستستبدل البيانات الحالية. هل تريد المتابعة؟', function() {
@@ -6659,7 +6686,7 @@ function _importBackupConfirmed(file) {
         setInv(data.inv);
         invCount = data.inv.length;
       }
-      if (data.sales)     { _salesCache = data.sales; if (!_fbReady) DB.s('sales', data.sales); }
+      if (data.sales)     { _salesCache = data.sales; _restoreSalesToCloud(data.sales); }
       if (data.customers) setCustomers(data.customers);
       if (data.transfers) setTransfers(data.transfers);
       if (data.settings)  { _settingsCache = data.settings; saveSettingsCache(); }
