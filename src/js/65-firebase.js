@@ -620,6 +620,14 @@ function confirmSuspend() {
     id:        'S' + Date.now().toString(36).toUpperCase().slice(-6),
     created:   new Date().toISOString(),
     cashier:   currentUsername || (currentUser === 'admin' ? 'مدير' : 'كاشير'),
+    // بدونها الفواتير المعلقة من كل الفروع كانت بتتعرض مخلوطة مع بعض من
+    // غير أي تمييز — لو كاشير فرع تاني (أو الأدمن وهو شايف فرع مختلف)
+    // استأنف الفاتورة دي، activateSuspended() كانت بتفحص المخزون على
+    // فرعه الحالي هو، وcompleteSale() كانت بتسجّل البيع وتخصم المخزون من
+    // فرعه هو — يعني بيع وخصم مخزون منسوبين لفرع غلط تمامًا عن الفرع اللي
+    // الفاتورة فعلاً اتعلّقت فيه.
+    branchId:   currentBranch,
+    branchName: getBranchName(currentBranch),
     note,
     items:     cart.map(i => ({...i})),
     sub,
@@ -656,7 +664,10 @@ function updateSuspendedBadge() {
 }
 
 function renderSuspendedPage() {
-  const list = getSuspended();
+  // غير الأدمن بيشوف فواتير فرعه بس — فاتورة من غير branchId (اتعلّقت قبل
+  // الفيكس ده) بتفضل تظهر للكل زي سلوكها الأصلي، عشان معدش نضيّع فواتير
+  // قديمة كانت شغالة عادي. شوف الملاحظة على branchId في confirmSuspend().
+  const list = getSuspended().filter(b => currentUser === 'admin' || !b.branchId || b.branchId === currentBranch);
   document.getElementById('suspendedCountLabel').textContent = list.length + ' فاتورة معلقة';
   const el = document.getElementById('suspendedList');
   if (!list.length) {
@@ -673,7 +684,7 @@ function renderSuspendedPage() {
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
         <div>
           <div style="font-weight:700;font-size:15px;font-family:monospace;color:var(--primary);">${b.id}</div>
-          <div style="font-size:12px;color:var(--text-muted);">${new Date(b.created).toLocaleString('ar-EG')} — كاشير: ${escHtml(b.cashier)}</div>
+          <div style="font-size:12px;color:var(--text-muted);">${new Date(b.created).toLocaleString('ar-EG')} — كاشير: ${escHtml(b.cashier)}${b.branchName ? ' — ' + escHtml(b.branchName) : ''}</div>
           ${b.note?`<div style="font-size:12px;margin-top:3px;color:#6b7280;">ملاحظة: ${escHtml(b.note)}</div>`:''}
         </div>
         <div style="text-align:left;">
@@ -696,6 +707,13 @@ function renderSuspendedPage() {
 
 function activateSuspended(id) {
   const bill = getSuspended().find(b => b.id === id); if (!bill) return;
+  // دفاع إضافي بجانب فلترة القايمة في renderSuspendedPage()/renderResumeList()
+  // — لو اتنادت بأي طريقة تانية على فاتورة فرع مختلف، بيع/خصم مخزون بفرع غلط
+  // تمامًا هيحصل صامت من غير ما حد ياخد باله (شوف الملاحظة في confirmSuspend()).
+  if (currentUser !== 'admin' && bill.branchId && bill.branchId !== currentBranch) {
+    showToast('الفاتورة دي معلّقة على فرع تاني (' + (bill.branchName || bill.branchId) + ') — مينفعش تتفعّل هنا');
+    return;
+  }
 
   // Prices are already modified by admin — no need for extra _adminDiscount
   // ⚠️ الكمية بتتفحص هنا تاني: الفاتورة اتعلّقت من وقت، وممكن يكون اتباع من
@@ -951,7 +969,8 @@ function openResumeModal() {
 }
 
 function renderResumeList() {
-  const list = getSuspended();
+  // شوف نفس الملاحظة في renderSuspendedPage() — نفس فلترة الفرع.
+  const list = getSuspended().filter(b => currentUser === 'admin' || !b.branchId || b.branchId === currentBranch);
   const el   = document.getElementById('resumeLocalList');
   if (!list.length) {
     el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-muted);">لا توجد فواتير معلقة</div>';
