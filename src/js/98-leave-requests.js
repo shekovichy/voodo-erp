@@ -64,8 +64,11 @@ function approveLeaveRequest(id) {
       // غير ما حاجة تكتبها.
       saveAttendanceRecord(req.empName, req.date, 'excused', '', '', 'إجازة معتمدة');
     } else {
+      // 'permission' مش 'late': إذن الانصراف المعتمد معناه الموظف خرج بإذن
+      // رسمي، مش إنه اتأخر في الحضور — تسجيله 'late' كان بيضخّم عداد
+      // "⏰ تأخير" لموظف عمره ما اتأخر، لمجرد إنه خد إذن انصراف مبكر مرات كتير.
       const notes = (req.fromTime && req.toTime) ? 'إذن انصراف '+req.fromTime+' - '+req.toTime : 'إذن انصراف معتمد';
-      saveAttendanceRecord(req.empName, req.date, 'late', req.fromTime||'', req.toTime||'', notes);
+      saveAttendanceRecord(req.empName, req.date, 'permission', req.fromTime||'', req.toTime||'', notes);
     }
     updateLeaveReqBadge(); renderHRPage(); showToast('✅ تمت الموافقة وتسجيل الحضور');
   });

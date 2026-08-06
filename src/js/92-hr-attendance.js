@@ -103,20 +103,22 @@ function renderAttendancePane() {
   const today = new Date().toISOString().slice(0,10);
   const attMap = {};
   getAttendance().filter(a=>a.date?.slice(0,7)===month).forEach(a=>{ attMap[a.empName+'_'+a.date]=a; });
-  const SC = {present:'#dcfce7',absent:'#fee2e2',late:'#fef9c3',excused:'#eff6ff','':'#f3f4f6'};
-  const SL = {present:'✅',absent:'❌',late:'⏰',excused:'🔵','':'—'};
+  const SC = {present:'#dcfce7',absent:'#fee2e2',late:'#fef9c3',excused:'#eff6ff',permission:'#f3e8ff','':'#f3f4f6'};
+  const SL = {present:'✅',absent:'❌',late:'⏰',excused:'🔵',permission:'🕐','':'—'};
 
   const summCards = sps.map(name => {
     const p = Object.values(attMap).filter(a=>a.empName===name&&a.status==='present').length;
     const ab= Object.values(attMap).filter(a=>a.empName===name&&a.status==='absent').length;
     const lt= Object.values(attMap).filter(a=>a.empName===name&&a.status==='late').length;
     const ex= Object.values(attMap).filter(a=>a.empName===name&&a.status==='excused').length;
+    const pr= Object.values(attMap).filter(a=>a.empName===name&&a.status==='permission').length;
     return `<div style="background:var(--bg-secondary);border-radius:8px;padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
       <span style="font-weight:700;min-width:70px;">${escHtml(name)}</span>
       <span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:12px;font-size:12px;">✅ ${p} حضور</span>
       <span style="background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:12px;font-size:12px;">❌ ${ab} غياب</span>
       <span style="background:#fef9c3;color:#854d0e;padding:2px 8px;border-radius:12px;font-size:12px;">⏰ ${lt} تأخير</span>
       <span style="background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:12px;font-size:12px;">🔵 ${ex} إجازة</span>
+      <span style="background:#f3e8ff;color:#7c3aed;padding:2px 8px;border-radius:12px;font-size:12px;">🕐 ${pr} إذن</span>
     </div>`;
   }).join('');
 
