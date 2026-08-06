@@ -198,6 +198,19 @@ function renderApprovedCartsList() {
   }).join('');
 }
 
+// Called from completeSale() (20-pos-payment.js) once a sale actually
+// commits — see the note in _resumeApprovedCartConfirmed() above for why
+// this can't happen any earlier than that.
+function markApprovalConsumed(id) {
+  if (!id) return;
+  var list = getApprovals();
+  var r = list.find(function(x){ return x.id === id; });
+  if (!r) return;
+  r.status = 'consumed';
+  setApprovals(list);
+  updateApprovalBadge();
+}
+
 function resumeApprovedCart(id) {
   var req = getApprovals().find(function(r){ return r.id === id; });
   if (!req) return;
@@ -211,13 +224,15 @@ function _resumeApprovedCartConfirmed(id) {
   var req = getApprovals().find(function(r){ return r.id === id; });
   if (!req) return;
   cart = req.items.map(function(i){ return Object.assign({},i); });
+  // مش بتتحط 'consumed' هنا خالص — ده كان بيحصل قبل ما البيع يتم فعلاً،
+  // فلو الكاشير قفل شاشة الدفع (أو مسح الفاتورة) بدل ما يكمّل، الطلب
+  // المعتمد كان بيختفي نهائيًا من "الفواتير المعتمدة" من غير ما فاتورة
+  // حقيقية تتسجل — الطلب ضايع تمامًا ومفيش أي أثر إنه اتضاع. بتتحط
+  // 'consumed' فعليًا في completeSale() (20-pos-payment.js) بعد ما
+  // addSale() تنجح فعلاً.
+  cart._fromApprovalId = id;
   renderCart();
   document.getElementById('approvedCartsModal').classList.add('hidden');
-  // Mark as consumed
-  var list = getApprovals();
-  var r = list.find(function(x){ return x.id === id; });
-  if (r) r.status = 'consumed';
-  setApprovals(list);
   updateApprovalBadge();
   // Open payment
   setTimeout(openPayment, 300);

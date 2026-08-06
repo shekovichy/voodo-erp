@@ -573,6 +573,11 @@ function _persistCart() {
     adminDiscount: cart._adminDiscount || 0,
     adminDiscountNote: cart._adminDiscountNote || '',
     appliedPromos: cart._appliedPromos || [],
+    // لو الفاتورة دي جاية من "استئناف فاتورة معتمدة" (96-approvals.js) —
+    // من غير الحفظ ده، ريفريش عرضي وسط الدفع كان هيرجّع الفاتورة صح بس
+    // يضيع الربط بطلب الاعتماد، فـ completeSale() ما كانتش هتعرف تحطه
+    // 'consumed'، وكان يفضل معلّق للأبد كأنه لسه مستني رغم إنه اتباع فعلاً.
+    fromApprovalId: cart._fromApprovalId || null,
   });
 }
 function _restoreCart() {
@@ -590,6 +595,7 @@ function _restoreCart() {
   cart._adminDiscount = saved.adminDiscount || 0;
   cart._adminDiscountNote = saved.adminDiscountNote || '';
   cart._appliedPromos = saved.appliedPromos || [];
+  if (saved.fromApprovalId) cart._fromApprovalId = saved.fromApprovalId;
 }
 let chartWeekly = null, chartTop = null, chartRptSales = null, chartProfit = null;
 let chartTrend = null, chartBranches = null, chartCmpTrend = null, chartCmpBranches = null;

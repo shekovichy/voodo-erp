@@ -75,6 +75,7 @@ function completeSale() {
     customerPhone: _saleCustomer ? (_saleCustomer.phone || '') : ''
   };
   addSale(sale);
+  if (cart._fromApprovalId) markApprovalConsumed(cart._fromApprovalId);
   if (sale.customerId) awardLoyaltyPoints(sale.customerId, sale.total);
   _lastSale = sale; // for WhatsApp sharing
   addAuditLog('sale.complete', `فاتورة #${String(sale.id||'').slice(-6)} — ${fmt(sale.total)} ج — ${sale.items.length} صنف`, sale.branchId);
