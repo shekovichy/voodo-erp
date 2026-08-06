@@ -10298,7 +10298,12 @@ function buildReceiptESCPOS(sale) {
   return new Uint8Array(bytes);
 }
 async function printReceiptESCPOS(sale) {
-  if (!_serialWriter) { printSaleReceipt(sale); return; }
+  // printSaleReceipt() never existed anywhere in the codebase — the real
+  // on-screen/browser-print fallback is showReceipt()+printReceipt() (see
+  // 20-pos-payment.js). Currently unreachable in practice (this function's
+  // only caller, testReceiptPrint(), already checks _serialWriter first),
+  // but a latent ReferenceError landmine for any future caller that doesn't.
+  if (!_serialWriter) { showReceipt(sale); printReceipt(); return; }
   const bytes = buildReceiptESCPOS(sale);
   const ok = await sendToSerial(bytes);
   if (ok) showToast('✅ تم الإرسال للطابعة');
