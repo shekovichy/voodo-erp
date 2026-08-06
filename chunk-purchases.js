@@ -138,7 +138,15 @@ function poProdSearchFn() {
   const q = document.getElementById('poProdSearch').value.toLowerCase().trim();
   const dd = document.getElementById('poProdDropdown');
   if (!q) { dd.classList.add('hidden'); return; }
-  const results = getInv().filter(i => i.name.toLowerCase().includes(q) || (i.code||'').toLowerCase().includes(q)).slice(0,8);
+  // Must search the PO's OWN branch dropdown (poBranchId), not getInv()'s
+  // default of currentBranch — an admin creating a PO for a branch other
+  // than the one they're currently viewing would otherwise see (and could
+  // add) that OTHER branch's products/costs, and receivePO() checks
+  // "does this branch already stock this code" against po.branchId, so a
+  // product that only existed in the admin's own branch would be silently
+  // inserted as brand-new stock in the PO's actual branch.
+  const poBranch = document.getElementById('poBranchId')?.value || currentBranch;
+  const results = getInv(poBranch).filter(i => i.name.toLowerCase().includes(q) || (i.code||'').toLowerCase().includes(q)).slice(0,8);
   if (!results.length) { dd.classList.add('hidden'); return; }
   dd.innerHTML = results.map(i => `<div style="padding:8px 12px; cursor:pointer; font-size:13px; border-bottom:1px solid var(--border);"
     onmousedown="selectPOProduct('${escJsAttr(i.code)}','${escJsAttr(i.name)}',${i.cost||0})">
@@ -317,9 +325,14 @@ function _receivePOConfirmed(po) {
       const newCost = newTotalQty > 0 ? (oldQty * oldCost + item.qty * landedCost) / newTotalQty : landedCost;
       return { code: item.code, delta: item.qty, set: { cost: newCost } };
     }
+    // `priceAfter` (NOT `price`) is the field every other page reads for the
+    // selling price (see addToCart() in 15-pos-cart.js) — a stray `price:`
+    // here used to leave priceAfter undefined for any product introduced to
+    // a branch for the first time via receiving a PO, silently breaking its
+    // cart total (NaN) the moment someone tried to sell it.
     return {
       code: item.code, delta: item.qty,
-      insert: { code: item.code, name: item.name, cost: landedCost, price: item.cost * 1.3 }
+      insert: { code: item.code, name: item.name, cost: landedCost, priceAfter: item.cost * 1.3, priceBefore: 0, category: '', family: '' }
     };
   }), po.branchId);
 
@@ -429,7 +442,22 @@ function saveSupplierPayment() {
   showToast('✅ تم تسجيل الدفعة');
 }
 
+// Once a PO is 'received', receivePO() has already added its items to
+// inventory and increased the supplier's balance by po.total — and possibly
+// had supplier payments allocated against it (saveSupplierPayment's FIFO
+// allocation). Silently deleting the PO record after that point doesn't
+// undo any of it: the stock and the supplier debt (and any payment
+// allocations referencing this PO's id) stay behind forever with nothing
+// left explaining where they came from. Blocking deletion here is safer
+// than trying to auto-reverse three interconnected balances — correct
+// stock and supplier balance manually instead (inventory edit + a
+// supplier payment/adjustment) if a received PO was truly a mistake.
 function deletePO(id) {
+  const target = getPurchases().find(p => p.id === id);
+  if (target && target.status === 'received') {
+    showToast('أمر الشراء ده مستلم بالفعل — حذفه مش هيرجّع المخزون أو رصيد المورد لحالتهم. صحّح المخزون والرصيد يدويًا بدل الحذف.');
+    return;
+  }
   showConfirmModal('حذف أمر الشراء هذا؟', function() {
     const po = getPurchases().find(p => p.id === id);
     setPurchases(getPurchases().filter(p => p.id !== id));
@@ -509,8 +537,8 @@ function renderPurchasesPage() {
       <td><span style="background:${statusBg};color:${statusColor};padding:2px 8px;border-radius:10px;font-size:11px;">${statusLabel}</span></td>
       <td>
         <button class="btn btn-sm" onclick="openPODetails('${po.id}')" style="font-size:11px; padding:3px 8px; margin-left:4px;">👁️</button>
-        ${po.status!=='received'?`<button class="btn btn-sm" onclick="openPOModal('${po.id}')" style="font-size:11px; padding:3px 8px; margin-left:4px;">✏️</button>`:''}
-        <button class="btn btn-danger btn-sm" onclick="deletePO('${po.id}')" style="font-size:11px; padding:3px 8px;">🗑️</button>
+        ${po.status!=='received'?`<button class="btn btn-sm" onclick="openPOModal('${po.id}')" style="font-size:11px; padding:3px 8px; margin-left:4px;">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="deletePO('${po.id}')" style="font-size:11px; padding:3px 8px;">🗑️</button>`:''}
       </td>
     </tr>`;
   }).join('');
