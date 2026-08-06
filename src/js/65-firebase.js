@@ -224,7 +224,18 @@ function initFirebase() {
             // otherwise re-seed it into Firestore every time this doc looks
             // empty (a fresh device, or right after any reset), which is
             // exactly how demo inventory kept reappearing after cleanup.
-            const local = (b === 'b1'
+            //
+            // Same idea, general case: also refuse to re-seed if this
+            // device's local cache predates the last "reset all data"
+            // (_resetAllConfirmed, 60-settings.js sets _settingsCache.resetAt)
+            // — otherwise ANY device that made local edits before a reset
+            // and reconnects after resurrects its pre-reset stock the moment
+            // it sees the (freshly-deleted) doc looks empty. Best-effort: if
+            // the settings listener hasn't delivered resetAt yet when this
+            // fires, it reads as 0 and doesn't block — narrow race, not
+            // worth blocking inventory sync on settings sync order.
+            const resetAt = _settingsCache.resetAt || 0;
+            const local = (_localInvTs(b) < resetAt) ? [] : (b === 'b1'
               ? (DB.g('pos_inv_b1', null) || DB.g('inv', []))
               : DB.g(`pos_inv_${b}`, [])
             ).filter(p => !_DEMO_CODES.has(p.code));
@@ -234,7 +245,7 @@ function initFirebase() {
                  .set({ items: local, updatedAt: Date.now(), branchId: b });
             }
           }
-          DB.s(`pos_inv_${b}`, _invCacheByBranch[b]); // keep localStorage in sync
+          _setLocalInv(b, _invCacheByBranch[b]); // keep localStorage in sync
           if (b === currentBranch) {
             updateLowStockBell();
             if (currentUser === 'admin') {
@@ -523,6 +534,18 @@ function initFirebase() {
       // exactly how demo sales kept reappearing after cleanup).
       return localSalesAll.filter(s => s.date.slice(0, 7) === month && (s.branchId || currentBranch) === b && !_isDemoSale(s));
     }
+    // Only for the "cloud doc confirmed empty, should I re-seed it from
+    // local?" decision — NOT the connectivity-error fallback below (that one
+    // legitimately still wants "last known good", reset or not, since there
+    // was no confirmation from the cloud either way). See _setLocalInv's
+    // note in 00-core.js for why this check exists at all: an unbounded
+    // re-seed here could resurrect this device's entire pre-reset sales
+    // history the moment _resetAllConfirmed() (60-settings.js) deletes the
+    // last 24 months of branch docs and this device reconnects.
+    function _localSalesFallbackForReseed(month, b) {
+      if (_localSalesTs() < (_settingsCache.resetAt || 0)) return [];
+      return _localSalesFallback(month, b);
+    }
     function _refreshSalesViews() {
       visRefresh('page-sales', () => { initSalesFilter(); renderSales(); });
       visRefresh('page-dashboard', buildDashboard);
@@ -539,7 +562,7 @@ function initFirebase() {
               _applySalesBranchMonth(month, doc.id, doc.data().items || []);
             });
             BRANCH_IDS.filter(b => !seen.has(b)).forEach(b => {
-              const local = _localSalesFallback(month, b);
+              const local = _localSalesFallbackForReseed(month, b);
               _applySalesBranchMonth(month, b, local);
               if (local.length) {
                 _db.collection('pos_sales').doc(month).collection('branches').doc(b)
@@ -560,7 +583,7 @@ function initFirebase() {
             const items = snap.exists ? (snap.data().items || []) : [];
             _applySalesBranchMonth(month, currentBranch, items);
             if (!snap.exists) {
-              const local = _localSalesFallback(month, currentBranch);
+              const local = _localSalesFallbackForReseed(month, currentBranch);
               if (local.length) {
                 _db.collection('pos_sales').doc(month).collection('branches').doc(currentBranch)
                    .set({ items: firebase.firestore.FieldValue.arrayUnion(...local), updatedAt: Date.now(), month, branchId: currentBranch }, { merge: true });

@@ -342,6 +342,19 @@ function setInv(v, branch) {
 // pattern silently lost one of the two writes). If the transaction can't run
 // (offline / repeated contention), falls back to writing the local array —
 // no worse than the old behavior, and the SDK queues it until reconnect.
+// Companion "last local write" timestamp per branch — lets the Firestore
+// listener fallback in 65-firebase.js tell a genuinely-fresh local cache
+// apart from one that predates an admin "reset all data" (60-settings.js).
+// Without this, ANY device whose local cache still had pre-reset stock and
+// reconnected after the Firestore doc was deleted would silently resurrect
+// it (same mechanism that used to bring old demo data back — see
+// _DEMO_CODES — just for real data instead of demo data this time).
+function _setLocalInv(b, items) {
+  DB.s(`pos_inv_${b}`, items);
+  DB.s(`pos_inv_${b}_ts`, Date.now());
+}
+function _localInvTs(b) { return DB.g(`pos_inv_${b}_ts`, 0); }
+
 function adjustStock(deltas, branch) {
   const b = branch || currentBranch;
   const applyTo = (items) => {
@@ -360,7 +373,7 @@ function adjustStock(deltas, branch) {
     return items;
   };
   _invCacheByBranch[b] = applyTo(_invCacheByBranch[b] || []);
-  DB.s(`pos_inv_${b}`, _invCacheByBranch[b]);
+  _setLocalInv(b, _invCacheByBranch[b]);
   if (!_fbReady) return;
   const ref = _db.collection('pos_data').doc('inventory').collection('branches').doc(b);
   _db.runTransaction(tx =>
@@ -390,10 +403,20 @@ function adjustStock(deltas, branch) {
 // running the migration first — the new listener looks for data that only
 // exists after migration; publishing before then makes sales reports look
 // empty.
+// Same reset-resurrection risk as _setLocalInv/_localInvTs above, but worse:
+// this flat cache spans every month/branch this device ever recorded, so a
+// stale copy reconnecting after setSales([]) below could resurrect this
+// device's ENTIRE sales history across all branches, not just one branch's.
+function _setLocalSales(v) {
+  DB.s('sales', v);
+  DB.s('sales_ts', Date.now());
+}
+function _localSalesTs() { return DB.g('sales_ts', 0); }
+
 const getSales = () => _salesCache;
 function addSale(sale) {
   _salesCache.push(sale);
-  if (!_fbReady) { DB.s('sales', _salesCache); return; }
+  if (!_fbReady) { _setLocalSales(_salesCache); return; }
   const month = sale.date.slice(0, 7); // YYYY-MM
   const branchId = sale.branchId || currentBranch;
   // Branch-scoped subcollection, NOT a flat pos_sales/{month} doc. Firestore
@@ -418,7 +441,7 @@ function addSale(sale) {
        // cache locally so the invoice survives a reload instead of
        // silently evaporating with the failed cloud write.
        console.error('Firestore addSale (persisted locally):', e);
-       DB.s('sales', _salesCache);
+       _setLocalSales(_salesCache);
      });
 }
 function setSales(v) {

@@ -577,6 +577,12 @@ function _resetAllConfirmed() {
   // saveSettingsCache() بتحفظ نسخة الـ cache زي ما هي دلوقتي (بعد تعديل
   // threshold بس) بدل ما تمسح الدوك كله.
   _settingsCache.threshold = 5;
+  // بيتقارن بيه أي جهاز تاني لسه فاتح كاش محلي قديم لما يرجع يتصل — لو
+  // كان آخر تعديل محلي عنده قبل اللحظة دي، السيستم بيرفض يرجّعه للسحابة
+  // بدل ما يبعته تلقائي (شوف _setLocalInv/_localInvTs في 00-core.js
+  // و_localSalesFallbackForReseed هنا) — نفس آلية بقاء بيانات الديمو
+  // قبل كده، بس عامة لأي كاش قديم مش بس بيانات الديمو.
+  _settingsCache.resetAt = Date.now();
   saveSettingsCache();
   showMsg('sSettingsMsg','تم حذف كل البيانات','danger');
 }
