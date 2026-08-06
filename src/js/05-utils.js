@@ -3,6 +3,17 @@
 // ══════════════════════════════════════════════
 const fmt = (n) => (parseFloat(n) || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
+// payMethod is only ever 'cash', 'card', or 'return' (see setPayMethod() in
+// 20-pos-payment.js and _processCashierReturnConfirmed() in 89-cashier-
+// return.js) — but several pages displayed it as a plain cash/card binary
+// (anything !== 'cash' fell through to "كارت"), so every return row in the
+// sales list, its detail modal, the WhatsApp receipt summary, and the pivot
+// report all falsely labeled refunds as card payments.
+const payMethodLabel = (pm, {emoji=true} = {}) =>
+  pm === 'cash'   ? (emoji ? '💵 نقدي'  : 'نقدي')
+  : pm === 'return' ? (emoji ? '↩️ مرتجع' : 'مرتجع')
+  : (emoji ? '💳 كارت' : 'كارت');
+
 // Calls fn() only if the given page element exists and is currently visible.
 // Used by both the Firestore listeners in 65-firebase.js (so live data
 // updates only re-render the page actually on screen) and switchBranch() in

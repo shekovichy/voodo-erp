@@ -79,7 +79,7 @@ function updateQty(code, val) {
   // it no longer rewrites the whole array (which clobbered concurrent sales of
   // OTHER products). The corrected product itself is intentionally last-write-
   // wins: the admin is overriding the count on purpose.
-  adjustStock([{ code, set: { qty: parseInt(val) || 0 } }], b);
+  adjustStock([{ code, set: { qty: Math.max(0, parseInt(val) || 0) } }], b);
   renderInventory();
 }
 
@@ -135,7 +135,7 @@ function saveProduct() {
     cost:       parseFloat(document.getElementById('pm-cost').value) || 0,
     priceBefore: parseFloat(document.getElementById('pm-priceBefore').value) || 0,
     priceAfter,
-    qty:      parseInt(document.getElementById('pm-qty').value) || 0,
+    qty:      Math.max(0, parseInt(document.getElementById('pm-qty').value) || 0),
     category: document.getElementById('pm-category').value.trim(),
     family:   document.getElementById('pm-family').value.trim()
   };
@@ -233,7 +233,7 @@ function importExcel(e) {
         cost:        parseFloat(g('cost','التكلفة','تكلفة','buy price','buying price','purchase price','سعر الشراء')||0)||0,
         priceBefore: parseFloat(g('price before','price_before','pricebefore','السعر قبل','سعر قبل','old price')||0)||0,
         priceAfter,
-        qty:      parseInt(g('qty','quantity','الكمية','كمية','stock','مخزون')||0)||0,
+        qty:      Math.max(0, parseInt(g('qty','quantity','الكمية','كمية','stock','مخزون')||0)||0),
         category: String(g('category','الفئة','فئة','كاتيجورى','كاتيجوري','')||'').trim(),
         family:   String(g('family','المجموعة','مجموعة','فاميلى','فاميلي','')||'').trim()
       };

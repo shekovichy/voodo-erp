@@ -3779,6 +3779,17 @@ async function executeInventoryMigration() {
 // ══════════════════════════════════════════════
 const fmt = (n) => (parseFloat(n) || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
+// payMethod is only ever 'cash', 'card', or 'return' (see setPayMethod() in
+// 20-pos-payment.js and _processCashierReturnConfirmed() in 89-cashier-
+// return.js) — but several pages displayed it as a plain cash/card binary
+// (anything !== 'cash' fell through to "كارت"), so every return row in the
+// sales list, its detail modal, the WhatsApp receipt summary, and the pivot
+// report all falsely labeled refunds as card payments.
+const payMethodLabel = (pm, {emoji=true} = {}) =>
+  pm === 'cash'   ? (emoji ? '💵 نقدي'  : 'نقدي')
+  : pm === 'return' ? (emoji ? '↩️ مرتجع' : 'مرتجع')
+  : (emoji ? '💳 كارت' : 'كارت');
+
 // Calls fn() only if the given page element exists and is currently visible.
 // Used by both the Firestore listeners in 65-firebase.js (so live data
 // updates only re-render the page actually on screen) and switchBranch() in
@@ -5691,7 +5702,7 @@ function updateQty(code, val) {
   // it no longer rewrites the whole array (which clobbered concurrent sales of
   // OTHER products). The corrected product itself is intentionally last-write-
   // wins: the admin is overriding the count on purpose.
-  adjustStock([{ code, set: { qty: parseInt(val) || 0 } }], b);
+  adjustStock([{ code, set: { qty: Math.max(0, parseInt(val) || 0) } }], b);
   renderInventory();
 }
 
@@ -5747,7 +5758,7 @@ function saveProduct() {
     cost:       parseFloat(document.getElementById('pm-cost').value) || 0,
     priceBefore: parseFloat(document.getElementById('pm-priceBefore').value) || 0,
     priceAfter,
-    qty:      parseInt(document.getElementById('pm-qty').value) || 0,
+    qty:      Math.max(0, parseInt(document.getElementById('pm-qty').value) || 0),
     category: document.getElementById('pm-category').value.trim(),
     family:   document.getElementById('pm-family').value.trim()
   };
@@ -5845,7 +5856,7 @@ function importExcel(e) {
         cost:        parseFloat(g('cost','التكلفة','تكلفة','buy price','buying price','purchase price','سعر الشراء')||0)||0,
         priceBefore: parseFloat(g('price before','price_before','pricebefore','السعر قبل','سعر قبل','old price')||0)||0,
         priceAfter,
-        qty:      parseInt(g('qty','quantity','الكمية','كمية','stock','مخزون')||0)||0,
+        qty:      Math.max(0, parseInt(g('qty','quantity','الكمية','كمية','stock','مخزون')||0)||0),
         category: String(g('category','الفئة','فئة','كاتيجورى','كاتيجوري','')||'').trim(),
         family:   String(g('family','المجموعة','مجموعة','فاميلى','فاميلي','')||'').trim()
       };
@@ -5929,7 +5940,7 @@ function renderSales() {
         <td>${fmt(s.sub)} ج</td>
         <td>${s.disc>0?fmt(s.disc)+' ج':'-'}</td>
         <td><strong>${fmt(s.total)} ج</strong></td>
-        <td>${s.payMethod==='cash'?'💵 نقدي':'💳 كارت'}</td>
+        <td>${payMethodLabel(s.payMethod)}</td>
         <td><button class="btn btn-gray btn-sm" onclick="viewSale(${s.id})">👁️ عرض</button></td>
       </tr>`).join('');
 }
@@ -5942,7 +5953,7 @@ function viewSale(id) {
       <div><strong>رقم الفاتورة:</strong> ${String(sale.id).slice(-8)}</div>
       <div><strong>التاريخ:</strong> ${new Date(sale.date).toLocaleString('ar-EG')}</div>
       <div><strong>البائع:</strong> ${escHtml(sale.salesperson || sale.cashier || '-')}</div>
-      <div><strong>الدفع:</strong> ${sale.payMethod==='cash'?'💵 نقدي':'💳 كارت'}</div>
+      <div><strong>الدفع:</strong> ${payMethodLabel(sale.payMethod)}</div>
     </div>
     <div class="table-wrap">
       <table style="font-size:13px;">
@@ -9704,7 +9715,7 @@ function shareReceiptWhatsApp() {
     `━━━━━━━━━━━━━━━━━━━━`,
     sale.disc > 0 ? `🎁 خصم: ${fmt(sale.disc)} ج` : '',
     `💰 الإجمالي: ${fmt(sale.total)} ج`,
-    `💳 الدفع: ${sale.payMethod === 'cash' ? 'نقدي' : 'كارت'}`,
+    `💳 الدفع: ${payMethodLabel(sale.payMethod, {emoji:false})}`,
     ``,
     `شكراً لثقتك بـ VOODO ERP 🏠`
   ].filter(l => l !== undefined && l !== null);

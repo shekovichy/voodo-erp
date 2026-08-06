@@ -320,7 +320,7 @@ function shareReceiptWhatsApp() {
     `━━━━━━━━━━━━━━━━━━━━`,
     sale.disc > 0 ? `🎁 خصم: ${fmt(sale.disc)} ج` : '',
     `💰 الإجمالي: ${fmt(sale.total)} ج`,
-    `💳 الدفع: ${sale.payMethod === 'cash' ? 'نقدي' : 'كارت'}`,
+    `💳 الدفع: ${payMethodLabel(sale.payMethod, {emoji:false})}`,
     ``,
     `شكراً لثقتك بـ VOODO ERP 🏠`
   ].filter(l => l !== undefined && l !== null);

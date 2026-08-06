@@ -46,7 +46,7 @@ function renderSales() {
         <td>${fmt(s.sub)} ج</td>
         <td>${s.disc>0?fmt(s.disc)+' ج':'-'}</td>
         <td><strong>${fmt(s.total)} ج</strong></td>
-        <td>${s.payMethod==='cash'?'💵 نقدي':'💳 كارت'}</td>
+        <td>${payMethodLabel(s.payMethod)}</td>
         <td><button class="btn btn-gray btn-sm" onclick="viewSale(${s.id})">👁️ عرض</button></td>
       </tr>`).join('');
 }
@@ -59,7 +59,7 @@ function viewSale(id) {
       <div><strong>رقم الفاتورة:</strong> ${String(sale.id).slice(-8)}</div>
       <div><strong>التاريخ:</strong> ${new Date(sale.date).toLocaleString('ar-EG')}</div>
       <div><strong>البائع:</strong> ${escHtml(sale.salesperson || sale.cashier || '-')}</div>
-      <div><strong>الدفع:</strong> ${sale.payMethod==='cash'?'💵 نقدي':'💳 كارت'}</div>
+      <div><strong>الدفع:</strong> ${payMethodLabel(sale.payMethod)}</div>
     </div>
     <div class="table-wrap">
       <table style="font-size:13px;">
