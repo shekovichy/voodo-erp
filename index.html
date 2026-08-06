@@ -9016,7 +9016,7 @@ function renderCustomers() {
   const thresh = _settingsCache.vipThreshold || 1000;
   const items = q ? custs.filter(c => c.name.toLowerCase().includes(q) || (c.phone||'').includes(q)) : custs;
 
-  const vipCount   = custs.filter(c => (c.totalSpent||0) >= 5000).length;
+  const vipCount   = custs.filter(c => (c.totalSpent||0) >= thresh).length;
   const totalSpent = custs.reduce((s,c) => s + (c.totalSpent||0), 0);
   const totalPts   = custs.reduce((s,c) => s + (c.loyaltyPoints||0), 0);
   animateNumber(document.getElementById('cust-count'), custs.length);
@@ -9099,7 +9099,7 @@ function deleteCustomer(id) {
     setCustomers(getCustomers().filter(x => x.id !== id));
     if (c) {
       const changes = buildAuditDiff(
-        { name: c.name, phone: c.phone || '-', totalSpent: fmt(c.totalSpent || 0) + ' ج', points: c.points || 0 },
+        { name: c.name, phone: c.phone || '-', totalSpent: fmt(c.totalSpent || 0) + ' ج', points: c.loyaltyPoints || 0 },
         {},
         { name: 'الاسم', phone: 'الهاتف', totalSpent: 'إجمالي الإنفاق', points: 'نقاط الولاء' }
       );
@@ -9112,7 +9112,13 @@ function deleteCustomer(id) {
 function openCustomerProfile(id) {
   const c = getCustomers().find(x => x.id === id);
   if (!c) return;
-  const allSales = getSales().filter(s => !s.isReturn && (s.customerId === id || s.customerPhone === c.phone));
+  // getSales() has no guaranteed order (insertion/listener-merge order, not
+  // chronological) — "آخر الفواتير" below used to just slice(0,20) off the
+  // front of that unsorted list, so it could show arbitrary old invoices
+  // instead of the customer's actual most recent ones. Sorted once here,
+  // newest first, and used for both that list and "top products".
+  const allSales = getSales().filter(s => !s.isReturn && (s.customerId === id || s.customerPhone === c.phone))
+    .sort((a,b) => new Date(b.date) - new Date(a.date));
   const spent  = allSales.reduce((a,s) => a+s.total, 0);
   const visits = allSales.length;
   const pts    = c.loyaltyPoints || 0;
@@ -9131,7 +9137,6 @@ function openCustomerProfile(id) {
     prodMap[i.name] = (prodMap[i.name]||0) + i.qty;
   }));
   const topProds = Object.entries(prodMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
-  const lastSale = allSales.sort((a,b)=>b.id-a.id)[0];
 
   const el = document.getElementById('custProfileModal');
   document.getElementById('cpBody').innerHTML = `
