@@ -113,6 +113,14 @@ function calcCashierReturnTotal() {
 function processCashierReturn() {
   if (!_crSelectedSale) return;
   const sale = _crSelectedSale;
+  // searchSalesForReturn() بيمنع اختيار فاتورة اترجعت قبل كده من القايمة،
+  // بس ده فحص واجهة بس — لو الفاتورة اترجعت من مكان تاني (زي زر "إرجاع"
+  // في تفاصيل الفاتورة، 87-returns.js) وقت ما الشاشة دي كانت لسه مفتوحة
+  // عليها، الفحص هنا وقت التنفيذ الفعلي هو الضمانة الحقيقية.
+  if (getSales().some(r => r.isReturn && r.originalSaleId === sale.id)) {
+    showToast('الفاتورة دي اترجعت قبل كده بالفعل');
+    return;
+  }
   const reason = document.getElementById('crReturnReason').value.trim();
   const returnItems = [];
   let returnTotal = 0;

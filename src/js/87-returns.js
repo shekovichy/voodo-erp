@@ -6,6 +6,15 @@ let _returnOriginalSale = null;
 function openReturnFromModal() {
   if (!lastSaleForPrint) return;
   if (lastSaleForPrint.isReturn) { showToast('لا يمكن إرجاع فاتورة مرتجعة'); return; }
+  // 89-cashier-return.js بتمنع اختيار فاتورة اترجعت قبل كده من قايمة
+  // البحث بتاعتها، لكن المسار ده (زر "إرجاع" في تفاصيل الفاتورة) مكانش
+  // بيعمل نفس الفحص خالص — فأي فاتورة اتفتحت من صفحة المبيعات كانت
+  // ممكن تترجع أكتر من مرة، وكل مرة يترجّع المخزون وتترد فلوس العميل
+  // وتتسحب نقاط الولاء تاني، من غير أي حد يوقفها.
+  if (getSales().some(r => r.isReturn && r.originalSaleId === lastSaleForPrint.id)) {
+    showToast('الفاتورة دي اترجعت قبل كده بالفعل');
+    return;
+  }
   _returnOriginalSale = lastSaleForPrint;
   document.getElementById('returnReason').value = '';
   document.getElementById('returnSummary').style.display = 'none';
@@ -41,6 +50,13 @@ function calcReturnTotal() {
 function processReturn() {
   if (!_returnOriginalSale) return;
   const sale = _returnOriginalSale;
+  // فحص تاني وقت التنفيذ الفعلي مش بس وقت فتح المودال — لو المودال فضل
+  // مفتوح لفترة وحصل إرجاع للفاتورة دي من مكان تاني (أو تاب تاني) في الوقت
+  // ده، ده بيمنع تكرار الإرجاع بدل ما نعتمد بس على الفحص وقت الفتح.
+  if (getSales().some(r => r.isReturn && r.originalSaleId === sale.id)) {
+    showToast('الفاتورة دي اترجعت قبل كده بالفعل');
+    return;
+  }
   const reason = document.getElementById('returnReason').value.trim();
   const returnItems = [];
   let returnTotal = 0;
