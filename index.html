@@ -8911,9 +8911,14 @@ function calcPromoDiscount(promo) {
     return Math.max(0, disc);
   }
   if (promo.type === 'bxgy') {
+    // "اشتري X خد Y مجاناً" لازم X+Y وحدة في السلة فعلاً — مش X بس. كان الشرط
+    // بيقبل ci.qty >= buyQty بس، يعني عميل حاطط في السلة نفس عدد buyQty بالظبط
+    // (من غير الوحدات المجانية أصلاً) كان بياخد خصم getQty كأنها موجودة، فعليًا
+    // بيدفع أقل بكتير من العرض الحقيقي (مثال: "اشتري 2 خد 1" مع 2 بس في السلة
+    // كان بيدي خصم كأنه "اشتري 1 خد 1" — خصم أكبر من المُعلَن).
     const allMatch = (promo.items||[]).every(bi => {
       const ci = cart.find(c => c.code === bi.code);
-      return ci && ci.qty >= (promo.buyQty || 1);
+      return ci && ci.qty >= (promo.buyQty || 1) + (promo.getQty || 1);
     });
     if (!allMatch) return 0;
     return (promo.items||[]).reduce((s,bi) => {
@@ -8943,9 +8948,10 @@ function detectEligiblePromos() {
     if (promo.type === 'threshold') return sub >= promo.minAmount;
     if (promo.type === 'category')  return cart.some(i => (i.category||i.name||'').toLowerCase().includes((promo.categoryName||'').toLowerCase()));
     if (promo.type === 'bxgy') {
+      // شوف نفس الملاحظة في calcPromoDiscount — لازم buyQty+getQty مش buyQty بس.
       return (promo.items||[]).every(bi => {
         const ci = cart.find(c => c.code === bi.code);
-        return ci && ci.qty >= (promo.buyQty||1);
+        return ci && ci.qty >= (promo.buyQty||1) + (promo.getQty||1);
       });
     }
     return false;
