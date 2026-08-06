@@ -58,7 +58,13 @@ function calcMonthlyPayroll(month) {
     const name = typeof sp === 'string' ? sp : sp.name;
     const base = typeof sp === 'object' ? (sp.baseSalary || 0) : 0;
     const empSales  = allSales.filter(s => s.salesperson === name).reduce((s,x)=>s+x.total,0);
-    const commPct   = hrRec.targets?.[name]?.commission ?? 0;
+    // hrRec.targets[name] is stored as {target, commPct} — see saveHRTargets()
+    // in 80-hr-targets.js. This used to read a `.commission` field that never
+    // existed, so payroll commission was silently always zero regardless of
+    // the % actually configured on the HR Targets page (which reads the same
+    // record correctly and showed the right, nonzero number) — real money
+    // short on every commissioned salesperson's pay every month.
+    const commPct   = hrRec.targets?.[name]?.commPct ?? 0;
     const commission = Math.round(empSales * commPct / 100);
     const workDays  = attMonth.filter(a => a.empName===name && a.status==='present').length;
     // الإجازات المعتمدة ('excused') مقصودة إنها مش داخلة في absentDays ولا
