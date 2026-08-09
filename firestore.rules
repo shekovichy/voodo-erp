@@ -262,6 +262,17 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ── CHINA PRICING CALCULATOR (سعّرلي / عبد الرازق في الصين) ─────
+    // Unrelated side project sharing this Firebase project only because the
+    // free tier allows a single project. Fully isolated collection name,
+    // no relation to any voodo-erp data. Gated by signedIn() (anonymous
+    // auth is enough — this app has no roles/ concept and the data is
+    // low-sensitivity reference price lists), just to block casual/bot
+    // writes without needing real accounts.
+    match /china_pricing_prices/{source} {
+      allow read, write: if signedIn();
+    }
+
     // ── Deny everything else ──────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;
