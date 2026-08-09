@@ -281,6 +281,7 @@ function renderAuditPage() {
   const actionLabels = {
     'inv.add':'➕ إضافة صنف', 'inv.edit':'✏️ تعديل صنف', 'inv.delete':'🗑️ حذف صنف',
     'price.change':'🏷️ تغيير سعر', 'sale.complete':'💰 فاتورة مكتملة', 'sale.return':'↩️ مرتجع',
+    'stocktake.start':'📋 بدء جرد', 'stocktake.cancel':'🗑️ إلغاء جرد', 'stocktake.apply':'✅ تطبيق جرد',
     'po.receive':'📦 استلام بضاعة', 'po.create':'🛒 أمر شراء', 'po.delete':'🗑️ حذف أمر شراء',
     'supplier.delete':'🗑️ حذف مورّد', 'supplier.payment':'💵 دفعة لمورّد',
     'customer.delete':'🗑️ حذف عميل', 'promo.delete':'🗑️ حذف عرض',

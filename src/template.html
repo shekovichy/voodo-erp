@@ -379,6 +379,7 @@
             <button class="btn btn-outline" onclick="openBulkCategoryModal()" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe;">🏷️ تحديث الفئات</button>
             <button class="btn btn-outline" onclick="openVlookupModal()" style="background:#f0fdf4;color:#15803d;border-color:#bbf7d0;">🔗 VLOOKUP من Excel</button>
             <button class="btn btn-outline" onclick="openBarcodeModal()">🏷️ طباعة باركود / أسعار</button>
+            <button class="btn btn-outline" id="stockCountBtn" onclick="openStockCountStartModal()" style="background:#fef9c3;color:#854d0e;border-color:#fde68a;">📋 جرد المخزون</button>
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <select class="form-control" id="invBranchFilter" onchange="renderInventory()" style="width:150px;font-size:13px;font-weight:600;color:#1d4ed8;"></select>
@@ -2588,6 +2589,77 @@
     <div class="modal-footer" style="margin-top:14px;">
       <button class="btn btn-gray" onclick="document.getElementById('bulkCatModal').classList.add('hidden')">إلغاء</button>
       <button class="btn btn-primary" onclick="saveBulkCategories()">💾 حفظ التغييرات</button>
+    </div>
+  </div>
+</div>
+
+<!-- STOCK COUNT (جرد المخزون) — start modal: pick mode + optional custom sheet -->
+<div id="stockCountStartModal" class="modal-overlay hidden">
+  <div class="modal" style="width:480px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <h2 style="margin:0;">📋 بدء جرد مخزون</h2>
+      <button class="btn btn-gray btn-sm" onclick="document.getElementById('stockCountStartModal').classList.add('hidden')">✕ إغلاق</button>
+    </div>
+    <div style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">
+      الجرد هيبقى لفرع: <strong id="stockCountBranchLabel"></strong>
+    </div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;font-weight:600;">
+        <input type="radio" name="stockCountMode" value="full" checked onchange="stockCountModeChanged()" />
+        <span>جرد الفرع بالكامل — كل الأصناف الموجودة حاليًا في النظام</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;">
+        <input type="radio" name="stockCountMode" value="custom" onchange="stockCountModeChanged()" />
+        <span>جرد مخصص — استيراد قائمة أصناف من ملف</span>
+      </label>
+    </div>
+    <div id="stockCountFileRow" class="form-group hidden">
+      <label>ملف الجرد (Excel/CSV)</label>
+      <input type="file" id="stockCountFile" accept=".xlsx,.xls,.csv" class="form-control" onchange="handleStockCountFile(this)" />
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">عمود "كود" مطلوب. عمود "الكمية" اختياري — لو موجود بيتاخد كـ"متوقع" بدل كمية النظام الحالية.</div>
+      <div id="stockCountFileInfo" style="font-size:12px;color:var(--primary);margin-top:6px;font-weight:600;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="document.getElementById('stockCountStartModal').classList.add('hidden')">إلغاء</button>
+      <button class="btn btn-primary" onclick="startStockCount()">▶️ ابدأ الجرد</button>
+    </div>
+  </div>
+</div>
+
+<!-- STOCK COUNT — active counting session -->
+<div id="stockCountModal" class="modal-overlay hidden">
+  <div class="modal" style="width:920px;max-width:96vw;max-height:92vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+      <h2 style="margin:0;" id="stockCountTitle">📋 جرد جاري</h2>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <span id="stockCountProgress" style="font-size:13px;font-weight:700;color:var(--primary);"></span>
+        <button class="btn btn-danger btn-sm" onclick="cancelStockCount()">🗑️ إلغاء الجرد</button>
+        <button class="btn btn-gray btn-sm" onclick="document.getElementById('stockCountModal').classList.add('hidden')">✕ إغلاق مؤقتًا</button>
+      </div>
+    </div>
+    <input class="form-control" id="stockCountScanInput" placeholder="📷 امسح الباركود أو اكتب الكود واضغط Enter..." style="font-size:15px;margin-bottom:12px;" onkeydown="if(event.key==='Enter')stockCountScanEnter()" />
+    <div class="table-wrap" style="max-height:50vh;">
+      <table><thead><tr><th>الكود</th><th>المنتج</th><th>المتوقع</th><th>المعدود</th><th>الفرق</th><th>الحالة</th></tr></thead>
+        <tbody id="stockCountBody"></tbody></table>
+    </div>
+    <div class="modal-footer" style="margin-top:14px;">
+      <button class="btn btn-gray" onclick="document.getElementById('stockCountModal').classList.add('hidden')">إغلاق مؤقتًا (محفوظ تلقائيًا)</button>
+      <button class="btn btn-primary" onclick="reviewStockCount()">✅ مراجعة وإنهاء الجرد</button>
+    </div>
+  </div>
+</div>
+
+<!-- STOCK COUNT — variance review before applying to real stock -->
+<div id="stockCountReviewModal" class="modal-overlay hidden">
+  <div class="modal" style="width:640px;max-width:96vw;max-height:90vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <h2 style="margin:0;">✅ مراجعة الجرد قبل التطبيق</h2>
+      <button class="btn btn-gray btn-sm" onclick="document.getElementById('stockCountReviewModal').classList.add('hidden')">✕</button>
+    </div>
+    <div id="stockCountReviewBody"></div>
+    <div class="modal-footer" style="margin-top:14px;">
+      <button class="btn btn-gray" onclick="document.getElementById('stockCountReviewModal').classList.add('hidden')">رجوع للجرد</button>
+      <button class="btn btn-primary" onclick="applyStockCount()">💾 تطبيق الجرد على المخزون</button>
     </div>
   </div>
 </div>
