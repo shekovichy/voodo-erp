@@ -1,10 +1,32 @@
 // ══════════════════════════════════════════════
 // FIREBASE CONFIG
 // ══════════════════════════════════════════════
+// There is ONE live Firestore database and no staging copy of it, so every
+// deployment that carries a projectId writes to real business data. Before
+// this gate existed, the staging branch, every Vercel preview build and
+// plain `dev.bat` on localhost all wrote straight to production — the only
+// protection was remembering to blank projectId by hand before testing.
+//
+// So: production hosts are an explicit allowlist, and everything else runs
+// fully local (initFirebase() below falls back to localStorage when
+// projectId is empty). Testing on staging or a preview URL can no longer
+// touch real data, and no habit has to be remembered.
+//
+// ⚠️ ADD ANY NEW PRODUCTION HOSTNAME HERE — a custom domain that isn't on
+// this list would silently run local-only, and branch devices would keep
+// selling with their sales saved to the device instead of the cloud. The
+// status pill in the header says "🧪 تجريبي — بيانات محلية" whenever that
+// happens; if you ever see it on a real branch device, this list is wrong.
+const PROD_HOSTS = [
+  'voodo-erp.vercel.app',
+  'shekovichy.github.io'
+];
+const IS_PROD = PROD_HOSTS.includes(location.hostname);
+
 const FIREBASE_CONFIG = {
   apiKey:            "AIzaSyCzDuaf-4hN0f9ZZYUXUywQ6Lbe_ZbBVVQ",
   authDomain:        "nexus-2fec6.firebaseapp.com",
-  projectId:         "nexus-2fec6",
+  projectId:         IS_PROD ? "nexus-2fec6" : "",
   storageBucket:     "nexus-2fec6.firebasestorage.app",
   messagingSenderId: "923229931538",
   appId:             "1:923229931538:web:b3e9dc00f383732e8230cb"
@@ -152,7 +174,14 @@ function initFirebase() {
     _salesCache     = DB.g('sales', []);
     _customersCache = DB.g('pos_customers', []);
     _settingsCache  = { threshold: DB.g('threshold', 5) };
-    if (fbEl) fbEl.innerHTML = 'بدون Firebase';
+    // Loud on purpose: this mode looks identical to the real thing until
+    // you notice nothing ever syncs. On a branch device it means sales are
+    // piling up locally — see the PROD_HOSTS note at the top of this file.
+    if (fbEl) {
+      fbEl.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:10px;background:#fee2e2;color:#b91c1c;font-weight:700;';
+      fbEl.textContent   = '🧪 تجريبي — بيانات محلية';
+      fbEl.title         = 'مفيش اتصال بالسحابة: كل حاجة بتتحفظ على الجهاز ده بس';
+    }
     return;
   }
 

@@ -291,6 +291,22 @@ async function doLogin() {
 async function _legacyLogin(user, pass) {
   const users = getUsers();
 
+  // ── dev/dev — LOCAL TESTING ONLY ────────────────────────────────
+  // Off production, FIREBASE_CONFIG.projectId is blank (see PROD_HOSTS
+  // in 65-firebase.js), so doLogin() skips Firebase Auth entirely and
+  // lands here — and a fresh browser has no stored users.admin, which
+  // used to mean dev.bat could not get past the login screen at all.
+  // This account exists only when IS_PROD is false: on a real host the
+  // branch never runs. Even if it somehow did, the session carries no
+  // Firebase token, so firestore.rules deny every cloud read/write —
+  // it can only ever see the empty localStorage of the test machine.
+  if (!IS_PROD && user === 'dev' && pass === 'dev') {
+    currentUsername = 'dev';
+    isRealOwner = true;
+    _enterAdminSession('وضع تجريبي محلي: dev');
+    return true;
+  }
+
   if (user === 'admin' && users.admin && await checkPass(pass, users.admin)) {
     await upgradePassIfNeeded(pass, users.admin, 'admin');
     currentUsername = user;
