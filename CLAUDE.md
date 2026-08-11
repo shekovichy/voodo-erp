@@ -26,12 +26,25 @@
 ```
 cd C:\Projects\voodo-erp
 python build.py        # يولّد index.html من src/ + chunk-*.js
+python audit.py        # فاحص التناسق — لازم يعدي قبل أي push
 git add -A && git commit -m "..." && git push
 ```
 GitHub Actions تنشر تلقائياً على https://shekovichy.github.io/voodo-erp/
 
 ### تحميل كسول (Lazy chunks)
-3 صفحات مستقلة تماماً (`93-accounting.js`, `95-warehouse.js`, `75-purchases.js`) بتتبني كملفات `chunk-*.js` منفصلة بدل ما تتلزق جوه `index.html` — `showPage()` في `25-navigation.js` بيحمّلها ديناميكياً أول مرة المستخدم يدخل الصفحة (شوف `_loadChunk`/`_CHUNK_FILES` في `00-core.js`).
+7 صفحات مستقلة تماماً بتتبني كملفات `chunk-*.js` منفصلة بدل ما تتلزق جوه `index.html` — `showPage()` في `25-navigation.js` بيحمّلها ديناميكياً أول مرة المستخدم يدخل الصفحة (شوف `_loadChunk`/`_CHUNK_FILES` في `00-core.js`). القايمة الرسمية في `LAZY_CHUNKS` جوه `build.py`:
+
+| الملف | الشنك |
+|-------|-------|
+| `93-accounting.js` | `chunk-accounting.js` |
+| `95-warehouse.js` | `chunk-warehouse.js` |
+| `75-purchases.js` | `chunk-purchases.js` |
+| `110-helpdesk.js` | `chunk-helpdesk.js` |
+| `115-pivot-reports.js` | `chunk-pivot.js` |
+| `120-data-migration.js` | `chunk-migration.js` |
+| `125-strategic-analytics.js` | `chunk-analytics.js` |
+
+⚠️ الشنكات دي **مش** جوه `index.html`، فلازم تتبني ويتعملها commit لوحدها. في 2026-08-01 اتعملت 3 إصلاحات في `93-accounting.js` واتعمل commit لـ `index.html` بس — الإصلاحات فضلت في الريبو من غير ما توصل للتطبيق أصلاً. `audit.py` بيمسك الحالة دي دلوقتي.
 
 ⚠️ **لو هتضيف ملف جديد للتحميل الكسول**: لازم تتأكد أولاً إن مفيش ملف "أساسي" (مش هو نفسه) بينادي على أي دالة فيه بشكل غير مشروط (يعني من غير `visRefresh`/فحص `!hidden` قبلها) — لأن ده هيبوّظ لو الملف لسه ماتحمّلش. افحص بـ:
 ```
@@ -43,42 +56,54 @@ grep -oE '^function [a-zA-Z0-9_]+|^const [a-zA-Z0-9_]+ = ' src/js/الملف.js
 
 ## ملفات المصدر
 
+⚠️ أرقام السطور دي بتقدم بسرعة. لو فرق كبير عن الواقع، حدّثها بـ:
+`for f in src/js/*.js; do echo "$(basename $f) $(wc -l < $f)"; done`
+
 | الملف | المحتوى | السطور |
 |-------|---------|--------|
-| `src/template.html` | كل HTML + CSS | ~1500 |
-| `src/js/00-core.js` | DB، BRANCH_IDS، cache variables | 116 |
-| `src/js/05-utils.js` | fmt، showMsg، getDateRange، login/logout | 398 |
+| `src/template.html` | كل HTML + CSS | 3007 |
+| `src/js/00-core.js` | DB، BRANCH_IDS، cache variables، `_loadChunk`، `addSale` | 635 |
+| `src/js/02-demo-cleanup.js` | تنظيف بيانات الديمو اللي تسربت للداتا الحقيقية (مرة واحدة) | 154 |
+| `src/js/03-sales-migration.js` | ترحيل `pos_sales` من مسطح لمعزول بالفرع (مرة واحدة) | 123 |
+| `src/js/04-inventory-migration.js` | ترحيل المخزون لعزل الفروع (مرة واحدة) | 104 |
+| `src/js/05-utils.js` | fmt، showMsg، getDateRange، login/logout | 634 |
+| `src/js/06-permissions-migration.js` | backfill لـ `roles/{uid}.permissions` (مرة واحدة، آمن التكرار) | 114 |
 | `src/js/10-pos-products.js` | renderProducts، handleSearchKey | 55 |
-| `src/js/15-pos-cart.js` | addToCart، renderCart، cartTotals | 124 |
-| `src/js/20-pos-payment.js` | openPayment، completeSale، showReceipt | 134 |
-| `src/js/25-navigation.js` | showPage | 47 |
-| `src/js/30-dashboard.js` | buildDashboard، calcProfit | 223 |
-| `src/js/35-inventory.js` | renderInventory، saveProduct، importExcel | 178 |
+| `src/js/15-pos-cart.js` | addToCart، renderCart، cartTotals | 134 |
+| `src/js/20-pos-payment.js` | openPayment، completeSale، showReceipt | 266 |
+| `src/js/25-navigation.js` | showPage | 98 |
+| `src/js/30-dashboard.js` | buildDashboard، calcProfit | 263 |
+| `src/js/35-inventory.js` | renderInventory، saveProduct، importExcel | 270 |
+| `src/js/36-stocktake.js` | جرد المخزون — فرع كامل أو شيت مخصص، جلسة محفوظة | 239 |
 | `src/js/40-sales.js` | renderSales، viewSale | 82 |
-| `src/js/45-reports.js` | buildSalesReport، buildInventoryReport، buildProfitReport | 302 |
-| `src/js/50-kpi.js` | buildKPIReport | 83 |
-| `src/js/52-sellers-report.js` | buildSellersReport | 59 |
-| `src/js/55-lowstock.js` | updateLowStockBell، buildHeatmap، exportBackup | 206 |
-| `src/js/60-settings.js` | saveSettings، renderBranchUsersSettings | 137 |
-| `src/js/65-firebase.js` | initFirebase، Firebase listeners، suspend/cashier | 633 |
-| `src/js/70-branches.js` | switchBranch، openTransferModal، getTransfers | 203 |
-| `src/js/75-purchases.js` | suppliers، purchase orders، receive goods | 384 |
-| `src/js/80-hr-targets.js` | HR targets، commission، buildSellersReport | 144 |
-| `src/js/82-promotions.js` | promotions system | 310 |
-| `src/js/85-crm.js` | CRM customers، loyalty points | 236 |
-| `src/js/87-returns.js` | returns system | 122 |
-| `src/js/88-abc-expenses.js` | ABC analysis، expense tracking، audit log، WhatsApp | 278 |
-| `src/js/89-cashier-return.js` | openCashierReturn، processCashierReturn | 181 |
-| `src/js/90-barcode.js` | barcodes، price tags، ESC/POS printer | 206 |
+| `src/js/45-reports.js` | buildSalesReport، buildInventoryReport، buildProfitReport | 325 |
+| `src/js/50-kpi.js` | buildKPIReport | 91 |
+| `src/js/52-sellers-report.js` | buildSellersReport | 64 |
+| `src/js/55-lowstock.js` | updateLowStockBell، buildHeatmap، exportBackup | 242 |
+| `src/js/60-settings.js` | saveSettings، renderBranchUsersSettings، شجرة الصلاحيات | 612 |
+| `src/js/65-firebase.js` | initFirebase، Firebase listeners، suspend/cashier | 1065 |
+| `src/js/70-branches.js` | switchBranch، openTransferModal، getTransfers | 255 |
+| `src/js/75-purchases.js` | suppliers، purchase orders، receive goods | 546 |
+| `src/js/80-hr-targets.js` | HR targets، commission، الراتب الأساسي | 145 |
+| `src/js/82-promotions.js` | promotions system | 330 |
+| `src/js/85-crm.js` | CRM customers، loyalty points | 274 |
+| `src/js/87-returns.js` | returns system | 153 |
+| `src/js/88-abc-expenses.js` | ABC analysis، expense tracking، audit log، WhatsApp | 356 |
+| `src/js/89-cashier-return.js` | openCashierReturn، processCashierReturn | 194 |
+| `src/js/90-barcode.js` | barcodes، price tags، ESC/POS printer | 217 |
 | `src/js/91-loyalty.js` | loyalty settings | 57 |
-| `src/js/92-hr-attendance.js` | attendance، payroll، renderAttendancePane | 219 |
-| `src/js/93-accounting.js` | P&L، cash flow، accounting page | 186 |
-| `src/js/94-vlookup.js` | VLOOKUP reports، category reports | 346 |
-| `src/js/95-warehouse.js` | warehouse page، warehouse transfers | 207 |
-| `src/js/96-approvals.js` | price-change approvals، suspended tabs | 339 |
-| `src/js/97-expense-requests.js` | expense approval requests | 99 |
-| `src/js/98-leave-requests.js` | leave & permission requests | 120 |
-| `src/js/100-home.js` | home page، renderHomeIcons، fingerprint import | 181 |
+| `src/js/92-hr-attendance.js` | attendance، payroll، renderAttendancePane | 232 |
+| `src/js/93-accounting.js` | P&L، cash flow، accounting page | 513 |
+| `src/js/94-vlookup.js` | VLOOKUP reports، category reports | 360 |
+| `src/js/95-warehouse.js` | warehouse page، warehouse transfers | 208 |
+| `src/js/96-approvals.js` | price-change approvals، suspended tabs | 373 |
+| `src/js/97-expense-requests.js` | expense approval requests | 100 |
+| `src/js/98-leave-requests.js` | leave & permission requests | 129 |
+| `src/js/100-home.js` | home page، renderHomeIcons، fingerprint import | 280 |
+| `src/js/110-helpdesk.js` | تذاكر الدعم الفني (تصنيف/أولوية/حالة) | 155 |
+| `src/js/115-pivot-reports.js` | تقارير محورية — أبعاد ومقاييس + drill-down على الخلية | 313 |
+| `src/js/120-data-migration.js` | استيراد بيانات سيستم قديم من إكسيل (مبيعات ومصاريف تاريخية) | 320 |
+| `src/js/125-strategic-analytics.js` | تحليل الخصومات، تحليل حركة المخزون، كشف حساب صنف | 782 |
 
 ---
 
@@ -90,6 +115,7 @@ grep -oE '^function [a-zA-Z0-9_]+|^const [a-zA-Z0-9_]+ = ' src/js/الملف.js
 |---------|-------|
 | كاشير / بيع | `20-pos-payment.js` + `15-pos-cart.js` |
 | المخزون | `35-inventory.js` |
+| جرد المخزون | `36-stocktake.js` |
 | الداشبورد | `30-dashboard.js` |
 | Firebase / cloud | `65-firebase.js` |
 | الفروع والتحويلات | `70-branches.js` |
@@ -102,6 +128,10 @@ grep -oE '^function [a-zA-Z0-9_]+|^const [a-zA-Z0-9_]+ = ' src/js/الملف.js
 | طلبات الإجازات | `98-leave-requests.js` |
 | طلبات المصاريف | `97-expense-requests.js` |
 | اعتماد الأسعار | `96-approvals.js` |
+| الدعم الفني | `110-helpdesk.js` |
+| التقارير المحورية | `115-pivot-reports.js` |
+| استيراد بيانات قديمة | `120-data-migration.js` |
+| التحليلات الاستراتيجية | `125-strategic-analytics.js` |
 
 ---
 
@@ -109,12 +139,21 @@ grep -oE '^function [a-zA-Z0-9_]+|^const [a-zA-Z0-9_]+ = ' src/js/الملف.js
 
 ### تعديل كود (src/)
 1. **اختبر محلياً الأول** — شغّل `dev.bat` (بيعمل build.py ويفتح المتصفح على `localhost:8765`). جرّب الفيتشر فعلياً قبل الدفع — ده بالظبط اللي كان ناقص لما حصلت مشكلة اختفاء المبيعات في 2026-07-11.
-2. لو تمام: `python build.py` (لو لسه ماعملتوش) → `git add -A && git commit -m "وصف التغيير" && git push`
-3. GitHub Actions تنشر على GitHub Pages خلال ~30 ثانية، وVercel بينشر تلقائي كمان.
-4. لتجربة تغيير كبير قبل ما يوصل لـ main، ادفعه على فرع `staging` الأول (`git push origin HEAD:staging`) — لو Vercel مضبوط يعمل preview للفروع هيديك لينك منفصل تجرب عليه.
+2. `python build.py` (لو لسه ماعملتوش).
+3. **`python audit.py` — قبل أي push، من غير استثناء.** بيرجّع exit code 1 لو فيه أخطاء. بيمسك في أقل من ثانية نوع البجّات اللي المراجعة البشرية بتفوّتها لأن كل ملف لوحده بيبان سليم والتعارض بين الملفات: IDs مكررة، `onclick` بينادي دالة اتمسحت، JS بيدوّر على `id` مش موجود، أكتر من فلتر فرع في نفس الصفحة، وشنك اتبنى ومااتعملّهوش commit. **كل فحص فيه اتكتب بعد بج حقيقي حصل فعلاً.**
+4. لو التعديل يمس منطق (مش شكل بس) — امشي على السيناريوهات اليدوية في [`TESTING.md`](TESTING.md). القاعدة الذهبية: جرّب بحسابين على الأقل (المالك + كاشير فرع)، ولو الصفحة فيها فلتر فرع غيّر الفلتر **وبعدين** اعمل عملية كتابة.
+5. `git add -A && git commit -m "وصف التغيير" && git push`
+6. GitHub Actions تنشر على GitHub Pages خلال ~30 ثانية، وVercel بينشر تلقائي كمان.
+7. لتجربة تغيير كبير قبل ما يوصل لـ main، ادفعه على فرع `staging` الأول (`git push origin HEAD:staging`) — لو Vercel مضبوط يعمل preview للفروع هيديك لينك منفصل تجرب عليه.
+
+### لو لقيت بج
+اسأل: **"هل `audit.py` كان يقدر يمسكه؟"** لو أيوة ضيف الفحص فيه، لو لأ ضيف السيناريو في `TESTING.md`. كده كل بج بيتصاد مرة واحدة بس. وفيه أوديت شهري بـ 20 دقيقة في `TESTING.md` بيكشف التلف الصامت المتراكم (أهمه: صافي الربح لازم يطابق في 3 شاشات — الداشبورد، قائمة الدخل، الملخص).
 
 ### تعديل Firestore Rules (`firestore.rules`)
 ⚠️ **ممنوع تنشر Rules جديدة على الـ Console مباشرة من غير تجربة.** في 2026-07-11 نشر Rules ناقصة (من غير قاعدة لـ `pos_sales`) قفل وصول المبيعات كلها في الإنتاج فجأة.
 1. عدّل `firestore.rules` في الكود، اعمل commit وpush زي أي تعديل عادي (الملف مش جزء من build.py، بس لازم يفضل متزامن مع اللي منشور فعلاً).
+   - `firebase.json` و`.firebaserc` موجودين دلوقتي، يعني ينفع تنشر بـ `firebase deploy --only firestore:rules` بدل النسخ اليدوي في الكونسول — بس **خطوة التجربة تحت لسه إجبارية بنفس الدرجة**، الأمر ده بينشر على طول من غير أي تأكيد.
 2. **قبل الضغط على Publish في Firebase Console**: افتح تبويب Rules → **"Rules playground"** (موجودة تحت في نفس الصفحة) والصق القواعد الجديدة فيها، وجرّب محاكاة get/list على أهم المسارات (خصوصاً `pos_data/{doc}` و`pos_sales/{doc}`) وشوف النتيجة Allow ولا Deny قبل ما تنشر فعلياً.
 3. بعد التأكد، انشر، وبعدها افتح التطبيق وتأكد إن البيانات بترجع تظهر.
+
+⚠️ **مجموعة غريبة في `firestore.rules` — متمسحهاش**: `china_pricing_prices/{source}` (سطر ~272) **مالهاش أي علاقة بـ VOODO** — دي مشروع جانبي منفصل (حاسبة تسعير) بيشارك نفس مشروع Firebase عشان الخطة المجانية بتسمح بمشروع واحد بس. معزولة تماماً: مفيش تداخل مع أي مجموعة أو قاعدة بتاعة VOODO، ومحمية بـ `signedIn()`. لو مسحتها هتكسر التطبيق التاني من غير ما تلاحظ.
