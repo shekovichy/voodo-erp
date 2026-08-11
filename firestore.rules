@@ -262,6 +262,75 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ── PRICE-CHANGE APPROVALS — one document per request ─────────
+    // Replaces the shared pos_data/price_approvals document, which could not
+    // be secured: a rule gates a whole document, so every account allowed to
+    // write that one could set status:'approved' on its own request. The
+    // manager-approves-a-discount control lived only in the UI. Same reasoning
+    // as pos_audit above — per-document storage is what makes the rule
+    // expressible at all.
+    //
+    // ⚠️ The old pos_data/price_approvals rule is deliberately still in force
+    // (it falls under the pos_data block above). Publish THESE rules first,
+    // then deploy the client: the client cannot write here until the rules
+    // allow it, so the usual client-first order is reversed. Drop the old
+    // document once every device is on the new build.
+    //
+    // Only a role of 'admin' decides — matches the app exactly: the approvals
+    // bell renders for currentUser === 'admin' only, and a branch manager is
+    // currentUser === 'cashier' with an isBranchManager flag (00-core.js), so
+    // managers never approved. 'admin' is a label whose finer permissions come
+    // from the tree; gating this on a dedicated permission key instead is a
+    // clean follow-up that would touch only this line.
+    match /pos_price_approvals/{reqId} {
+      allow read: if isOwner() || (
+        signedIn() && exists(/databases/$(database)/documents/roles/$(request.auth.uid)) && (
+          resource.data.cashierUid == request.auth.uid ||
+          get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin'
+        )
+      );
+
+      // A request may only ever be born pending, and only in your own name.
+      allow create: if signedIn() &&
+        exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.cashierUid == request.auth.uid;
+
+      // The decision — admin only, and NEVER on your own request. items/total
+      // are pinned so the prices approved are the prices that were reviewed.
+      allow update: if (
+        isOwner() || (
+          signedIn() && exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin'
+        )
+      ) &&
+        resource.data.cashierUid != request.auth.uid &&
+        resource.data.status == 'pending' &&
+        request.resource.data.status in ['approved', 'rejected'] &&
+        request.resource.data.cashierUid == resource.data.cashierUid &&
+        request.resource.data.items == resource.data.items &&
+        request.resource.data.total == resource.data.total;
+
+      // Closing out your own approved request. These are the only two
+      // self-updates allowed and both only ever reduce what it permits:
+      // 'consumed' (the sale committed — completeSale calls this) and
+      // 'cancelled' (the customer walked away). Consuming is refused after
+      // expiresAt so an approval cannot outlive its business day; cancelling
+      // stays allowed afterwards, since that is only tidying up.
+      allow update: if signedIn() &&
+        exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
+        resource.data.cashierUid == request.auth.uid &&
+        resource.data.status == 'approved' &&
+        request.resource.data.status in ['consumed', 'cancelled'] &&
+        (request.resource.data.status == 'cancelled' ||
+         request.time.toMillis() < resource.data.expiresAt) &&
+        request.resource.data.cashierUid == resource.data.cashierUid &&
+        request.resource.data.items == resource.data.items &&
+        request.resource.data.total == resource.data.total;
+
+      allow delete: if isOwner();
+    }
+
     // ── CHINA PRICING CALCULATOR (سعّرلي / عبد الرازق في الصين) ─────
     // Unrelated side project sharing this Firebase project only because the
     // free tier allows a single project. Fully isolated collection name,

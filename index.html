@@ -11298,19 +11298,61 @@ function applyVlookup(matched) {
 // ══════════════════════════════════════════════════════
 
 // ── Data layer ─────────────────────────────────────────
+// ONE FIRESTORE DOCUMENT PER REQUEST (pos_price_approvals/{id}).
+//
+// This used to be a single shared array document (pos_data/price_approvals),
+// which could not be secured at all: a Firestore rule gates a whole document,
+// so every account allowed to write that document could set status:'approved'
+// on its OWN request. The manager-approves-a-discount control existed only in
+// the UI. Splitting storage per request is what lets the rule say "the
+// requester may not be the approver" — see pos_price_approvals in
+// firestore.rules, and the pos_audit collection for the same pattern.
 var _approvalsCache = null;
 function getApprovals() {
   if (!_approvalsCache) _approvalsCache = DB.g('pos_price_approvals', []);
   return _approvalsCache;
 }
-function setApprovals(v) {
-  _approvalsCache = v;
-  DB.s('pos_price_approvals', v);
+function _persistApprovalsLocal() {
+  DB.s('pos_price_approvals', _approvalsCache || []);
+}
+// The uid the rules identify a requester by. Null offline / in local test
+// mode (no Firebase Auth) — everything still works there, it just stays on
+// the device, which is exactly what local testing should do.
+function _myUid() {
+  try {
+    return (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser)
+      ? firebase.auth().currentUser.uid : null;
+  } catch (e) { return null; }
+}
+// Every mutation goes through here, so the Firestore write is always a
+// single-document set() that the rules can reason about. Writing the whole
+// list at once (the old setApprovals) is what made the rule unenforceable.
+function _saveApproval(req) {
+  var list = getApprovals();
+  var i = list.findIndex(function(r){ return r.id === req.id; });
+  if (i === -1) list.unshift(req); else list[i] = req;
+  _persistApprovalsLocal();
   if (_fbReady && _db) {
-    _db.collection('pos_data').doc('price_approvals')
-       .set({ items: v, updatedAt: Date.now() })
-       .catch(function(e){ console.error('setApprovals:', e); });
+    _db.collection('pos_price_approvals').doc(String(req.id))
+       .set(req)
+       .catch(function(e){ console.error('_saveApproval:', e); });
   }
+}
+
+// ── Expiry — an approval dies with the business day ────
+// A price cleared for one specific customer must not still be loadable next
+// week for a different one. Before this, an approved cart that never became a
+// sale stayed in "الفواتير المعتمدة" forever and could be re-loaded any number
+// of times — the same control bypassed by waiting instead of by an API call.
+function _endOfDayMs(when) {
+  var e = new Date(when || Date.now());
+  e.setHours(23, 59, 59, 999);
+  return e.getTime();
+}
+// Legacy records predate expiresAt and are localStorage-only; treat them as
+// live rather than making them vanish on upgrade.
+function isApprovalLive(r) {
+  return r.status === 'approved' && (!r.expiresAt || Date.now() < r.expiresAt);
 }
 
 // ── Cashier: edit item price ────────────────────────────
@@ -11343,6 +11385,9 @@ function sendForApproval() {
       // compares against the same expression, so old records (generic
       // 'cashier') and new ones both keep working.
       cashier: currentUsername || currentUser || 'كاشير',
+      // The rules match on uid, not on this display name — a name is
+      // client-supplied and so can't decide who owns a request.
+      cashierUid: _myUid(),
       branchId: currentBranch,
       branchName: (getBranches()[currentBranch] || BRANCH_DEFAULTS[currentBranch]),
       items: cart.map(function(i){ return Object.assign({}, i); }),
@@ -11351,9 +11396,7 @@ function sendForApproval() {
       status: 'pending',
       adminNote: ''
     };
-    var list = getApprovals();
-    list.unshift(request);
-    setApprovals(list);
+    _saveApproval(request);
     // _clearCartConfirmed مباشرة مش clearCart: التانية بتسأل "مسح الفاتورة؟"
     // وده سؤال غلط في السياق ده — الفاتورة اتبعتت للمدير خلاص. ولو الكاشير
     // رد بـ"لا" كانت السلة تفضل بالسعر المعدّل، فيضغط دفع تاني ويتبعت طلب
@@ -11403,30 +11446,28 @@ function renderApprovalsList() {
   }).join('');
 }
 
-function approveRequest(id) {
-  var list = getApprovals();
-  var req = list.find(function(r){ return r.id === id; });
-  if (!req) return;
-  req.status = 'approved';
-  req.adminNote = document.getElementById('adminNote_' + id)?.value || '';
-  req.approvedAt = new Date().toISOString();
-  setApprovals(list);
+// The two approve/reject pairs (this modal and the suspended-page tab) share
+// one implementation so a fix to either can't drift out of the other.
+function _decideRequest(id, decision, noteElId, repaint) {
+  var req = getApprovals().find(function(r){ return r.id === id; });
+  if (!req || req.status !== 'pending') return;
+  req.status    = decision;
+  req.adminNote = document.getElementById(noteElId + id)?.value || '';
+  if (decision === 'approved') {
+    req.approvedAt = new Date().toISOString();
+    req.approvedBy = currentUsername || currentUser || '';
+    req.expiresAt  = _endOfDayMs();
+  } else {
+    req.rejectedAt = new Date().toISOString();
+  }
+  _saveApproval(req);
   updateApprovalBadge();
-  renderApprovalsList();
-  showToast('✅ تمت الموافقة — سيتم إشعار الكاشير');
+  if (repaint) repaint();
+  if (decision === 'approved') showToast('✅ تمت الموافقة — سيتم إشعار الكاشير');
 }
 
-function rejectRequest(id) {
-  var list = getApprovals();
-  var req = list.find(function(r){ return r.id === id; });
-  if (!req) return;
-  req.status = 'rejected';
-  req.adminNote = document.getElementById('adminNote_' + id)?.value || '';
-  req.rejectedAt = new Date().toISOString();
-  setApprovals(list);
-  updateApprovalBadge();
-  renderApprovalsList();
-}
+function approveRequest(id) { _decideRequest(id, 'approved', 'adminNote_', renderApprovalsList); }
+function rejectRequest(id)  { _decideRequest(id, 'rejected', 'adminNote_', renderApprovalsList); }
 
 // ── Badge update ────────────────────────────────────────
 function updateApprovalBadge() {
@@ -11446,7 +11487,7 @@ var _notifiedApprovals = DB.g('pos_notified_approvals', []);
 function checkForApprovedCarts() {
   if (currentUser === 'admin') return;
   var approved = getApprovals().filter(function(r){
-    return r.status === 'approved' && (r.cashier === currentUsername || r.cashier === currentUser) && !_notifiedApprovals.includes(r.id);
+    return isApprovalLive(r) && (r.cashier === currentUsername || r.cashier === currentUser) && !_notifiedApprovals.includes(r.id);
   });
   if (!approved.length) return;
   approved.forEach(function(r){ _notifiedApprovals.push(r.id); });
@@ -11466,7 +11507,7 @@ function openApprovedCarts() {
 
 function renderApprovedCartsList() {
   var myApproved = getApprovals().filter(function(r){
-    return r.status === 'approved' && (currentUser === 'admin' || r.cashier === currentUsername || r.cashier === currentUser);
+    return isApprovalLive(r) && (currentUser === 'admin' || r.cashier === currentUsername || r.cashier === currentUser);
   });
   var el = document.getElementById('approvedCartsList');
   if (!myApproved.length) {
@@ -11488,7 +11529,11 @@ function renderApprovedCartsList() {
       + '</div>'
       + '<div style="margin-bottom:10px;">'+itemsHtml+'</div>'
       + (req.adminNote ? '<div style="background:#d1fae5;padding:6px 10px;border-radius:6px;font-size:12px;margin-bottom:8px;">💬 '+escHtml(req.adminNote)+'</div>' : '')
-      + '<button onclick="resumeApprovedCart('+req.id+')" class="btn btn-success" style="width:100%;">🛒 تحميل الفاتورة وإتمام البيع</button>'
+      + '<div style="display:flex;gap:8px;">'
+      + '<button onclick="resumeApprovedCart('+req.id+')" class="btn btn-success" style="flex:1;">🛒 تحميل الفاتورة وإتمام البيع</button>'
+      + '<button onclick="cancelApprovedCart('+req.id+')" class="btn btn-danger btn-sm" title="العميل رجع في كلامه">❌ إلغاء</button>'
+      + '</div>'
+      + '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;text-align:center;">⏳ صالحة لآخر اليوم</div>'
       + '</div>';
   }).join('');
 }
@@ -11498,12 +11543,32 @@ function renderApprovedCartsList() {
 // this can't happen any earlier than that.
 function markApprovalConsumed(id) {
   if (!id) return;
-  var list = getApprovals();
-  var r = list.find(function(x){ return x.id === id; });
+  var r = getApprovals().find(function(x){ return x.id === id; });
   if (!r) return;
   r.status = 'consumed';
-  setApprovals(list);
+  r.consumedAt = new Date().toISOString();
+  _saveApproval(r);
   updateApprovalBadge();
+}
+
+// The exit that was missing: an approved cart the customer walked away from
+// had no way to close. It stayed loadable forever, because 'consumed' is only
+// set once a sale actually commits (see markApprovalConsumed and the comment
+// in _resumeApprovedCartConfirmed). Cancelling only ever reduces what the
+// request permits, so the requester is allowed to do it themselves.
+function cancelApprovedCart(id) {
+  showConfirmModal('إلغاء الفاتورة المعتمدة نهائياً؟ مش هتقدر ترجعها.', function(){
+    var r = getApprovals().find(function(x){ return x.id === id; });
+    if (!r || r.status !== 'approved') return;
+    r.status      = 'cancelled';
+    r.cancelledAt = new Date().toISOString();
+    _saveApproval(r);
+    addAuditLog('approval.cancel',
+      'إلغاء فاتورة معتمدة #' + String(id).slice(-6) + ' — ' + fmt(r.total) + ' ج', r.branchId);
+    updateApprovalBadge();
+    renderApprovedCartsList();
+    showToast('تم إلغاء الفاتورة المعتمدة');
+  });
 }
 
 function resumeApprovedCart(id) {
@@ -11534,16 +11599,37 @@ function _resumeApprovedCartConfirmed(id) {
 }
 
 // ── Firebase listener for approvals ────────────────────
+// ⚠️ THE QUERY MUST MIRROR THE RULE. Firestore will not filter a query down
+// to what you're allowed to see — if a single document the query could return
+// fails the rule, the WHOLE query is rejected and the listener errors out. So
+// a cashier must filter by their own uid (the rule lets them read only their
+// own requests) and only an admin may read the collection unfiltered.
+// Widening either query without widening the rule breaks approvals outright.
 function initApprovalsFirebaseListener() {
   if (!_fbReady || !_db) return;
-  _db.collection('pos_data').doc('price_approvals')
-    .onSnapshot(function(snap) {
-      if (snap.exists) {
-        _approvalsCache = snap.data().items || [];
-        DB.s('pos_price_approvals', _approvalsCache);
-        updateApprovalBadge();
-      }
-    }, function(err){ console.error('approvals listener:', err); });
+  var col = _db.collection('pos_price_approvals');
+  var q;
+  if (currentUser === 'admin') {
+    // 'pending'/'approved' only: closed requests are history no screen reads,
+    // and this keeps a long-lived listener off the whole growing collection.
+    q = col.where('status', 'in', ['pending', 'approved']);
+  } else {
+    var uid = _myUid();
+    if (!uid) return;   // offline/local session — localStorage is the source
+    q = col.where('cashierUid', '==', uid);
+  }
+  q.onSnapshot(function(snap) {
+    _approvalsCache = snap.docs.map(function(d){ return d.data(); })
+                          .sort(function(a, b){ return (b.id || 0) - (a.id || 0); });
+    _persistApprovalsLocal();
+    updateApprovalBadge();
+    // Repaint whichever approvals view is currently open, so an approval
+    // landing from another device shows up without a manual refresh.
+    if (!document.getElementById('approvalsModal')?.classList.contains('hidden')) renderApprovalsList();
+    if (!document.getElementById('approvedCartsModal')?.classList.contains('hidden')) renderApprovedCartsList();
+    var pane = document.getElementById('suspPane_approvals');
+    if (pane && !pane.classList.contains('hidden')) renderSuspApprovals();
+  }, function(err){ console.error('approvals listener:', err); });
 }
 
 // ══════════════════════════════════════════
@@ -11600,29 +11686,8 @@ function renderSuspApprovals() {
   }).join('');
 }
 
-function approveSuspRequest(id) {
-  var list = getApprovals();
-  var req  = list.find(function(r){ return r.id===id; });
-  if (!req) return;
-  req.status    = 'approved';
-  req.adminNote = document.getElementById('sAdminNote_'+id)?.value || '';
-  req.approvedAt= new Date().toISOString();
-  setApprovals(list);
-  updateApprovalBadge();
-  renderSuspApprovals();
-}
-
-function rejectSuspRequest(id) {
-  var list = getApprovals();
-  var req  = list.find(function(r){ return r.id===id; });
-  if (!req) return;
-  req.status    = 'rejected';
-  req.adminNote = document.getElementById('sAdminNote_'+id)?.value || '';
-  req.rejectedAt= new Date().toISOString();
-  setApprovals(list);
-  updateApprovalBadge();
-  renderSuspApprovals();
-}
+function approveSuspRequest(id) { _decideRequest(id, 'approved', 'sAdminNote_', renderSuspApprovals); }
+function rejectSuspRequest(id)  { _decideRequest(id, 'rejected', 'sAdminNote_', renderSuspApprovals); }
 
 function updateHomeClock() {
   var now = new Date();
