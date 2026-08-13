@@ -11354,6 +11354,34 @@ function _endOfDayMs(when) {
 function isApprovalLive(r) {
   return r.status === 'approved' && (!r.expiresAt || Date.now() < r.expiresAt);
 }
+// Pending requests expire the same way. A request nobody answered piles up in
+// the admin's queue forever otherwise, and approving a week-old one would put
+// that discount live today — the stale-approval problem in a different shape.
+//
+// Requests written by the previous build carry no expiresAt (it was only set
+// at approval time back then), so fall back to the end of the day they were
+// raised. Treating them as immortal instead would leave exactly the stale
+// queue this is meant to drain.
+function _pendingExpiryOf(r) {
+  return r.expiresAt || (r.date ? _endOfDayMs(r.date) : 0);
+}
+function isPendingLive(r) {
+  return r.status === 'pending' && Date.now() < _pendingExpiryOf(r);
+}
+// Flip anything already past its day to 'expired' so it stops coming back in
+// the listener query at all, instead of being filtered out on every render
+// forever. Safe to run from any device: the rule only permits pending ->
+// expired after expiry, and only for the requester or an admin.
+function _expireStaleRequests() {
+  getApprovals()
+    .filter(function(r){ return r.status === 'pending' && Date.now() >= _pendingExpiryOf(r); })
+    .forEach(function(r){
+      r.status    = 'expired';
+      r.expiredAt = new Date().toISOString();
+      if (!r.expiresAt) r.expiresAt = _pendingExpiryOf(r);   // backfill legacy
+      _saveApproval(r);
+    });
+}
 
 // ── Cashier: edit item price ────────────────────────────
 function editItemPrice(code) {
@@ -11394,6 +11422,9 @@ function sendForApproval() {
       total: total,
       note: note,
       status: 'pending',
+      // A request nobody answers dies with the day too, not just an approved
+      // one. Reset to the approval day in _decideRequest.
+      expiresAt: _endOfDayMs(),
       adminNote: ''
     };
     _saveApproval(request);
@@ -11414,7 +11445,7 @@ function openApprovalsPanel() {
 }
 
 function renderApprovalsList() {
-  var list = getApprovals().filter(function(r){ return r.status === 'pending'; });
+  var list = getApprovals().filter(isPendingLive);
   var el = document.getElementById('approvalsList');
   if (!list.length) {
     el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-muted);">لا توجد طلبات معلقة ✓</div>';
@@ -11450,7 +11481,7 @@ function renderApprovalsList() {
 // one implementation so a fix to either can't drift out of the other.
 function _decideRequest(id, decision, noteElId, repaint) {
   var req = getApprovals().find(function(r){ return r.id === id; });
-  if (!req || req.status !== 'pending') return;
+  if (!req || !isPendingLive(req)) return;
   req.status    = decision;
   req.adminNote = document.getElementById(noteElId + id)?.value || '';
   if (decision === 'approved') {
@@ -11471,7 +11502,7 @@ function rejectRequest(id)  { _decideRequest(id, 'rejected', 'adminNote_', rende
 
 // ── Badge update ────────────────────────────────────────
 function updateApprovalBadge() {
-  var pending = getApprovals().filter(function(r){ return r.status === 'pending'; }).length;
+  var pending = getApprovals().filter(isPendingLive).length;
   var btn    = document.getElementById('approvalBellBtn');
   var badge  = document.getElementById('approvalBadge');
   if (currentUser === 'admin') {
@@ -11622,6 +11653,7 @@ function initApprovalsFirebaseListener() {
     _approvalsCache = snap.docs.map(function(d){ return d.data(); })
                           .sort(function(a, b){ return (b.id || 0) - (a.id || 0); });
     _persistApprovalsLocal();
+    _expireStaleRequests();
     updateApprovalBadge();
     // Repaint whichever approvals view is currently open, so an approval
     // landing from another device shows up without a manual refresh.
@@ -11648,7 +11680,7 @@ function switchSuspTab(tab, el) {
 function renderSuspApprovals() {
   var el = document.getElementById('suspApprovalsList');
   if (!el) return;
-  var list = getApprovals().filter(function(r){ return r.status === 'pending'; });
+  var list = getApprovals().filter(isPendingLive);
 
   // Update count badge
   var badge = document.getElementById('suspApprovalsCount');

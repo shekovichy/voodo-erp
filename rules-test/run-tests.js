@@ -38,7 +38,7 @@ const anon    = () => env.unauthenticatedContext().firestore();
 const REQ = (over = {}) => Object.assign({
   id: 999, cashier: 'c', cashierUid: 'uid_cashier', branchId: 'b5', branchName: 'باكوس',
   items: [{ code: 'T1', qty: 1, price: 70 }], total: 70, note: '',
-  status: 'pending', adminNote: ''
+  status: 'pending', adminNote: '', expiresAt: FUTURE
 }, over);
 
 async function seed(data) {
@@ -123,6 +123,40 @@ async function main() {
   await seed({ status: 'approved', expiresAt: FUTURE });
   await check('الكاشير مايقدرش يرجّع فاتورته لـ pending',
     assertFails(setDoc(doc(cashier(), 'pos_price_approvals/999'), REQ({ status: 'pending', expiresAt: FUTURE }))));
+
+  console.log('\n\x1b[1mالطلبات المعلقة اللي محدش رد عليها\x1b[0m');
+  await seed({ status: 'pending', expiresAt: PAST });
+  await check('⭐ الأدمن مايقدرش يعتمد طلب معلق انتهت صلاحيته',
+    assertFails(setDoc(doc(admin(), 'pos_price_approvals/999'), REQ({ status: 'approved', expiresAt: PAST }))));
+  await seed({ status: 'pending', expiresAt: PAST });
+  await check('الأدمن يعلّم الطلب المنتهي expired (تنضيف)',
+    assertSucceeds(setDoc(doc(admin(), 'pos_price_approvals/999'), REQ({ status: 'expired', expiresAt: PAST }))));
+  await seed({ status: 'pending', expiresAt: PAST });
+  await check('صاحب الطلب كمان يقدر يعلّمه expired',
+    assertSucceeds(setDoc(doc(cashier(), 'pos_price_approvals/999'), REQ({ status: 'expired', expiresAt: PAST }))));
+  await seed({ status: 'pending', expiresAt: FUTURE });
+  await check('⭐ مايقدرش يدفن طلب لسه صالح بـ expired',
+    assertFails(setDoc(doc(admin(), 'pos_price_approvals/999'), REQ({ status: 'expired', expiresAt: FUTURE }))));
+  await seed({ status: 'pending', expiresAt: PAST });
+  await check('كاشير أجنبي مايقدرش يعلّم طلب غيره expired',
+    assertFails(setDoc(doc(cashier2(), 'pos_price_approvals/999'), REQ({ status: 'expired', expiresAt: PAST }))));
+  await seed({ status: 'pending', expiresAt: FUTURE });
+  await check('الأدمن يعتمد طلب معلق لسه صالح (ماتكسرش)',
+    assertSucceeds(setDoc(doc(admin(), 'pos_price_approvals/999'), REQ({ status: 'approved', expiresAt: FUTURE }))));
+
+  // الطلبات اللي اتعملت بالنسخة السابقة مالهاش expiresAt خالص. من غير
+  // التسامح ده، نشر القاعدة كان هيخلي كل طلب معلق حالياً مستحيل يتعتمد.
+  console.log('\n\x1b[1mانتقالي — طلبات النسخة القديمة (من غير expiresAt)\x1b[0m');
+  await env.withSecurityRulesDisabled(async ctx => {
+    const legacy = REQ({ status: 'pending' });
+    delete legacy.expiresAt;
+    await setDoc(doc(ctx.firestore(), 'pos_price_approvals/999'), legacy);
+  });
+  await check('⭐ الأدمن لسه يقدر يعتمد طلب قديم من غير expiresAt',
+    assertSucceeds(setDoc(doc(admin(), 'pos_price_approvals/999'), REQ({ status: 'approved', expiresAt: FUTURE }))));
+  await check('الطلب الجديد لازم يبقى معاه expiresAt',
+    assertFails(setDoc(doc(cashier(), 'pos_price_approvals/nx'), (() => {
+      const r = REQ({ id: 77 }); delete r.expiresAt; return r; })())));
 
   console.log('\n\x1b[1mالقراءة\x1b[0m');
   await seed({ status: 'approved', expiresAt: FUTURE });
