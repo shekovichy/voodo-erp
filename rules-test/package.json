@@ -1,0 +1,14 @@
+{
+  "name": "voodo-erp-rules-test",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Firestore security-rules tests for VOODO ERP — run with test-rules.bat",
+  "type": "commonjs",
+  "scripts": {
+    "test": "firebase emulators:exec --only firestore --project voodo-rules-test \"node run-tests.js\""
+  },
+  "dependencies": {
+    "@firebase/rules-unit-testing": "^3.0.4",
+    "firebase": "^10.12.0"
+  }
+}
