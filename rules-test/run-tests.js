@@ -191,7 +191,7 @@ async function main() {
   console.log('\n\x1b[1mسجل الجردات (تسوية) — مستند لكل جرد، لا يتعدّل\x1b[0m');
   const TAKE = (over = {}) => Object.assign({
     id: 5, branchId: 'b5', branchName: 'باكوس', mode: 'full',
-    startedAt: Date.now(), appliedAt: Date.now(), appliedBy: 'c',
+    startedAt: 1, countedAt: 2, countedBy: 'a', status: 'pending',
     items: [], summary: { total: 0, counted: 0, variances: 0, netValue: 0 }
   }, over);
   // الجرد شغل أدمن بالسياسة من أول يوم — الكاشير مالوش صلاحية ولا بيقدر
@@ -206,10 +206,25 @@ async function main() {
   await env.withSecurityRulesDisabled(async ctx => {
     await setDoc(doc(ctx.firestore(), 'pos_stocktakes/t1'), TAKE());   // للقراءة تحت
   });
-  await check('⭐ التسوية ماتتعدلش بعد ما تتكتب',
-    assertFails(setDoc(doc(admin(), 'pos_stocktakes/t1'), TAKE({ appliedBy: 'مزوّر' }))));
-  await check('ولا حتى المالك يعدّلها',
-    assertFails(setDoc(doc(owner(), 'pos_stocktakes/t1'), TAKE({ appliedBy: 'مزوّر' }))));
+  await check('الجرد لازم يتولد pending — مايتسجّلش مطبّق من الأول',
+    assertFails(setDoc(doc(admin(), 'pos_stocktakes/t9'), TAKE({ status: 'applied' }))));
+  await check('⭐ الأدمن مايعتمدش التسوية (المالك بس)',
+    assertFails(setDoc(doc(admin(), 'pos_stocktakes/t1'), TAKE({ status: 'applied' }))));
+  await check('المالك يعتمدها',
+    assertSucceeds(setDoc(doc(owner(), 'pos_stocktakes/t1'), TAKE({ status: 'applied' }))));
+  await check('⭐ ومايقدرش يعتمدها تاني بعد ما اتعملت',
+    assertFails(setDoc(doc(owner(), 'pos_stocktakes/t1'), TAKE({ status: 'applied' }))));
+  await env.withSecurityRulesDisabled(async ctx => {
+    await setDoc(doc(ctx.firestore(), 'pos_stocktakes/t1'), TAKE()); });
+  await check('المالك يلغيها',
+    assertSucceeds(setDoc(doc(owner(), 'pos_stocktakes/t1'), TAKE({ status: 'cancelled' }))));
+  await env.withSecurityRulesDisabled(async ctx => {
+    await setDoc(doc(ctx.firestore(), 'pos_stocktakes/t1'), TAKE()); });
+  await check('⭐ مايقدرش يغيّر أرقام العدّ وهو بيعتمد',
+    assertFails(setDoc(doc(owner(), 'pos_stocktakes/t1'),
+      TAKE({ status: 'applied', summary: { total: 0, counted: 0, variances: 0, netValue: 9999 } }))));
+  await check('⭐ ولا ينسب العدّ لحد تاني',
+    assertFails(setDoc(doc(owner(), 'pos_stocktakes/t1'), TAKE({ status: 'applied', countedBy: 'مزوّر' }))));
   await check('الكاشير يقرا تسوية فرعه',
     assertSucceeds(getDoc(doc(cashier(), 'pos_stocktakes/t1'))));
   await check('⭐ مايقراش تسوية فرع تاني',

@@ -306,12 +306,31 @@ service cloud.firestore {
           get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.branchId == resource.data.branchId
         )
       );
-      allow create: if isOwner() || (
-        signedIn() && exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin'
-      );
-      // Immutable once written — an adjusted reconciliation is worth nothing.
-      allow update: if false;
+      // A count is issued pending and moves no stock. Counting and approving
+      // are two separate acts: the count has to be reviewed, more than once,
+      // before anyone acts on it.
+      allow create: if (
+        isOwner() || (
+          signedIn() && exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin'
+        )
+      ) && request.resource.data.status == 'pending';
+
+      // OWNER ONLY, and only pending -> applied/cancelled. The figures that
+      // were counted are pinned: whoever approves is approving the numbers
+      // that were reviewed, not a version edited on the way through. items is
+      // compared by length rather than element-by-element — a full count can
+      // carry thousands of entries and rules have an expression budget — while
+      // summary (the money) is compared outright.
+      allow update: if isOwner() &&
+        resource.data.status == 'pending' &&
+        request.resource.data.status in ['applied', 'cancelled'] &&
+        request.resource.data.summary == resource.data.summary &&
+        request.resource.data.items.size() == resource.data.items.size() &&
+        request.resource.data.branchId == resource.data.branchId &&
+        request.resource.data.countedBy == resource.data.countedBy &&
+        request.resource.data.countedAt == resource.data.countedAt;
+
       allow delete: if isOwner();
     }
 

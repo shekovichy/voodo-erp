@@ -2660,7 +2660,7 @@
     <div id="stockCountReviewBody"></div>
     <div class="modal-footer" style="margin-top:14px;">
       <button class="btn btn-gray" onclick="document.getElementById('stockCountReviewModal').classList.add('hidden')">رجوع للجرد</button>
-      <button class="btn btn-primary" onclick="applyStockCount()">💾 تطبيق الجرد على المخزون</button>
+      <button class="btn btn-primary" onclick="finishStockCount()">💾 إنهاء الجرد وإصدار التسوية</button>
     </div>
   </div>
 </div>
@@ -2688,6 +2688,9 @@
     <div class="modal-footer" style="margin-top:14px;">
       <button class="btn btn-gray" onclick="document.getElementById('stocktakeSettlementModal').classList.add('hidden')">إغلاق</button>
       <button class="btn btn-primary" onclick="exportStocktakeSettlementPDF()">🖨️ تصدير PDF</button>
+      <!-- أزرار الاعتماد بتتحط هنا من openStocktakeSettlement — بره جسم
+           المستند عشان الـ PDF مايطلعش وفيه أزرار -->
+      <span id="stocktakeApproveBar" style="display:flex;gap:10px;"></span>
     </div>
   </div>
 </div>

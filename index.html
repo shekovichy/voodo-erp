@@ -6043,8 +6043,12 @@ function _buildStocktakeRecord(s) {
     mode:       s.mode,
     startedAt:  s.startedAt,
     startedBy:  s.startedBy,
-    appliedAt:  Date.now(),
-    appliedBy:  currentUsername || currentUser || '',
+    // Counting and applying are two separate acts now. A count produces a
+    // settlement and nothing else; the stock only moves when the owner
+    // approves it, possibly days and several reviews later.
+    countedAt:  Date.now(),
+    countedBy:  currentUsername || currentUser || '',
+    status:     'pending',
     items:      items,
     summary: {
       total:        items.length,
@@ -6345,35 +6349,97 @@ function reviewStockCount() {
   document.getElementById('stockCountReviewModal').classList.remove('hidden');
 }
 
-function applyStockCount() {
+// Ends the count and issues the settlement. Deliberately does NOT touch stock:
+// a count has to be reviewed — more than once, by more than one pair of eyes —
+// before anyone believes the numbers. Moving stock the moment counting stopped
+// meant the first draft of a count was also the final word on it.
+function finishStockCount() {
   const s = _stockCountSession; if (!s) return;
-  const variances = s.items.filter(i => i.countedQty !== null && i.countedQty !== i.expectedQty && !i._notInSystem);
-
-  // Snapshot BEFORE adjustStock — expectedQty is only the pre-count quantity
-  // until the write lands, and cost is read from the same pre-write inventory.
   const record = _buildStocktakeRecord(s);
-
-  if (variances.length) {
-    // One transactional bulk update (see adjustStock) — items that match
-    // their expected count need no write at all.
-    adjustStock(variances.map(i => ({ code: i.code, set: { qty: i.countedQty } })), s.branchId);
-  }
   _saveStocktake(record);
 
-  const changes = variances.map(i => ({ label: i.name, before: String(i.expectedQty), after: String(i.countedQty) }));
   const countedTotal = s.items.filter(i => i.countedQty !== null).length;
-  addAuditLog('stocktake.apply',
-    `تطبيق جرد ${s.mode === 'full' ? 'كامل' : 'مخصص'} — ${countedTotal} صنف اتعدّ، ${variances.length} اتصحّح`,
-    s.branchId, changes.length ? changes : null);
+  addAuditLog('stocktake.count',
+    `إنهاء جرد ${s.mode === 'full' ? 'كامل' : 'مخصص'} — ${countedTotal} صنف اتعدّ، ${record.summary.variances} فرق — تسوية في انتظار الاعتماد`,
+    s.branchId);
 
   _clearStockCountSession(s.branchId);
   _stockCountSession = null;
   document.getElementById('stockCountReviewModal').classList.add('hidden');
-  renderInventory();
-  showToast(`✅ تم تطبيق الجرد — ${variances.length} صنف اتصحّحت كميته`);
-  // Straight to the reconciliation: it's the document you actually wanted out
-  // of the count, and this is the one moment you're certain to be looking.
+  showToast('✅ اتقفل الجرد واتعملت التسوية — المخزون لسه ما اتغيّرش');
   openStocktakeSettlement(record.id);
+}
+
+// Older records predate the two-step flow: they were applied the instant
+// counting stopped, so treat a missing status as already applied.
+function stocktakeStatus(r) { return r.status || 'applied'; }
+
+// The second step, owner only. Applies the variance as a DELTA, never as an
+// absolute quantity: between counting and approving, the branch keeps selling.
+// Writing the counted figure back would erase every sale and transfer that
+// happened in between — with an immediate apply the two were the same thing,
+// with a deferred one they are not.
+function applyStocktakeToStock(id) {
+  const r = getStocktakes().find(x => x.id === id);
+  if (!r) return;
+  if (!isRealOwner) { showToast('اعتماد التسوية للمالك فقط'); return; }
+  if (stocktakeStatus(r) !== 'pending') { showToast('التسوية دي اتعملت خلاص'); return; }
+
+  const applicable = r.items.filter(i => i.countedQty !== null && i.diff !== 0 && !i.notInSystem);
+  if (!applicable.length) {
+    showConfirmModal('مفيش أي فروقات تتطبّق. تحب تقفل التسوية كمعتمدة؟', function () {
+      _markStocktakeApplied(r, 0, []);
+    });
+    return;
+  }
+
+  // Anything that moved since the count is worth saying out loud — the person
+  // approving counted days ago and can't know what happened since.
+  const inv   = getInv(r.branchId);
+  const moved = applicable.filter(function (i) {
+    const p = inv.find(x => x.code === i.code);
+    return p && p.qty !== i.expectedQty;
+  });
+
+  let msg = 'اعتماد التسوية وتطبيق ' + applicable.length + ' فرق على مخزون ' + r.branchName + '؟';
+  if (moved.length) {
+    msg += ' ⚠️ ' + moved.length + ' صنف اتحرك مخزونه بعد الجرد — الفرق هيتضاف لرصيدهم الحالي مش هيلغيه.';
+  }
+  showConfirmModal(msg, function () {
+    adjustStock(applicable.map(i => ({ code: i.code, delta: i.diff })), r.branchId);
+    _markStocktakeApplied(r, applicable.length, applicable);
+  });
+}
+
+function _markStocktakeApplied(r, count, applied) {
+  r.status    = 'applied';
+  r.appliedAt = Date.now();
+  r.appliedBy = currentUsername || currentUser || '';
+  _saveStocktake(r);
+  addAuditLog('stocktake.apply',
+    'اعتماد تسوية جرد ' + r.branchName + ' — ' + count + ' صنف اتعدّل، صافي ' + fmt(r.summary.netValue) + ' ج',
+    r.branchId,
+    applied.map(i => ({ label: i.name, before: String(i.expectedQty), after: String(i.countedQty) })));
+  renderInventory();
+  openStocktakeSettlement(r.id);
+  showToast('✅ اتعتمدت التسوية واتطبّقت على المخزون');
+}
+
+// A count that turned out wrong shouldn't sit pending forever.
+function cancelStocktakeSettlement(id) {
+  const r = getStocktakes().find(x => x.id === id);
+  if (!r) return;
+  if (!isRealOwner) { showToast('إلغاء التسوية للمالك فقط'); return; }
+  if (stocktakeStatus(r) !== 'pending') { showToast('التسوية دي اتعملت خلاص'); return; }
+  showConfirmModal('إلغاء التسوية دي نهائياً؟ المخزون مش هيتغيّر والجرد هيفضل في السجل كملغي.', function () {
+    r.status      = 'cancelled';
+    r.cancelledAt = Date.now();
+    r.cancelledBy = currentUsername || currentUser || '';
+    _saveStocktake(r);
+    addAuditLog('stocktake.cancel', 'إلغاء تسوية جرد ' + r.branchName, r.branchId);
+    openStocktakeSettlement(r.id);
+    showToast('اتلغت التسوية — المخزون زي ما هو');
+  });
 }
 
 // ══════════════════════════════════════════════
@@ -6418,11 +6484,17 @@ function renderStocktakeHistory() {
   body.innerHTML = list.map(function (r) {
     const net = r.summary.netValue;
     const col = net === 0 ? 'var(--text-muted)' : (net > 0 ? '#1d4ed8' : 'var(--danger)');
-    return '<div onclick="openStocktakeSettlement(' + r.id + ')" style="cursor:pointer;background:white;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:12px;">'
-      + '<div><div style="font-weight:700;font-size:14px;">📋 جرد ' + (r.mode === 'full' ? 'كامل' : 'مخصص') + ' — ' + escHtml(r.branchName) + '</div>'
+    const st  = stocktakeStatus(r);
+    const tag = st === 'pending'
+      ? '<span class="badge" style="background:#fef9c3;color:#854d0e;">⏳ في انتظار الاعتماد</span>'
+      : st === 'cancelled'
+      ? '<span class="badge badge-danger">❌ ملغية</span>'
+      : '<span class="badge badge-success">✅ مطبّقة</span>';
+    return '<div onclick="openStocktakeSettlement(' + r.id + ')" style="cursor:pointer;background:white;border:1px solid ' + (st==='pending'?'#fde68a':'var(--border)') + ';border-radius:10px;padding:14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:12px;">'
+      + '<div><div style="font-weight:700;font-size:14px;">📋 جرد ' + (r.mode === 'full' ? 'كامل' : 'مخصص') + ' — ' + escHtml(r.branchName) + ' ' + tag + '</div>'
       + '<div style="font-size:12px;color:var(--text-muted);margin-top:3px;">'
-      + new Date(r.appliedAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })
-      + ' — ' + escHtml(r.appliedBy || '') + '</div>'
+      + new Date(r.countedAt || r.appliedAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })
+      + ' — ' + escHtml(r.countedBy || r.appliedBy || '') + '</div>'
       + '<div style="font-size:12px;color:var(--text-muted);margin-top:3px;">'
       + r.summary.counted + ' صنف اتعدّ · ' + r.summary.variances + ' فرق</div></div>'
       + '<div style="text-align:left;white-space:nowrap;">'
@@ -6438,6 +6510,17 @@ function openStocktakeSettlement(id) {
   _lastSettlementId = id;
   document.getElementById('stocktakeHistoryModal').classList.add('hidden');
   document.getElementById('stocktakeSettlementBody').innerHTML = _renderSettlementHTML(r);
+
+  // Approval controls live in the footer, outside the printed body — a PDF of
+  // the settlement shouldn't carry buttons.
+  const foot    = document.getElementById('stocktakeApproveBar');
+  const pending = stocktakeStatus(r) === 'pending';
+  foot.innerHTML = !pending ? ''
+    : isRealOwner
+      ? '<button class="btn btn-danger btn-sm" onclick="cancelStocktakeSettlement(' + r.id + ')">❌ إلغاء التسوية</button>'
+        + '<button class="btn btn-success" onclick="applyStocktakeToStock(' + r.id + ')">✅ اعتماد وتطبيق على المخزون</button>'
+      : '<span style="font-size:12px;color:var(--text-muted);">⏳ في انتظار اعتماد المالك</span>';
+
   document.getElementById('stocktakeSettlementModal').classList.remove('hidden');
 }
 
@@ -6477,11 +6560,28 @@ function _renderSettlementHTML(r) {
   };
   const when = function (t) { return new Date(t).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' }); };
 
-  return '<div style="margin-bottom:14px;font-size:13px;line-height:1.9;">'
+  const st = stocktakeStatus(r);
+  const banner = st === 'pending'
+    ? '<div style="background:#fef9c3;color:#854d0e;border:1px solid #fde68a;padding:12px 14px;border-radius:8px;margin-bottom:14px;font-weight:600;">'
+      + '⏳ في انتظار الاعتماد — <strong>المخزون لسه ما اتغيّرش.</strong> راجع الأعداد كويس، وبعدين المالك يعتمدها.</div>'
+    : st === 'cancelled'
+    ? '<div style="background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;padding:12px 14px;border-radius:8px;margin-bottom:14px;font-weight:600;">'
+      + '❌ تسوية ملغية — المخزون ما اتغيّرش.</div>'
+    : '<div style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;padding:12px 14px;border-radius:8px;margin-bottom:14px;font-weight:600;">'
+      + '✅ معتمدة ومطبّقة على المخزون</div>';
+
+  return banner
+    + '<div style="margin-bottom:14px;font-size:13px;line-height:1.9;">'
     + '<strong>الفرع:</strong> ' + escHtml(r.branchName)
     + ' &nbsp;·&nbsp; <strong>نوع الجرد:</strong> ' + (r.mode === 'full' ? 'كامل' : 'مخصص')
     + '<br><strong>بدأ:</strong> ' + when(r.startedAt) + ' &nbsp;·&nbsp; <strong>بواسطة:</strong> ' + escHtml(r.startedBy || '—')
-    + '<br><strong>اتطبّق:</strong> ' + when(r.appliedAt) + ' &nbsp;·&nbsp; <strong>بواسطة:</strong> ' + escHtml(r.appliedBy || '—')
+    + '<br><strong>اتقفل العدّ:</strong> ' + when(r.countedAt || r.appliedAt) + ' &nbsp;·&nbsp; <strong>بواسطة:</strong> ' + escHtml(r.countedBy || r.appliedBy || '—')
+    + (st === 'applied' && r.appliedAt
+        ? '<br><strong>اتعتمد وطُبّق:</strong> ' + when(r.appliedAt) + ' &nbsp;·&nbsp; <strong>بواسطة:</strong> ' + escHtml(r.appliedBy || '—')
+        : '')
+    + (st === 'cancelled' && r.cancelledAt
+        ? '<br><strong>اتلغى:</strong> ' + when(r.cancelledAt) + ' &nbsp;·&nbsp; <strong>بواسطة:</strong> ' + escHtml(r.cancelledBy || '—')
+        : '')
     + '</div>'
 
     + '<div class="stats-grid">'
@@ -12904,7 +13004,7 @@ function switchHRTab(tab) {
     <div id="stockCountReviewBody"></div>
     <div class="modal-footer" style="margin-top:14px;">
       <button class="btn btn-gray" onclick="document.getElementById('stockCountReviewModal').classList.add('hidden')">رجوع للجرد</button>
-      <button class="btn btn-primary" onclick="applyStockCount()">💾 تطبيق الجرد على المخزون</button>
+      <button class="btn btn-primary" onclick="finishStockCount()">💾 إنهاء الجرد وإصدار التسوية</button>
     </div>
   </div>
 </div>
@@ -12932,6 +13032,9 @@ function switchHRTab(tab) {
     <div class="modal-footer" style="margin-top:14px;">
       <button class="btn btn-gray" onclick="document.getElementById('stocktakeSettlementModal').classList.add('hidden')">إغلاق</button>
       <button class="btn btn-primary" onclick="exportStocktakeSettlementPDF()">🖨️ تصدير PDF</button>
+      <!-- أزرار الاعتماد بتتحط هنا من openStocktakeSettlement — بره جسم
+           المستند عشان الـ PDF مايطلعش وفيه أزرار -->
+      <span id="stocktakeApproveBar" style="display:flex;gap:10px;"></span>
     </div>
   </div>
 </div>
