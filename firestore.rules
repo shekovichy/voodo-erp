@@ -283,6 +283,35 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ── STOCK-TAKE RECORDS (تسوية الجرد) — one document per count ──
+    // An applied count is an accounting record: what was counted, what the
+    // variances were worth at the cost of the day, and who applied it. Kept
+    // per-document and immutable for the same reason as pos_audit — a rule can
+    // enforce "never changes once written" on a document, but not on entries
+    // inside a shared array.
+    //
+    // Whoever can apply a count can already write that branch's inventory (the
+    // rule below), so create is not gated any further than that; it is the
+    // record of the write, not the authority for it.
+    match /pos_stocktakes/{takeId} {
+      allow read: if isOwner() || (
+        signedIn() && exists(/databases/$(database)/documents/roles/$(request.auth.uid)) && (
+          get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin' ||
+          get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.branchId == resource.data.branchId
+        )
+      );
+      allow create: if isOwner() || (
+        signedIn() && exists(/databases/$(database)/documents/roles/$(request.auth.uid)) && (
+          get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin' ||
+          get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.branchId == request.resource.data.branchId ||
+          get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.branchId == 'wh'
+        )
+      );
+      // Immutable once written — an adjusted reconciliation is worth nothing.
+      allow update: if false;
+      allow delete: if isOwner();
+    }
+
     // ── PRICE-CHANGE APPROVALS — one document per request ─────────
     // Replaces the shared pos_data/price_approvals document, which could not
     // be secured: a rule gates a whole document, so every account allowed to

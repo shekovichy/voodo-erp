@@ -10,6 +10,82 @@
 let _stockCountSession   = null; // { branchId, mode, startedAt, startedBy, items:[{code,name,expectedQty,countedQty}] }
 let _stockCountPendingRows = null; // parsed rows from an uploaded custom-count sheet, before "ابدأ الجرد" is clicked
 
+// ── Completed stock-takes (تسوية الجرد) ────────────────────────────
+// Applying a count used to leave nothing behind but one audit-log line —
+// item names and quantities, no codes and no costs — so there was no way to
+// produce a reconciliation afterwards. Each applied count is now kept as its
+// own immutable document (pos_stocktakes/{id}), same pattern as pos_audit:
+// a record of what was counted, what it was worth, and who did it.
+//
+// Fetched on demand rather than through a listener — counts are occasional
+// and historical, so a permanent subscription to a collection that only grows
+// would cost more than it's worth.
+let _stocktakesCache = null;
+function getStocktakes() {
+  if (!_stocktakesCache) _stocktakesCache = DB.g('pos_stocktakes', []);
+  return _stocktakesCache;
+}
+
+// The snapshot is taken from the session plus the cost of each item at the
+// moment of applying — cost is what values a variance, and looking it up
+// later would price the count with whatever cost happens to be current then.
+function _buildStocktakeRecord(s) {
+  const inv = getInv(s.branchId);
+  const items = s.items.map(function (i) {
+    const p    = inv.find(x => x.code === i.code);
+    const cost = p ? (parseFloat(p.cost) || 0) : 0;
+    const diff = i.countedQty === null ? 0 : i.countedQty - i.expectedQty;
+    return {
+      code: i.code, name: i.name, cost: cost,
+      expectedQty: i.expectedQty,
+      countedQty:  i.countedQty,          // null = لم يُعد
+      diff:        diff,
+      value:       diff * cost,
+      notInSystem: !!i._notInSystem,
+    };
+  });
+
+  const counted   = items.filter(i => i.countedQty !== null);
+  const applied   = counted.filter(i => i.diff !== 0 && !i.notInSystem);
+  const surplus   = applied.filter(i => i.diff > 0).reduce((t, i) => t + i.value, 0);
+  const shortage  = applied.filter(i => i.diff < 0).reduce((t, i) => t + i.value, 0);
+
+  return {
+    id: Date.now(),
+    branchId:   s.branchId,
+    branchName: getBranchName(s.branchId),
+    mode:       s.mode,
+    startedAt:  s.startedAt,
+    startedBy:  s.startedBy,
+    appliedAt:  Date.now(),
+    appliedBy:  currentUsername || currentUser || '',
+    items:      items,
+    summary: {
+      total:        items.length,
+      counted:      counted.length,
+      uncounted:    items.length - counted.length,
+      matched:      counted.filter(i => i.diff === 0).length,
+      variances:    applied.length,
+      skipped:      counted.filter(i => i.diff !== 0 && i.notInSystem).length,
+      surplusValue: surplus,
+      shortageValue: shortage,          // سالب
+      netValue:     surplus + shortage,
+    },
+  };
+}
+
+function _saveStocktake(rec) {
+  const list = getStocktakes();
+  list.unshift(rec);
+  _stocktakesCache = list.slice(0, 100);      // مرآة محلية محدودة
+  DB.s('pos_stocktakes', _stocktakesCache);
+  if (_fbReady && _db) {
+    _db.collection('pos_stocktakes').doc(String(rec.id))
+       .set(rec)
+       .catch(function (e) { console.error('_saveStocktake:', e); });
+  }
+}
+
 function _stockCountKey(branchId) { return `pos_stocktake_${branchId}`; }
 function _persistStockCount() {
   if (!_stockCountSession) return;
@@ -219,11 +295,16 @@ function applyStockCount() {
   const s = _stockCountSession; if (!s) return;
   const variances = s.items.filter(i => i.countedQty !== null && i.countedQty !== i.expectedQty && !i._notInSystem);
 
+  // Snapshot BEFORE adjustStock — expectedQty is only the pre-count quantity
+  // until the write lands, and cost is read from the same pre-write inventory.
+  const record = _buildStocktakeRecord(s);
+
   if (variances.length) {
     // One transactional bulk update (see adjustStock) — items that match
     // their expected count need no write at all.
     adjustStock(variances.map(i => ({ code: i.code, set: { qty: i.countedQty } })), s.branchId);
   }
+  _saveStocktake(record);
 
   const changes = variances.map(i => ({ label: i.name, before: String(i.expectedQty), after: String(i.countedQty) }));
   const countedTotal = s.items.filter(i => i.countedQty !== null).length;
@@ -236,4 +317,154 @@ function applyStockCount() {
   document.getElementById('stockCountReviewModal').classList.add('hidden');
   renderInventory();
   showToast(`✅ تم تطبيق الجرد — ${variances.length} صنف اتصحّحت كميته`);
+  // Straight to the reconciliation: it's the document you actually wanted out
+  // of the count, and this is the one moment you're certain to be looking.
+  openStocktakeSettlement(record.id);
+}
+
+// ══════════════════════════════════════════════
+// سجل الجردات + تسوية الجرد
+// ══════════════════════════════════════════════
+let _lastSettlementId = null;
+
+// Fetched on open rather than subscribed to — see the note on getStocktakes().
+// ⚠️ The query has to mirror the rule: everyone may read their own branch's
+// counts and only an admin may read them all. Firestore rejects a whole query
+// it cannot prove safe rather than trimming it, so widening either branch here
+// without widening the rule breaks the screen outright.
+async function openStocktakeHistory() {
+  const body = document.getElementById('stocktakeHistoryBody');
+  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-muted);">جاري التحميل...</div>';
+  document.getElementById('stocktakeHistoryModal').classList.remove('hidden');
+
+  if (_fbReady && _db) {
+    try {
+      const col = _db.collection('pos_stocktakes');
+      const q   = (currentUser === 'admin')
+        ? col.orderBy('appliedAt', 'desc').limit(100)
+        : col.where('branchId', '==', currentBranch);
+      const snap = await q.get();
+      _stocktakesCache = snap.docs.map(d => d.data())
+                             .sort((a, b) => (b.appliedAt || 0) - (a.appliedAt || 0));
+      DB.s('pos_stocktakes', _stocktakesCache.slice(0, 100));
+    } catch (e) {
+      console.error('openStocktakeHistory:', e);   // نكمل على المرآة المحلية
+    }
+  }
+  renderStocktakeHistory();
+}
+
+function renderStocktakeHistory() {
+  const list = getStocktakes();
+  const body = document.getElementById('stocktakeHistoryBody');
+  if (!list.length) {
+    body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">مفيش جردات متسجّلة لسه</div>';
+    return;
+  }
+  body.innerHTML = list.map(function (r) {
+    const net = r.summary.netValue;
+    const col = net === 0 ? 'var(--text-muted)' : (net > 0 ? '#1d4ed8' : 'var(--danger)');
+    return '<div onclick="openStocktakeSettlement(' + r.id + ')" style="cursor:pointer;background:white;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:12px;">'
+      + '<div><div style="font-weight:700;font-size:14px;">📋 جرد ' + (r.mode === 'full' ? 'كامل' : 'مخصص') + ' — ' + escHtml(r.branchName) + '</div>'
+      + '<div style="font-size:12px;color:var(--text-muted);margin-top:3px;">'
+      + new Date(r.appliedAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })
+      + ' — ' + escHtml(r.appliedBy || '') + '</div>'
+      + '<div style="font-size:12px;color:var(--text-muted);margin-top:3px;">'
+      + r.summary.counted + ' صنف اتعدّ · ' + r.summary.variances + ' فرق</div></div>'
+      + '<div style="text-align:left;white-space:nowrap;">'
+      + '<div style="font-size:11px;color:var(--text-muted);">صافي التسوية</div>'
+      + '<div style="font-size:18px;font-weight:800;color:' + col + ';">' + fmt(net) + ' ج</div>'
+      + '</div></div>';
+  }).join('');
+}
+
+function openStocktakeSettlement(id) {
+  const r = getStocktakes().find(x => x.id === id);
+  if (!r) { showToast('التسوية مش موجودة'); return; }
+  _lastSettlementId = id;
+  document.getElementById('stocktakeHistoryModal').classList.add('hidden');
+  document.getElementById('stocktakeSettlementBody').innerHTML = _renderSettlementHTML(r);
+  document.getElementById('stocktakeSettlementModal').classList.remove('hidden');
+}
+
+function _settlementRow(i, showValue) {
+  const col = i.diff > 0 ? '#1d4ed8' : (i.diff < 0 ? 'var(--danger)' : 'inherit');
+  return '<tr><td style="font-size:12px;">' + escHtml(i.code) + '</td>'
+    + '<td>' + escHtml(i.name) + (i.notInSystem ? ' <span style="color:var(--danger);font-size:11px;">(مش في النظام)</span>' : '') + '</td>'
+    + '<td>' + i.expectedQty + '</td>'
+    + '<td>' + (i.countedQty === null ? '—' : i.countedQty) + '</td>'
+    + '<td style="font-weight:700;color:' + col + ';">' + (i.diff > 0 ? '+' : '') + i.diff + '</td>'
+    + (showValue ? '<td style="font-weight:700;color:' + col + ';">' + fmt(i.value) + ' ج</td>' : '')
+    + '</tr>';
+}
+
+function _settlementTable(items, showValue) {
+  return '<div class="table-wrap"><table><thead><tr>'
+    + '<th>الكود</th><th>المنتج</th><th>المتوقع</th><th>المعدود</th><th>الفرق</th>'
+    + (showValue ? '<th>قيمة الفرق</th>' : '')
+    + '</tr></thead><tbody>'
+    + items.map(function (i) { return _settlementRow(i, showValue); }).join('')
+    + '</tbody></table></div>';
+}
+
+// Rendered into a real element so exportReportPDF() (05-utils.js) can lift it
+// into a print window — the same path every other report PDF takes. Its
+// stylesheet already styles .stats-grid/.stat-card/table, so the print copy
+// comes out formatted without a second set of styles here.
+function _renderSettlementHTML(r) {
+  const s         = r.summary;
+  const variances = r.items.filter(function (i) { return i.countedQty !== null && i.diff !== 0; });
+  const matched   = r.items.filter(function (i) { return i.countedQty !== null && i.diff === 0; });
+  const uncounted = r.items.filter(function (i) { return i.countedQty === null; });
+  const netCol    = s.netValue === 0 ? '#1a2b4a' : (s.netValue > 0 ? '#1d4ed8' : '#dc2626');
+  const card = function (label, value, color) {
+    return '<div class="stat-card"><div class="stat-label">' + label + '</div>'
+      + '<div class="stat-value" style="color:' + (color || '#1a5faf') + ';">' + value + '</div></div>';
+  };
+  const when = function (t) { return new Date(t).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' }); };
+
+  return '<div style="margin-bottom:14px;font-size:13px;line-height:1.9;">'
+    + '<strong>الفرع:</strong> ' + escHtml(r.branchName)
+    + ' &nbsp;·&nbsp; <strong>نوع الجرد:</strong> ' + (r.mode === 'full' ? 'كامل' : 'مخصص')
+    + '<br><strong>بدأ:</strong> ' + when(r.startedAt) + ' &nbsp;·&nbsp; <strong>بواسطة:</strong> ' + escHtml(r.startedBy || '—')
+    + '<br><strong>اتطبّق:</strong> ' + when(r.appliedAt) + ' &nbsp;·&nbsp; <strong>بواسطة:</strong> ' + escHtml(r.appliedBy || '—')
+    + '</div>'
+
+    + '<div class="stats-grid">'
+    + card('إجمالي الأصناف', s.total)
+    + card('اتعدّ', s.counted)
+    + card('مطابق', s.matched, '#16a34a')
+    + card('فيه فرق', s.variances, s.variances ? '#dc2626' : '#16a34a')
+    + '</div>'
+    + '<div class="stats-grid">'
+    + card('قيمة الزيادة', fmt(s.surplusValue) + ' ج', '#1d4ed8')
+    + card('قيمة العجز', fmt(s.shortageValue) + ' ج', '#dc2626')
+    + card('صافي التسوية', fmt(s.netValue) + ' ج', netCol)
+    + card('ماتعدّش', s.uncounted, s.uncounted ? '#d97706' : '#16a34a')
+    + '</div>'
+
+    + (variances.length
+        ? '<h3 style="font-size:15px;margin:18px 0 8px;">الفروقات (' + variances.length + ')</h3>' + _settlementTable(variances, true)
+        : '<div style="background:#dcfce7;color:#166534;padding:10px 14px;border-radius:8px;margin:16px 0;font-weight:600;">✅ مفيش أي فروقات — الجرد مطابق بالكامل</div>')
+
+    + (s.skipped
+        ? '<div style="background:#fee2e2;color:#b91c1c;padding:10px 14px;border-radius:8px;margin:12px 0;font-size:13px;">⚠️ ' + s.skipped + ' صنف فيه فرق بس مش موجود في مخزون النظام — كميته ماتغيرتش، لازم يتضاف يدوي.</div>'
+        : '')
+
+    + (matched.length
+        ? '<h3 style="font-size:15px;margin:18px 0 8px;">الأصناف المطابقة (' + matched.length + ')</h3>' + _settlementTable(matched, false)
+        : '')
+
+    + (uncounted.length
+        ? '<h3 style="font-size:15px;margin:18px 0 8px;">أصناف ماتعدّتش (' + uncounted.length + ')</h3>'
+          + '<div style="font-size:12px;color:#666;margin-bottom:6px;">كمياتها ماتغيرتش في المخزون.</div>'
+          + _settlementTable(uncounted, false)
+        : '');
+}
+
+function exportStocktakeSettlementPDF() {
+  const r = getStocktakes().find(function (x) { return x.id === _lastSettlementId; });
+  if (!r) return;
+  exportReportPDF('stocktakeSettlementBody',
+    'تسوية جرد المخزون — ' + r.branchName + ' — ' + new Date(r.appliedAt).toLocaleDateString('ar-EG'));
 }

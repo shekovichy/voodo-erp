@@ -188,6 +188,33 @@ async function main() {
   // إيميل المالك هو الحاجة الوحيدة اللي بتعرّفه (الحساب مالوش roles/{uid})،
   // وإيميل غير متحقق منه مش إثبات ملكية. اتضاف في 2026-08-15 بعد ما الحساب
   // الحقيقي اتفعّل — قبل كده كان هيقفل المالك بره كل حاجة.
+  console.log('\n\x1b[1mسجل الجردات (تسوية) — مستند لكل جرد، لا يتعدّل\x1b[0m');
+  const TAKE = (over = {}) => Object.assign({
+    id: 5, branchId: 'b5', branchName: 'باكوس', mode: 'full',
+    startedAt: Date.now(), appliedAt: Date.now(), appliedBy: 'c',
+    items: [], summary: { total: 0, counted: 0, variances: 0, netValue: 0 }
+  }, over);
+  await check('الكاشير يسجّل جرد فرعه',
+    assertSucceeds(setDoc(doc(cashier(), 'pos_stocktakes/t1'), TAKE())));
+  await check('⭐ مايسجّلش جرد باسم فرع تاني',
+    assertFails(setDoc(doc(cashier(), 'pos_stocktakes/t2'), TAKE({ branchId: 'b1' }))));
+  await check('الأدمن يسجّل جرد أي فرع',
+    assertSucceeds(setDoc(doc(admin(), 'pos_stocktakes/t3'), TAKE({ branchId: 'b1' }))));
+  await check('⭐ التسوية ماتتعدلش بعد ما تتكتب',
+    assertFails(setDoc(doc(admin(), 'pos_stocktakes/t1'), TAKE({ appliedBy: 'مزوّر' }))));
+  await check('ولا حتى المالك يعدّلها',
+    assertFails(setDoc(doc(owner(), 'pos_stocktakes/t1'), TAKE({ appliedBy: 'مزوّر' }))));
+  await check('الكاشير يقرا تسوية فرعه',
+    assertSucceeds(getDoc(doc(cashier(), 'pos_stocktakes/t1'))));
+  await check('⭐ مايقراش تسوية فرع تاني',
+    assertFails(getDoc(doc(cashier(), 'pos_stocktakes/t3'))));
+  await check('الأدمن يقرا أي تسوية',
+    assertSucceeds(getDoc(doc(admin(), 'pos_stocktakes/t1'))));
+  await check('حساب من غير role مايقراش',
+    assertFails(getDoc(doc(noRole(), 'pos_stocktakes/t1'))));
+  await check('الكاشير مايمسحش تسوية',
+    assertFails(require('firebase/firestore').deleteDoc(doc(cashier(), 'pos_stocktakes/t1'))));
+
   console.log('\n\x1b[1mالمالك لازم يكون إيميله متحقق منه\x1b[0m');
   await check('المالك المتحقق يقرا roles (سلطة كاملة)',
     assertSucceeds(getDoc(doc(owner(), 'roles/uid_admin'))));

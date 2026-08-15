@@ -380,6 +380,7 @@
             <button class="btn btn-outline" onclick="openVlookupModal()" style="background:#f0fdf4;color:#15803d;border-color:#bbf7d0;">🔗 VLOOKUP من Excel</button>
             <button class="btn btn-outline" onclick="openBarcodeModal()">🏷️ طباعة باركود / أسعار</button>
             <button class="btn btn-outline" id="stockCountBtn" onclick="openStockCountStartModal()" style="background:#fef9c3;color:#854d0e;border-color:#fde68a;">📋 جرد المخزون</button>
+            <button class="btn btn-outline" id="stocktakeHistoryBtn" onclick="openStocktakeHistory()" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe;">📄 سجل الجردات والتسويات</button>
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <select class="form-control" id="invBranchFilter" onchange="renderInventory()" style="width:150px;font-size:13px;font-weight:600;color:#1d4ed8;"></select>
@@ -2660,6 +2661,33 @@
     <div class="modal-footer" style="margin-top:14px;">
       <button class="btn btn-gray" onclick="document.getElementById('stockCountReviewModal').classList.add('hidden')">رجوع للجرد</button>
       <button class="btn btn-primary" onclick="applyStockCount()">💾 تطبيق الجرد على المخزون</button>
+    </div>
+  </div>
+</div>
+
+<!-- سجل الجردات — كل جرد اتطبّق متسجّل كتسوية دائمة -->
+<div id="stocktakeHistoryModal" class="modal-overlay hidden">
+  <div class="modal" style="width:680px;max-width:96vw;max-height:90vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <h2 style="margin:0;">📄 سجل الجردات</h2>
+      <button class="btn btn-gray btn-sm" onclick="document.getElementById('stocktakeHistoryModal').classList.add('hidden')">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">اضغط على أي جرد عشان تفتح تسويته وتطبعها.</div>
+    <div id="stocktakeHistoryBody"></div>
+  </div>
+</div>
+
+<!-- تسوية الجرد — المستند اللي بيتصدّر PDF -->
+<div id="stocktakeSettlementModal" class="modal-overlay hidden">
+  <div class="modal" style="width:860px;max-width:96vw;max-height:90vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <h2 style="margin:0;">🧾 تسوية جرد المخزون</h2>
+      <button class="btn btn-gray btn-sm" onclick="document.getElementById('stocktakeSettlementModal').classList.add('hidden')">✕</button>
+    </div>
+    <div id="stocktakeSettlementBody"></div>
+    <div class="modal-footer" style="margin-top:14px;">
+      <button class="btn btn-gray" onclick="document.getElementById('stocktakeSettlementModal').classList.add('hidden')">إغلاق</button>
+      <button class="btn btn-primary" onclick="exportStocktakeSettlementPDF()">🖨️ تصدير PDF</button>
     </div>
   </div>
 </div>
