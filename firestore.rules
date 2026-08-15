@@ -218,12 +218,34 @@ service cloud.firestore {
     // confirmWhTransfer in 95-warehouse.js / "وضع مخزن فقط" in
     // FEATURES.md). No role other than admin/wh ever needs cross-branch
     // inventory access, matching how the UI already gates transfers.
+    // ⚠️ The 'admin' arm is gated on the permission tree (2026-08-15). It used
+    // to be an unconditional bypass, which quietly undid the whole point of the
+    // owner setting each account's access one tab at a time: an account labelled
+    // admin reached EVERY branch's stock no matter what its tree said. 'admin'
+    // has been a label since 2026-07-20 — this makes the rule agree.
+    //
+    // The other two arms are untouched and are what cashiers actually rely on:
+    // access comes from owning the branch, not from a tab grant. That is why
+    // `inventory` is enforced:false in DEPARTMENTS — the tab gate would lock a
+    // cashier out of their own job — and gating only the admin arm keeps that
+    // true while closing the hole.
     match /pos_data/inventory/branches/{branchId} {
-      allow read, write: if isOwner() || (
+      allow read: if isOwner() || (
         signedIn() &&
         exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
         (
-          get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin' ||
+          (get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin' &&
+           _tabOk(get(/databases/$(database)/documents/roles/$(request.auth.uid)).data, 'inventory', 'view')) ||
+          get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.branchId == branchId ||
+          get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.branchId == 'wh'
+        )
+      );
+      allow write: if isOwner() || (
+        signedIn() &&
+        exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
+        (
+          (get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin' &&
+           _tabOk(get(/databases/$(database)/documents/roles/$(request.auth.uid)).data, 'inventory', 'write')) ||
           get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.branchId == branchId ||
           get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.branchId == 'wh'
         )
@@ -247,12 +269,26 @@ service cloud.firestore {
     // confirmed complete.
     match /pos_sales/{month} {
       allow read, write: if isOwner();
+      // Same change as inventory above: the 'admin' arm now has to be backed by
+      // the 'sales' tab in that account's tree. A cashier is unaffected — they
+      // reach their own branch through the branchId arm, which is what makes
+      // completing a sale work regardless of any tab grant.
       match /branches/{branchId} {
-        allow read, write: if isOwner() || (
+        allow read: if isOwner() || (
           signedIn() &&
           exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
           (
-            get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin' ||
+            (get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin' &&
+             _tabOk(get(/databases/$(database)/documents/roles/$(request.auth.uid)).data, 'sales', 'view')) ||
+            get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.branchId == branchId
+          )
+        );
+        allow write: if isOwner() || (
+          signedIn() &&
+          exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
+          (
+            (get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin' &&
+             _tabOk(get(/databases/$(database)/documents/roles/$(request.auth.uid)).data, 'sales', 'write')) ||
             get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.branchId == branchId
           )
         );

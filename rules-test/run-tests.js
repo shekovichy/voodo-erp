@@ -257,6 +257,44 @@ async function main() {
   await check('ومايوصلش لمبيعات فرع تاني',
     assertFails(getDoc(doc(ownerUnverified(), 'pos_sales/2026-08/branches/b1'))));
 
+  // «أدمن» لقب من 2026-07-20 والصلاحيات الفعلية من الشجرة. القاعدة كانت
+  // بتتجاهل ده وتدي أي حساب بلقب admin كل الفروع. الحسابات دي منسوخة من
+  // حسابات حقيقية في الإنتاج عشان الاختبار يعكس الأثر الفعلي.
+  console.log('\n\x1b[1mلقب "أدمن" مايتخطاش شجرة الصلاحيات\x1b[0m');
+  const P = (over) => Object.assign({
+    inventory: { view: false, write: false }, sales: { view: false, write: false }
+  }, over);
+  await env.withSecurityRulesDisabled(async ctx => {
+    const db = ctx.firestore();
+    // maryam: أدمن قراءة بس
+    await setDoc(doc(db, 'roles/uid_ro'),   { role: 'admin', username: 'ro', branchId: null,
+      permissions: P({ inventory: { view: true, write: false }, sales: { view: true, write: false } }) });
+    // tarek2: أدمن مخزون بس، ممنوع من المبيعات
+    await setDoc(doc(db, 'roles/uid_inv'),  { role: 'admin', username: 'inv', branchId: null,
+      permissions: P({ inventory: { view: true, write: true } }) });
+    await setDoc(doc(db, 'pos_data/inventory/branches/b1'), { items: [] });
+    await setDoc(doc(db, 'pos_sales/2026-08/branches/b1'), { items: [] });
+  });
+  const ro  = () => env.authenticatedContext('uid_ro',  { email: 'ro@voodo-pos.local' }).firestore();
+  const inv = () => env.authenticatedContext('uid_inv', { email: 'inv@voodo-pos.local' }).firestore();
+
+  await check('أدمن قراءة: يقرا المخزون',
+    assertSucceeds(getDoc(doc(ro(), 'pos_data/inventory/branches/b1'))));
+  await check('⭐ أدمن قراءة: مايكتبش المخزون (الشجرة بتمنعه)',
+    assertFails(setDoc(doc(ro(), 'pos_data/inventory/branches/b1'), { items: [1] })));
+  await check('أدمن قراءة: يقرا المبيعات',
+    assertSucceeds(getDoc(doc(ro(), 'pos_sales/2026-08/branches/b1'))));
+  await check('⭐ أدمن قراءة: مايكتبش المبيعات',
+    assertFails(setDoc(doc(ro(), 'pos_sales/2026-08/branches/b1'), { items: [1] })));
+  await check('أدمن المخزون: يقرا ويكتب المخزون',
+    assertSucceeds(setDoc(doc(inv(), 'pos_data/inventory/branches/b1'), { items: [2] })));
+  await check('⭐ أدمن المخزون: مايقراش المبيعات خالص (sales=false)',
+    assertFails(getDoc(doc(inv(), 'pos_sales/2026-08/branches/b1'))));
+  await check('⭐ ومايكتبش المبيعات',
+    assertFails(setDoc(doc(inv(), 'pos_sales/2026-08/branches/b1'), { items: [1] })));
+  await check('الكاشير لسه بيوصل لفرعه من غير أي منح تبويب',
+    assertSucceeds(getDoc(doc(cashier(), 'pos_data/inventory/branches/b5'))));
+
   console.log('\n\x1b[1mانحدار — باقي النظام لسه محمي\x1b[0m');
   await check('مفيش role = مفيش وصول لـ pos_data',
     assertFails(getDoc(doc(noRole(), 'pos_data/settings'))));
