@@ -6219,6 +6219,7 @@ function stockCountScanEnter() {
   const input = document.getElementById('stockCountScanInput');
   const code = input.value.trim();
   input.value = '';
+  hideStockCountDropdown();
   if (!code) return;
   const s = _stockCountSession; if (!s) return;
 
@@ -6306,6 +6307,71 @@ function stockCountAbsorbNewProduct(prod) {
 function addUnknownStockCountItem(idx) {
   const s = _stockCountSession; if (!s || !s.items[idx]) return;
   promptAddProductDuringCount(s.items[idx].code);
+}
+
+// ── Search while counting ───────────────────────────────────────────
+// A barcode gun types the whole code and hits Enter, which is what the input
+// was built for. Counting by hand is not that: you have the item in your hand
+// and part of its name, and typing a 13-digit code to find it is the slow way.
+// Same substring search the cashier screen uses, over the count's own list.
+function hideStockCountDropdown() {
+  document.getElementById('stockCountDropdown')?.classList.add('hidden');
+}
+
+function stockCountSearchInput() {
+  const s  = _stockCountSession;
+  const dd = document.getElementById('stockCountDropdown');
+  if (!s || !dd) return;
+  const q = document.getElementById('stockCountScanInput').value.trim().toLowerCase();
+  // One character matches most of the branch — not a useful list. A gun typing
+  // a full code passes through here too, and Enter fires before it matters.
+  if (q.length < 2) { hideStockCountDropdown(); return; }
+
+  const matches = s.items
+    .map(function (it, idx) { return { it: it, idx: idx }; })
+    .filter(function (m) {
+      return m.it.code.toLowerCase().includes(q) || (m.it.name || '').toLowerCase().includes(q);
+    });
+
+  if (!matches.length) {
+    dd.innerHTML = '<div style="padding:10px;font-size:12px;color:var(--text-muted);">مفيش صنف بالاسم أو الكود ده في الجرد — لو الصنف موجود فعلاً، اكتب كوده كامل واضغط Enter عشان يتضاف.</div>';
+    dd.classList.remove('hidden');
+    return;
+  }
+
+  dd.innerHTML = matches.slice(0, 12).map(function (m) {
+    const done = m.it.countedQty !== null;
+    const tag  = done
+      ? '<span style="color:#15803d;font-size:11px;">اتعدّ: ' + m.it.countedQty + '</span>'
+      : '<span style="color:var(--text-muted);font-size:11px;">لسه</span>';
+    return '<div style="padding:8px 10px;cursor:pointer;font-size:13px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;gap:10px;"'
+      // mousedown, not click: blur fires first and would close the list before
+      // a click ever lands.
+      + ' onmousedown="pickStockCountItem(' + m.idx + ')">'
+      + '<span>' + escHtml(m.it.name) + '<br><span style="color:var(--text-muted);font-size:11px;">' + escHtml(m.it.code) + '</span></span>'
+      + '<span style="white-space:nowrap;">المتوقع: ' + m.it.expectedQty + '<br>' + tag + '</span>'
+      + '</div>';
+  }).join('');
+  dd.classList.remove('hidden');
+}
+
+// Jumps to the row and puts the cursor in its quantity box — you pick the item,
+// then type how many you counted, rather than the scan behaviour of +1 each time.
+function pickStockCountItem(idx) {
+  hideStockCountDropdown();
+  const input = document.getElementById('stockCountScanInput');
+  if (input) input.value = '';
+  const box = document.querySelector('#stockCountBody tr:nth-child(' + (idx + 1) + ') input[type="number"]');
+  if (!box) return;
+  box.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  box.focus();
+  box.select();
+  const row = box.closest('tr');
+  if (row) {
+    const prev = row.style.background;
+    row.style.background = '#fef9c3';
+    setTimeout(function () { row.style.background = prev; }, 1200);
+  }
 }
 
 function stockCountSetQty(idx, val) {
@@ -6489,7 +6555,13 @@ function cancelStocktakeSettlement(id) {
     r.cancelledBy = currentUsername || currentUser || '';
     _saveStocktake(r);
     addAuditLog('stocktake.cancel', 'إلغاء تسوية جرد ' + r.branchName, r.branchId);
-    openStocktakeSettlement(r.id);
+    // Refresh whichever screen asked — cancelling from the list shouldn't
+    // throw you into the settlement you just got rid of.
+    if (!document.getElementById('stocktakeHistoryModal').classList.contains('hidden')) {
+      renderStocktakeHistory();
+    } else {
+      openStocktakeSettlement(r.id);
+    }
     showToast('اتلغت التسوية — المخزون زي ما هو');
   });
 }
@@ -6555,9 +6627,16 @@ function renderStocktakeHistory() {
       + ' — ' + escHtml(r.countedBy || r.appliedBy || '') + '</div>'
       + '<div style="font-size:12px;color:var(--text-muted);margin-top:3px;">'
       + r.summary.counted + ' صنف اتعدّ · ' + r.summary.variances + ' فرق</div></div>'
-      + '<div style="text-align:left;white-space:nowrap;">'
+      + '<div style="text-align:left;white-space:nowrap;display:flex;align-items:center;gap:10px;">'
+      + '<div>'
       + '<div style="font-size:11px;color:var(--text-muted);">صافي التسوية</div>'
       + '<div style="font-size:18px;font-weight:800;color:' + col + ';">' + fmt(net) + ' ج</div>'
+      + '</div>'
+      // Straight from the list — a wrong count shouldn't need opening first.
+      // stopPropagation, or the row's own click reopens the settlement behind it.
+      + (st === 'pending' && isRealOwner
+          ? '<button class="btn btn-danger btn-sm" title="إلغاء الجرد ده" onclick="event.stopPropagation();cancelStocktakeSettlement(' + r.id + ')">🗑️ إلغاء</button>'
+          : '')
       + '</div></div>';
   }).join('');
 }
@@ -13048,7 +13127,11 @@ function switchHRTab(tab) {
         <button class="btn btn-gray btn-sm" onclick="document.getElementById('stockCountModal').classList.add('hidden')">✕ إغلاق مؤقتًا</button>
       </div>
     </div>
-    <input class="form-control" id="stockCountScanInput" placeholder="📷 امسح الباركود أو اكتب الكود واضغط Enter..." style="font-size:15px;margin-bottom:12px;" onkeydown="if(event.key==='Enter')stockCountScanEnter()" />
+    <div style="position:relative;margin-bottom:12px;">
+      <input class="form-control" id="stockCountScanInput" placeholder="📷 امسح الباركود، أو اكتب جزء من الكود/الاسم واختار من القايمة..." style="font-size:15px;"
+             oninput="stockCountSearchInput()" onkeydown="if(event.key==='Enter')stockCountScanEnter(); else if(event.key==='Escape')hideStockCountDropdown()" onblur="setTimeout(hideStockCountDropdown,150)" />
+      <div id="stockCountDropdown" class="hidden" style="position:absolute;top:100%;right:0;left:0;background:#fff;border:1px solid var(--border);border-radius:8px;max-height:240px;overflow-y:auto;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.1);"></div>
+    </div>
     <div class="table-wrap" style="max-height:50vh;">
       <table><thead><tr><th>الكود</th><th>المنتج</th><th>المتوقع</th><th>المعدود</th><th>الفرق</th><th>الحالة</th></tr></thead>
         <tbody id="stockCountBody"></tbody></table>

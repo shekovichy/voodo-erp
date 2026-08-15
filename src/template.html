@@ -2638,7 +2638,11 @@
         <button class="btn btn-gray btn-sm" onclick="document.getElementById('stockCountModal').classList.add('hidden')">✕ إغلاق مؤقتًا</button>
       </div>
     </div>
-    <input class="form-control" id="stockCountScanInput" placeholder="📷 امسح الباركود أو اكتب الكود واضغط Enter..." style="font-size:15px;margin-bottom:12px;" onkeydown="if(event.key==='Enter')stockCountScanEnter()" />
+    <div style="position:relative;margin-bottom:12px;">
+      <input class="form-control" id="stockCountScanInput" placeholder="📷 امسح الباركود، أو اكتب جزء من الكود/الاسم واختار من القايمة..." style="font-size:15px;"
+             oninput="stockCountSearchInput()" onkeydown="if(event.key==='Enter')stockCountScanEnter(); else if(event.key==='Escape')hideStockCountDropdown()" onblur="setTimeout(hideStockCountDropdown,150)" />
+      <div id="stockCountDropdown" class="hidden" style="position:absolute;top:100%;right:0;left:0;background:#fff;border:1px solid var(--border);border-radius:8px;max-height:240px;overflow-y:auto;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.1);"></div>
+    </div>
     <div class="table-wrap" style="max-height:50vh;">
       <table><thead><tr><th>الكود</th><th>المنتج</th><th>المتوقع</th><th>المعدود</th><th>الفرق</th><th>الحالة</th></tr></thead>
         <tbody id="stockCountBody"></tbody></table>
