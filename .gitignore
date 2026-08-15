@@ -3,3 +3,7 @@ rules-test/node_modules/
 firebase-debug.log
 firestore-debug.log
 ui-debug.log
+
+# وثائق تخطيط شخصية — محلية عن قصد (شوف 845a756)
+تقارير السيستم*.md
+مقارنة شاملة*.md
