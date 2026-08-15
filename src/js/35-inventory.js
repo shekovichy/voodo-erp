@@ -16,6 +16,19 @@ function invPageBranch() {
 }
 
 function renderInventory() {
+  // Stock-taking is an admin-only job by policy. Until now that rested
+  // entirely on the inventory tab itself being hidden from cashiers by the
+  // permissions tree (_FIXED_ROLE_GRANTS grants a cashier helpdesk and nothing
+  // else) — nothing in the code said so, so widening that tree even slightly
+  // would have exposed the buttons by accident. Say it here as well; the
+  // enforcement that actually counts is in firestore.rules, since `inventory`
+  // is enforced: false.
+  var isAdmin = (currentUser === 'admin');
+  ['stockCountBtn', 'stocktakeHistoryBtn'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = isAdmin ? '' : 'none';
+  });
+
   // Populate branch filter if empty
   var ibf = document.getElementById('invBranchFilter');
   if (ibf && ibf.options.length === 0) {

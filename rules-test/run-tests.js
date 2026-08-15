@@ -194,12 +194,18 @@ async function main() {
     startedAt: Date.now(), appliedAt: Date.now(), appliedBy: 'c',
     items: [], summary: { total: 0, counted: 0, variances: 0, netValue: 0 }
   }, over);
-  await check('الكاشير يسجّل جرد فرعه',
-    assertSucceeds(setDoc(doc(cashier(), 'pos_stocktakes/t1'), TAKE())));
-  await check('⭐ مايسجّلش جرد باسم فرع تاني',
+  // الجرد شغل أدمن بالسياسة من أول يوم — الكاشير مالوش صلاحية ولا بيقدر
+  // يفتح تبويب المخزون أصلاً. و`inventory` معلّم enforced:false، يعني
+  // القواعد دي هي المكان الوحيد اللي ينفع تفرض ده فيه فعلاً.
+  await check('⭐ الكاشير مايسجّلش جرد ولا حتى لفرعه',
+    assertFails(setDoc(doc(cashier(), 'pos_stocktakes/t1'), TAKE())));
+  await check('ولا لفرع تاني طبعاً',
     assertFails(setDoc(doc(cashier(), 'pos_stocktakes/t2'), TAKE({ branchId: 'b1' }))));
   await check('الأدمن يسجّل جرد أي فرع',
     assertSucceeds(setDoc(doc(admin(), 'pos_stocktakes/t3'), TAKE({ branchId: 'b1' }))));
+  await env.withSecurityRulesDisabled(async ctx => {
+    await setDoc(doc(ctx.firestore(), 'pos_stocktakes/t1'), TAKE());   // للقراءة تحت
+  });
   await check('⭐ التسوية ماتتعدلش بعد ما تتكتب',
     assertFails(setDoc(doc(admin(), 'pos_stocktakes/t1'), TAKE({ appliedBy: 'مزوّر' }))));
   await check('ولا حتى المالك يعدّلها',

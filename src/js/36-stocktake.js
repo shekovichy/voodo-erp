@@ -99,6 +99,10 @@ function _clearStockCountSession(branchId) {
 }
 
 function openStockCountStartModal() {
+  // Belt as well as braces: the button is hidden for non-admins (renderInventory)
+  // and firestore.rules refuses the record, but neither helps if this is reached
+  // some other way — a stale page, a console call, a future entry point.
+  if (currentUser !== 'admin') { showToast('الجرد للأدمن فقط'); return; }
   const b = invPageBranch();
   const existing = _loadStockCountSession(b);
   if (existing) {

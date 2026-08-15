@@ -290,9 +290,15 @@ service cloud.firestore {
     // enforce "never changes once written" on a document, but not on entries
     // inside a shared array.
     //
-    // Whoever can apply a count can already write that branch's inventory (the
-    // rule below), so create is not gated any further than that; it is the
-    // record of the write, not the authority for it.
+    // ADMIN ONLY. Stock-taking has been an admin-only job by policy since the
+    // feature was built — a cashier has no permission for it and cannot even
+    // open the inventory tab (_FIXED_ROLE_GRANTS in 00-core.js grants a cashier
+    // helpdesk and nothing else). The UI reflects that, but the UI is not a
+    // barrier: `inventory` is enforced: false in DEPARTMENTS, so these rules
+    // are the only place the policy can actually be enforced.
+    //
+    // Reads stay branch-scoped rather than admin-only so a branch manager can
+    // be shown their own settlements later without reopening this rule.
     match /pos_stocktakes/{takeId} {
       allow read: if isOwner() || (
         signedIn() && exists(/databases/$(database)/documents/roles/$(request.auth.uid)) && (
@@ -301,11 +307,8 @@ service cloud.firestore {
         )
       );
       allow create: if isOwner() || (
-        signedIn() && exists(/databases/$(database)/documents/roles/$(request.auth.uid)) && (
-          get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin' ||
-          get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.branchId == request.resource.data.branchId ||
-          get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.branchId == 'wh'
-        )
+        signedIn() && exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin'
       );
       // Immutable once written — an adjusted reconciliation is worth nothing.
       allow update: if false;
