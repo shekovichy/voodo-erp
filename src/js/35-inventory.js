@@ -192,6 +192,17 @@ function saveProduct() {
   }
   document.getElementById('productModal').classList.add('hidden');
   renderInventory();
+  // If a stock count opened this modal to create a missing product, hand the
+  // product straight back so the count picks it up — a full count's item list
+  // is snapshotted when it starts, so it would never see it otherwise.
+  if (typeof stockCountAbsorbNewProduct === 'function') stockCountAbsorbNewProduct(prod);
+}
+
+// Dismissing the modal has to go through here rather than hiding it inline,
+// so a count waiting behind it gets restored instead of being left buried.
+function closeProductModal() {
+  document.getElementById('productModal').classList.add('hidden');
+  if (typeof stockCountCancelAddProduct === 'function') stockCountCancelAddProduct();
 }
 
 function deleteProduct(code) {

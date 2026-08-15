@@ -210,7 +210,7 @@ function renderStockCountModal() {
       <td><input type="number" min="0" value="${done ? it.countedQty : ''}" placeholder="—" style="width:70px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;text-align:center;"
           onchange="stockCountSetQty(${idx}, this.value)" /></td>
       <td style="font-weight:700;color:${diff===null?'var(--text-muted)':diff===0?'var(--success)':'var(--danger)'};">${diff===null?'—':(diff>=0?'+':'')+diff}</td>
-      <td>${statusHtml}</td>
+      <td>${statusHtml}${it._notInSystem ? `<button onclick="addUnknownStockCountItem(${idx})" class="btn btn-sm" style="margin-right:6px;background:#dbeafe;color:#1d4ed8;border:1px solid #bfdbfe;padding:2px 8px;font-size:11px;">➕ ضيفه</button>` : ''}</td>
     </tr>`;
   }).join('');
 }
@@ -227,24 +227,88 @@ function stockCountScanEnter() {
 
   let idx = s.items.findIndex(i => i.code.toLowerCase() === code.toLowerCase());
   if (idx < 0) {
-    if (s.mode === 'custom') {
-      // Found something on the shelf that wasn't on the planned list —
-      // useful to know (e.g. misplaced stock from another branch), so add
-      // it rather than silently dropping the scan.
-      const prod = getInv(s.branchId).find(p => p.code.toLowerCase() === code.toLowerCase());
-      if (!prod) { showToast('⚠️ الكود ده مش معروف في السيستم خالص'); input.focus(); return; }
-      s.items.push({ code: prod.code, name: prod.name, expectedQty: prod.qty, countedQty: 0 });
-      idx = s.items.length - 1;
-    } else {
-      showToast('⚠️ الكود ده مش موجود في مخزون الفرع ده');
-      input.focus();
-      return;
-    }
+    // Found something on the shelf that wasn't on the list. If the system
+    // knows the product, just add it to the count (e.g. misplaced stock, or a
+    // full count whose snapshot predates it). If it doesn't know it at all,
+    // offer to create it — this used to be a dead end in both modes: the scan
+    // was dropped, and in a full count the item list is snapshotted at start,
+    // so adding the product from the inventory screen afterwards wouldn't have
+    // appeared here either. The only way through was to abandon the count.
+    const prod = getInv(s.branchId).find(p => p.code.toLowerCase() === code.toLowerCase());
+    if (!prod) { promptAddProductDuringCount(code); return; }
+    s.items.push({ code: prod.code, name: prod.name, expectedQty: prod.qty, countedQty: 0 });
+    idx = s.items.length - 1;
   }
   s.items[idx].countedQty = (s.items[idx].countedQty || 0) + 1;
   _persistStockCount();
   renderStockCountModal();
   input.focus();
+}
+
+// ── Adding a product mid-count ──────────────────────────────────────
+// Set while the product modal is open on behalf of a count, so saveProduct()
+// (35-inventory.js) can hand the new product straight back here instead of the
+// admin having to cancel the count, add the product, and start over.
+let _stockCountAddingCode = null;
+
+function promptAddProductDuringCount(code) {
+  const s = _stockCountSession; if (!s) return;
+  showConfirmModal(
+    'الكود "' + code + '" مش موجود في السيستم خالص — تحب تضيفه كمنتج جديد وتكمّل الجرد؟',
+    function () {
+      _stockCountAddingCode = code;
+      document.getElementById('stockCountModal').classList.add('hidden');
+      openProductModal(null);
+      document.getElementById('pm-code').value = code;
+      // Zero on purpose: the system genuinely holds none of it yet. The count
+      // supplies the real figure, so the variance comes out as the full
+      // quantity found — which is what the settlement should show and value.
+      document.getElementById('pm-qty').value = 0;
+      setTimeout(() => document.getElementById('pm-name')?.focus(), 80);
+    }
+  );
+}
+
+// Called when the product modal is dismissed without saving — otherwise the
+// count modal stays hidden behind it and the admin is stranded mid-count.
+function stockCountCancelAddProduct() {
+  if (!_stockCountAddingCode) return;
+  _stockCountAddingCode = null;
+  if (!_stockCountSession) return;
+  document.getElementById('stockCountModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('stockCountScanInput')?.focus(), 100);
+}
+
+// Called by saveProduct() after a successful save. No-op unless a count asked
+// for it.
+function stockCountAbsorbNewProduct(prod) {
+  if (!_stockCountAddingCode) return;
+  _stockCountAddingCode = null;
+  const s = _stockCountSession;
+  document.getElementById('stockCountModal').classList.remove('hidden');
+  if (!s || !prod) return;
+
+  const existing = s.items.findIndex(i => i.code.toLowerCase() === prod.code.toLowerCase());
+  if (existing >= 0) {
+    // Was already on the list flagged as not-in-system (custom sheet) — it is
+    // real now, so it stops being skipped at apply time.
+    s.items[existing].name        = prod.name;
+    s.items[existing].expectedQty = prod.qty;
+    delete s.items[existing]._notInSystem;
+  } else {
+    s.items.push({ code: prod.code, name: prod.name, expectedQty: prod.qty, countedQty: 1 });
+  }
+  _persistStockCount();
+  renderStockCountModal();
+  showToast('✅ اتضاف للنظام وللجرد — اكتب الكمية اللي عدّيتها');
+  setTimeout(() => document.getElementById('stockCountScanInput')?.focus(), 100);
+}
+
+// Offered on the rows a custom sheet flagged as unknown, so they can be fixed
+// without leaving the count.
+function addUnknownStockCountItem(idx) {
+  const s = _stockCountSession; if (!s || !s.items[idx]) return;
+  promptAddProductDuringCount(s.items[idx].code);
 }
 
 function stockCountSetQty(idx, val) {
