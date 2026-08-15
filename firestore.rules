@@ -167,7 +167,14 @@ service cloud.firestore {
         isOwner() ||
         (signedIn() &&
          exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
-         !(doc in ['settings', 'accounts', 'budgets']) && (
+         // 'price_approvals' is the retired shared approvals document. Every
+         // device moved to the per-request pos_price_approvals collection on
+         // 2026-08-13 and nothing has written here since 2026-08-12 20:20.
+         // Closing it means a client somehow still running the old build gets
+         // a permission error instead of quietly filing a request into a
+         // document no screen reads any more. Read stays open so the old
+         // contents remain inspectable; delete it once you no longer care.
+         !(doc in ['settings', 'accounts', 'budgets', 'price_approvals']) && (
            doc == 'transfers'
              ? (_tabOk(get(/databases/$(database)/documents/roles/$(request.auth.uid)).data, 'transfers', 'write') ||
                 _tabOk(get(/databases/$(database)/documents/roles/$(request.auth.uid)).data, 'warehouse', 'write'))

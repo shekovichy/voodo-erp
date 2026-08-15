@@ -194,6 +194,10 @@ async function main() {
     assertFails(getDoc(doc(cashier(), 'pos_data/inventory/branches/b1'))));
   await check('الكاشير يقرا مخزون فرعه',
     assertSucceeds(getDoc(doc(cashier(), 'pos_data/inventory/branches/b5'))));
+  await check('الدوكيومنت المشترك القديم بقى للقراءة بس',
+    assertFails(setDoc(doc(cashier(), 'pos_data/price_approvals'), { items: [] })));
+  await check('والأدمن كمان مايكتبش فيه',
+    assertFails(setDoc(doc(admin(), 'pos_data/price_approvals'), { items: [] })));
   await check('سجل التغييرات مايتعدلش بعد الإنشاء',
     assertFails(setDoc(doc(admin(), 'pos_audit/x1'), { a: 1 }).then(() =>
       setDoc(doc(admin(), 'pos_audit/x1'), { a: 2 }))));
