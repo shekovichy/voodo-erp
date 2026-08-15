@@ -51,7 +51,10 @@ function _buildStocktakeRecord(s) {
   const shortage  = applied.filter(i => i.diff < 0).reduce((t, i) => t + i.value, 0);
 
   return {
-    id: Date.now(),
+    // Reuses the id when this count was reopened from a pending settlement, so
+    // a review round revises that settlement instead of filing another one.
+    id: s.settlementId || Date.now(),
+    revisions:  (s.revisions || 0),
     branchId:   s.branchId,
     branchName: getBranchName(s.branchId),
     mode:       s.mode,
@@ -80,7 +83,11 @@ function _buildStocktakeRecord(s) {
 
 function _saveStocktake(rec) {
   const list = getStocktakes();
-  list.unshift(rec);
+  // Upsert, not prepend: a revision and an approval both rewrite an existing
+  // settlement, and blindly unshifting left a stale duplicate of it in the
+  // local list (Firestore was fine — same document id).
+  const i = list.findIndex(function (x) { return x.id === rec.id; });
+  if (i === -1) list.unshift(rec); else list[i] = rec;
   _stocktakesCache = list.slice(0, 100);      // مرآة محلية محدودة
   DB.s('pos_stocktakes', _stocktakesCache);
   if (_fbReady && _db) {
@@ -369,18 +376,25 @@ function reviewStockCount() {
 // meant the first draft of a count was also the final word on it.
 function finishStockCount() {
   const s = _stockCountSession; if (!s) return;
+  const revising = !!s.settlementId;
+  if (revising) {
+    const prev = getStocktakes().find(x => x.id === s.settlementId);
+    s.revisions = ((prev && prev.revisions) || 0) + 1;
+  }
   const record = _buildStocktakeRecord(s);
   _saveStocktake(record);
 
   const countedTotal = s.items.filter(i => i.countedQty !== null).length;
-  addAuditLog('stocktake.count',
-    `إنهاء جرد ${s.mode === 'full' ? 'كامل' : 'مخصص'} — ${countedTotal} صنف اتعدّ، ${record.summary.variances} فرق — تسوية في انتظار الاعتماد`,
+  addAuditLog(revising ? 'stocktake.revise' : 'stocktake.count',
+    `${revising ? 'تعديل' : 'إنهاء'} جرد ${s.mode === 'full' ? 'كامل' : 'مخصص'} — ${countedTotal} صنف اتعدّ، ${record.summary.variances} فرق — تسوية في انتظار الاعتماد`,
     s.branchId);
 
   _clearStockCountSession(s.branchId);
   _stockCountSession = null;
   document.getElementById('stockCountReviewModal').classList.add('hidden');
-  showToast('✅ اتقفل الجرد واتعملت التسوية — المخزون لسه ما اتغيّرش');
+  showToast(revising
+    ? '✅ اتحدّثت التسوية — المخزون لسه ما اتغيّرش'
+    : '✅ اتقفل الجرد واتعملت التسوية — المخزون لسه ما اتغيّرش');
   openStocktakeSettlement(record.id);
 }
 
@@ -439,6 +453,44 @@ function _markStocktakeApplied(r, count, applied) {
   showToast('✅ اتعتمدت التسوية واتطبّقت على المخزون');
 }
 
+// Reopens a pending settlement as a live count. A review is the whole point of
+// the pending stage, and a review that finds a different number has to be able
+// to correct it — otherwise the only options are approving figures you no
+// longer believe or throwing the count away and recounting from scratch.
+// Finishing again updates the SAME settlement rather than making a second one.
+function reopenStocktakeForEdit(id) {
+  const r = getStocktakes().find(x => x.id === id);
+  if (!r) return;
+  if (currentUser !== 'admin') { showToast('الجرد للأدمن فقط'); return; }
+  if (stocktakeStatus(r) !== 'pending') { showToast('التسوية اتعملت خلاص — مينفعش تتعدّل'); return; }
+
+  const existing = _loadStockCountSession(r.branchId);
+  const warn = existing
+    ? 'فيه جرد شغال على الفرع ده هيتلغي. تكمّل؟'
+    : 'ترجع لتعديل أعداد الجرد ده؟ التسوية هتتحدّث لما تخلّص.';
+  showConfirmModal(warn, function () {
+    _stockCountSession = {
+      branchId:  r.branchId,
+      mode:      r.mode,
+      startedAt: r.startedAt,
+      startedBy: r.startedBy,
+      // Ties the next finish back to this settlement instead of filing a new
+      // one — otherwise every review round would leave another record behind.
+      settlementId: r.id,
+      items: r.items.map(function (i) {
+        return { code: i.code, name: i.name, expectedQty: i.expectedQty,
+                 countedQty: i.countedQty, _notInSystem: i.notInSystem || undefined };
+      }),
+      status: 'in_progress',
+    };
+    _persistStockCount();
+    document.getElementById('stocktakeSettlementModal').classList.add('hidden');
+    renderStockCountModal();
+    document.getElementById('stockCountModal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('stockCountScanInput')?.focus(), 100);
+  });
+}
+
 // A count that turned out wrong shouldn't sit pending forever.
 function cancelStocktakeSettlement(id) {
   const r = getStocktakes().find(x => x.id === id);
@@ -474,12 +526,18 @@ async function openStocktakeHistory() {
   if (_fbReady && _db) {
     try {
       const col = _db.collection('pos_stocktakes');
+      // ⚠️ NO orderBy. Firestore drops any document missing the ordered field,
+      // and ordering by appliedAt hid every pending settlement — they only get
+      // an appliedAt when the owner approves them. The settlement was saved
+      // correctly and simply never appeared in this list, so closing it looked
+      // like losing it and the owner had nothing to approve. Counts are
+      // occasional; sorting the handful we get here costs nothing.
       const q   = (currentUser === 'admin')
-        ? col.orderBy('appliedAt', 'desc').limit(100)
+        ? col.limit(200)
         : col.where('branchId', '==', currentBranch);
       const snap = await q.get();
       _stocktakesCache = snap.docs.map(d => d.data())
-                             .sort((a, b) => (b.appliedAt || 0) - (a.appliedAt || 0));
+                             .sort((a, b) => (b.countedAt || b.appliedAt || 0) - (a.countedAt || a.appliedAt || 0));
       DB.s('pos_stocktakes', _stocktakesCache.slice(0, 100));
     } catch (e) {
       console.error('openStocktakeHistory:', e);   // نكمل على المرآة المحلية
@@ -529,11 +587,19 @@ function openStocktakeSettlement(id) {
   // the settlement shouldn't carry buttons.
   const foot    = document.getElementById('stocktakeApproveBar');
   const pending = stocktakeStatus(r) === 'pending';
-  foot.innerHTML = !pending ? ''
-    : isRealOwner
+  let bar = '';
+  if (pending) {
+    // Anyone who may run a count may revise it while it is still pending —
+    // that is what the review stage is for.
+    if (currentUser === 'admin') {
+      bar += '<button class="btn btn-outline btn-sm" onclick="reopenStocktakeForEdit(' + r.id + ')">↩️ تعديل الأعداد</button>';
+    }
+    bar += isRealOwner
       ? '<button class="btn btn-danger btn-sm" onclick="cancelStocktakeSettlement(' + r.id + ')">❌ إلغاء التسوية</button>'
         + '<button class="btn btn-success" onclick="applyStocktakeToStock(' + r.id + ')">✅ اعتماد وتطبيق على المخزون</button>'
-      : '<span style="font-size:12px;color:var(--text-muted);">⏳ في انتظار اعتماد المالك</span>';
+      : '<span style="font-size:12px;color:var(--text-muted);align-self:center;">⏳ في انتظار اعتماد المالك</span>';
+  }
+  foot.innerHTML = bar;
 
   document.getElementById('stocktakeSettlementModal').classList.remove('hidden');
 }

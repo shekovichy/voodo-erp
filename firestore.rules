@@ -316,6 +316,21 @@ service cloud.firestore {
         )
       ) && request.resource.data.status == 'pending';
 
+      // Revising a count that is still pending. The pending stage exists to be
+      // reviewed, and a review that finds a different number has to be able to
+      // correct it — the alternative is approving figures nobody believes or
+      // recounting a whole branch from scratch. Stays 'pending' and stays on
+      // the same branch; the moment the owner approves, this closes.
+      allow update: if (
+        isOwner() || (
+          signedIn() && exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin'
+        )
+      ) &&
+        resource.data.status == 'pending' &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.branchId == resource.data.branchId;
+
       // OWNER ONLY, and only pending -> applied/cancelled. The figures that
       // were counted are pinned: whoever approves is approving the numbers
       // that were reviewed, not a version edited on the way through. items is

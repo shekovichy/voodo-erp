@@ -208,6 +208,17 @@ async function main() {
   });
   await check('الجرد لازم يتولد pending — مايتسجّلش مطبّق من الأول',
     assertFails(setDoc(doc(admin(), 'pos_stocktakes/t9'), TAKE({ status: 'applied' }))));
+  await check('الأدمن يعدّل الأعداد وهي لسه معلقة (مراجعة)',
+    assertSucceeds(setDoc(doc(admin(), 'pos_stocktakes/t1'),
+      TAKE({ summary: { total: 1, counted: 1, variances: 1, netValue: 50 } }))));
+  await check('⭐ لكن مايقدرش ينقلها لفرع تاني وهو بيعدّل',
+    assertFails(setDoc(doc(admin(), 'pos_stocktakes/t1'), TAKE({ branchId: 'b1' }))));
+  await check('⭐ ولا الكاشير يعدّل فيها',
+    assertFails(setDoc(doc(cashier(), 'pos_stocktakes/t1'), TAKE({ countedBy: 'x' }))));
+  // المراجعة فوق غيّرت الـ summary المخزّن، وقاعدة الاعتماد بتثبّته — فلازم
+  // نرجّع الحالة الأصلية قبل ما نختبر الاعتماد.
+  await env.withSecurityRulesDisabled(async ctx => {
+    await setDoc(doc(ctx.firestore(), 'pos_stocktakes/t1'), TAKE()); });
   await check('⭐ الأدمن مايعتمدش التسوية (المالك بس)',
     assertFails(setDoc(doc(admin(), 'pos_stocktakes/t1'), TAKE({ status: 'applied' }))));
   await check('المالك يعتمدها',
