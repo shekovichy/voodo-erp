@@ -313,15 +313,7 @@ service cloud.firestore {
         // A request nobody answered expires with its day too. Without this,
         // approving a week-old request would put that discount live today —
         // the same stale-approval problem the expiry on approved ones closes.
-        //
-        // ⚠️ TRANSITION: the build before this one only set expiresAt at
-        // approval time, so pending requests it created carry no such field.
-        // Without this tolerance, publishing would make every in-flight
-        // request permanently unapprovable. `create` above now requires the
-        // field, so the set of documents missing it is closed and drains
-        // within a day — delete this clause afterwards.
-        (!('expiresAt' in resource.data) ||
-         request.time.toMillis() < resource.data.expiresAt) &&
+        request.time.toMillis() < resource.data.expiresAt &&
         request.resource.data.status in ['approved', 'rejected'] &&
         request.resource.data.cashierUid == resource.data.cashierUid &&
         request.resource.data.items == resource.data.items &&
@@ -360,11 +352,7 @@ service cloud.firestore {
       ) &&
         resource.data.status == 'pending' &&
         request.resource.data.status == 'expired' &&
-        // Same transition tolerance as above: a pre-existing request with no
-        // expiresAt is retired using the fallback the client derives from its
-        // date (see isPendingLive in 96-approvals.js).
-        (!('expiresAt' in resource.data) ||
-         request.time.toMillis() >= resource.data.expiresAt) &&
+        request.time.toMillis() >= resource.data.expiresAt &&
         request.resource.data.cashierUid == resource.data.cashierUid &&
         request.resource.data.items == resource.data.items &&
         request.resource.data.total == resource.data.total;

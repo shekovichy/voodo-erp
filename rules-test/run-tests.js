@@ -144,16 +144,19 @@ async function main() {
   await check('الأدمن يعتمد طلب معلق لسه صالح (ماتكسرش)',
     assertSucceeds(setDoc(doc(admin(), 'pos_price_approvals/999'), REQ({ status: 'approved', expiresAt: FUTURE }))));
 
-  // الطلبات اللي اتعملت بالنسخة السابقة مالهاش expiresAt خالص. من غير
-  // التسامح ده، نشر القاعدة كان هيخلي كل طلب معلق حالياً مستحيل يتعتمد.
-  console.log('\n\x1b[1mانتقالي — طلبات النسخة القديمة (من غير expiresAt)\x1b[0m');
+  // expiresAt بقى إجباري. التسامح الانتقالي (اللي كان بيسمح باعتماد طلبات
+  // النسخة السابقة اللي مالهاش الحقل) اتشال في 2026-08-15 بعد ما الطلبات
+  // دي خلصت — أي مستند من غير الحقل دلوقتي مرفوض تماماً.
+  console.log('\n\x1b[1mexpiresAt إجباري\x1b[0m');
   await env.withSecurityRulesDisabled(async ctx => {
     const legacy = REQ({ status: 'pending' });
     delete legacy.expiresAt;
     await setDoc(doc(ctx.firestore(), 'pos_price_approvals/999'), legacy);
   });
-  await check('⭐ الأدمن لسه يقدر يعتمد طلب قديم من غير expiresAt',
-    assertSucceeds(setDoc(doc(admin(), 'pos_price_approvals/999'), REQ({ status: 'approved', expiresAt: FUTURE }))));
+  await check('⭐ مايتعتمدش طلب من غير expiresAt (التسامح اتشال)',
+    assertFails(setDoc(doc(admin(), 'pos_price_approvals/999'), REQ({ status: 'approved', expiresAt: FUTURE }))));
+  await check('ومايتعلّمش expired كمان',
+    assertFails(setDoc(doc(admin(), 'pos_price_approvals/999'), REQ({ status: 'expired' }))));
   await check('الطلب الجديد لازم يبقى معاه expiresAt',
     assertFails(setDoc(doc(cashier(), 'pos_price_approvals/nx'), (() => {
       const r = REQ({ id: 77 }); delete r.expiresAt; return r; })())));
