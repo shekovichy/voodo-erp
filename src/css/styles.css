@@ -262,6 +262,13 @@ tr:hover td { background:#f8fafc; }
 
 /* ---- MODAL ---- */
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:1000; padding:16px; }
+/* الحوارات العامة لازم تفضل فوق أي مودال تاني. كل .modal-overlay ليها نفس
+   z-index، فلما اتنين يبانوا مع بعض اللي أبعد في الـ DOM هو اللي بيتحط فوق —
+   والاتنين دول متعرّفين بدري (سطر ~2255)، فأي مودال بعدهم كان بيدفنهم. النتيجة
+   إن السؤال بيتنده فعلاً ومحدش شايفه: التأكيد اللي بيتطلب من شاشة الجرد، ومن
+   "الفواتير المعتمدة" (إلغاء فاتورة / استئناف فوق سلة شغالة)، ومن شاشة
+   المراجعة — كلهم كانوا بيقعوا في ده. */
+#genericConfirmModal, #genericPromptModal { z-index:1100; }
 .modal { background:var(--modal-bg); border-radius:16px; padding:28px; max-width:95vw; box-shadow:0 20px 60px rgba(0,0,0,.3); max-height:90vh; overflow-y:auto; color:var(--text); }
 .modal h2 { font-size:18px; font-weight:700; margin-bottom:18px; }
 .modal-footer { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
