@@ -43,8 +43,22 @@ service cloud.firestore {
       return request.auth != null;
     }
     // Owner bootstrap — this exact account is always admin.
+    //
+    // email_verified matters here because the email address is the ONLY thing
+    // identifying the owner (this account has no roles/{uid} document at all),
+    // and an unverified address is not proof of control over it. The check was
+    // deliberately absent until 2026-08-15 — the account really was unverified,
+    // so adding it earlier would have locked the owner out of the entire system
+    // the moment it was published.
+    //
+    // ⚠️ If the owner email is ever changed or the account recreated, verify it
+    // BEFORE publishing rules that depend on this, and sign out and back in
+    // afterwards: email_verified is read from the ID token, which keeps its old
+    // value for up to an hour after the address is verified.
     function isOwner() {
-      return signedIn() && request.auth.token.email == 'shekovichy@gmail.com';
+      return signedIn()
+        && request.auth.token.email == 'shekovichy@gmail.com'
+        && request.auth.token.email_verified == true;
     }
 
     // ── TAB PERMISSIONS (2026-07-19) ────────────────────────────────

@@ -32,7 +32,9 @@ const cashier = () => env.authenticatedContext('uid_cashier', { email: 'c@voodo-
 const cashier2= () => env.authenticatedContext('uid_cashier2',{ email: 'c2@voodo-pos.local' }).firestore();
 const admin   = () => env.authenticatedContext('uid_admin',   { email: 'a@voodo-pos.local' }).firestore();
 const noRole  = () => env.authenticatedContext('uid_norole',  { email: 'n@voodo-pos.local' }).firestore();
-const owner   = () => env.authenticatedContext('uid_owner',   { email: OWNER_EMAIL }).firestore();
+const owner   = () => env.authenticatedContext('uid_owner',   { email: OWNER_EMAIL, email_verified: true }).firestore();
+// نفس إيميل المالك بس من غير تحقق — لازم ميتعاملش كمالك إطلاقاً
+const ownerUnverified = () => env.authenticatedContext('uid_owner2', { email: OWNER_EMAIL, email_verified: false }).firestore();
 const anon    = () => env.unauthenticatedContext().firestore();
 
 const REQ = (over = {}) => Object.assign({
@@ -183,6 +185,19 @@ async function main() {
   // ── حماية الانحدار: القواعد القديمة لازم تفضل شغالة ──────────────
   // القواعد الجديدة إضافية. لو تعديل جاي كسر واحدة من دول، الاختبار ده
   // بيمسكها قبل النشر.
+  // إيميل المالك هو الحاجة الوحيدة اللي بتعرّفه (الحساب مالوش roles/{uid})،
+  // وإيميل غير متحقق منه مش إثبات ملكية. اتضاف في 2026-08-15 بعد ما الحساب
+  // الحقيقي اتفعّل — قبل كده كان هيقفل المالك بره كل حاجة.
+  console.log('\n\x1b[1mالمالك لازم يكون إيميله متحقق منه\x1b[0m');
+  await check('المالك المتحقق يقرا roles (سلطة كاملة)',
+    assertSucceeds(getDoc(doc(owner(), 'roles/uid_admin'))));
+  await check('⭐ نفس الإيميل من غير تحقق مالوش أي سلطة',
+    assertFails(getDoc(doc(ownerUnverified(), 'roles/uid_admin'))));
+  await check('ومايكتبش roles كمان',
+    assertFails(setDoc(doc(ownerUnverified(), 'roles/uid_hacker'), { role: 'admin' })));
+  await check('ومايوصلش لمبيعات فرع تاني',
+    assertFails(getDoc(doc(ownerUnverified(), 'pos_sales/2026-08/branches/b1'))));
+
   console.log('\n\x1b[1mانحدار — باقي النظام لسه محمي\x1b[0m');
   await check('مفيش role = مفيش وصول لـ pos_data',
     assertFails(getDoc(doc(noRole(), 'pos_data/settings'))));
