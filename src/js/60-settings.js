@@ -708,15 +708,19 @@ function wipeBranchSales() {
   if (!sales.length) { showMsg('bwMsg', 'الفرع ده مفيهوش مبيعات', 'warning'); return; }
   const rev = sales.reduce(function (t, s) { return t + (parseFloat(s.total) || 0); }, 0);
 
-  _bwConfirm(b, 'مبيعات', sales.length + ' فاتورة بإجمالي ' + fmt(rev) + ' ج', function () {
+  _bwConfirm(b, 'مبيعات', sales.length + ' فاتورة بإجمالي ' + fmt(rev) + ' ج (آخر 12 شهر)', function () {
     addAuditLog('branch.wipe.sales',
       'حذف مبيعات فرع ' + getBranchName(b) + ' — ' + sales.length + ' فاتورة بإجمالي ' + fmt(rev) + ' ج', b);
 
-    // Same 24-month window setSales() uses, but only this branch's documents —
-    // the shared pos_sales/{month} parent and every other branch stay put.
+    // ⚠️ 12, not 24. The listener only caches 12 months (`_saMonths` in
+    // 65-firebase.js), so getSales() — and therefore the count the owner just
+    // approved — can only ever see 12. Deleting 24 destroyed up to a year of
+    // history that was never counted, named or shown before the confirmation.
+    // The two windows have to agree; widening the count instead would mean
+    // reading a year of documents just to draw a dialog.
     if (_fbReady && _db) {
       const batch = _db.batch();
-      for (let i = 0; i < 24; i++) {
+      for (let i = 0; i < 12; i++) {
         const d = new Date(); d.setMonth(d.getMonth() - i);
         const month = d.toISOString().slice(0, 7);
         batch.delete(_db.collection('pos_sales').doc(month).collection('branches').doc(b));
