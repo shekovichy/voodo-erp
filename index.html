@@ -3276,7 +3276,7 @@ const getSales = () => _salesCache;
 function addSale(sale) {
   _salesCache.push(sale);
   if (!_fbReady) { _setLocalSales(_salesCache); return; }
-  const month = sale.date.slice(0, 7); // YYYY-MM
+  const month = monthKey(sale.date); // شهر الفرع مش UTC
   const branchId = sale.branchId || currentBranch;
   // Branch-scoped subcollection, NOT a flat pos_sales/{month} doc. Firestore
   // security rules operate at the document level — they can allow or deny
@@ -3315,7 +3315,7 @@ function setSales(v) {
   const months = [];
   for (let i = 0; i < 24; i++) {
     const d = new Date(); d.setMonth(d.getMonth() - i);
-    months.push(d.toISOString().slice(0, 7));
+    months.push(monthKey(d));
   }
   const batch = _db.batch();
   months.forEach(month => {
@@ -4282,7 +4282,7 @@ function exportReportExcel(type) {
   ws['!cols'] = [{wch:30},{wch:15},{wch:15},{wch:15},{wch:15},{wch:10}];
 
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
-  const date = new Date().toISOString().slice(0,10);
+  const date = todayKey();
   XLSX.writeFile(wb, sheetName + '_' + date + '.xlsx');
   showToast('✅ تم تصدير ' + sheetName + ' كـ Excel');
 }
@@ -4412,7 +4412,7 @@ async function backupToGoogleDrive(silent) {
   // 'pos_branch_names'...) so the uploaded backup was mostly empty arrays —
   // it looked like a backup but restored nothing.
   const backup = _buildFullBackup();
-  const fileName = 'VoodoERP_Backup_' + new Date().toISOString().slice(0,10) + '.json';
+  const fileName = 'VoodoERP_Backup_' + todayKey() + '.json';
   const blob = new Blob([JSON.stringify(backup,null,2)], {type:'application/json'});
   try {
     const form = new FormData();
@@ -4440,7 +4440,7 @@ function toggleAutoBackup(enabled) {
 async function checkAutoBackup(force) {
   if (!DB.g('autoBackupEnabled',false) && !force) return;
   const last = DB.g('lastDriveBackup','');
-  const today = new Date().toISOString().slice(0,10);
+  const today = todayKey();
   if (!force && last && last.startsWith(today)) return;
   if (_gdriveToken) {
     const ok = await backupToGoogleDrive(true);
@@ -5570,11 +5570,11 @@ function buildDashboard() {
   const prevEnd    = new Date(rangeStart); prevEnd.setDate(prevEnd.getDate() - 1); prevEnd.setHours(23,59,59,999);
 
   const today = now.toDateString();
-  const thisMonth = now.toISOString().slice(0,7);
+  const thisMonth = monthKey(now);
 
   // Get prev month
   const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const prevMonth = prevMonthDate.toISOString().slice(0,7);
+  const prevMonth = monthKey(prevMonthDate);
 
   const todaySales  = sales.filter(s => new Date(s.date).toDateString() === today);
   const rangeSales  = sales.filter(s => { const d = new Date(s.date); return d >= rangeStart && d <= now; });
@@ -5669,7 +5669,7 @@ function buildDashboard() {
   // ── 6-month revenue trend line chart ──
   const trendMonths = Array.from({length:6}, (_,i) => {
     const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
-    return { key: d.toISOString().slice(0,7), label: d.toLocaleDateString('ar-EG',{month:'short',year:'2-digit'}) };
+    return { key: monthKey(d), label: d.toLocaleDateString('ar-EG',{month:'short',year:'2-digit'}) };
   });
   const trendData = trendMonths.map(m => netAll.filter(s=>s.date.startsWith(m.key)).reduce((s,x)=>s+x.total,0));
   if (chartTrend) chartTrend.destroy();
@@ -6036,7 +6036,7 @@ function exportInventoryExcel() {
   const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'المخزون');
-  XLSX.writeFile(wb, 'inventory_' + new Date().toISOString().slice(0,10) + '.xlsx');
+  XLSX.writeFile(wb, 'inventory_' + todayKey() + '.xlsx');
 }
 
 
@@ -6830,8 +6830,8 @@ function exportStocktakeSettlementPDF() {
 function initSalesFilter() {
   if (!document.getElementById('salesFrom').value) {
     const d = new Date(); d.setDate(1);
-    document.getElementById('salesFrom').value = d.toISOString().slice(0,10);
-    document.getElementById('salesTo').value   = new Date().toISOString().slice(0,10);
+    document.getElementById('salesFrom').value = todayKey(d);
+    document.getElementById('salesTo').value   = todayKey();
   }
 }
 
@@ -7167,12 +7167,12 @@ function buildProfitReport() {
 function getDateRangeForPeriod(period) {
   var now = new Date();
   var from, to;
-  to = now.toISOString().slice(0,10);
+  to = todayKey(now);
   if (period === 'today') {
     from = to;
   } else if (period === 'week') {
     var d = new Date(now); d.setDate(d.getDate() - d.getDay());
-    from = d.toISOString().slice(0,10);
+    from = todayKey(d);
   } else if (period === 'month') {
     from = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-01';
   } else if (period === 'year') {
@@ -7447,7 +7447,7 @@ function exportReorderList() {
   const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'قائمة الطلب');
-  XLSX.writeFile(wb, 'reorder_list_' + new Date().toISOString().slice(0,10) + '.xlsx');
+  XLSX.writeFile(wb, 'reorder_list_' + todayKey() + '.xlsx');
 }
 
 // ══════════════════════════════════════════════
@@ -8429,7 +8429,7 @@ function wipeBranchSales() {
       const batch = _db.batch();
       for (let i = 0; i < 12; i++) {
         const d = new Date(); d.setMonth(d.getMonth() - i);
-        const month = d.toISOString().slice(0, 7);
+        const month = monthKey(d);
         batch.delete(_db.collection('pos_sales').doc(month).collection('branches').doc(b));
       }
       batch.commit().catch(function (e) { console.error('wipeBranchSales:', e); });
@@ -8987,12 +8987,12 @@ function initFirebase() {
     const _saMonths = [];
     for (let i = 0; i < 12; i++) {
       const d = new Date(); d.setMonth(d.getMonth() - i);
-      _saMonths.push(d.toISOString().slice(0, 7));
+      _saMonths.push(monthKey(d));
     }
 
     function _applySalesBranchMonth(month, b, items) {
       _salesCache = [
-        ..._salesCache.filter(s => !(s.date.slice(0, 7) === month && (s.branchId || '') === b)),
+        ..._salesCache.filter(s => !(monthKey(s.date) === month && (s.branchId || '') === b)),
         ...items
       ];
     }
@@ -9003,7 +9003,7 @@ function initFirebase() {
       // cloud doc looks empty" path below (and a device's old demo sales
       // sitting in localStorage from before demo mode was removed is
       // exactly how demo sales kept reappearing after cleanup).
-      return localSalesAll.filter(s => s.date.slice(0, 7) === month && (s.branchId || currentBranch) === b && !_isDemoSale(s));
+      return localSalesAll.filter(s => monthKey(s.date) === month && (s.branchId || currentBranch) === b && !_isDemoSale(s));
     }
     // Only for the "cloud doc confirmed empty, should I re-seed it from
     // local?" decision — NOT the connectivity-error fallback below (that one
@@ -9338,7 +9338,7 @@ function setCRPeriod(p) {
 
 function openCashierReport() {
   toggleMobileCart(false);
-  const today = new Date().toISOString().slice(0,10);
+  const today = todayKey();
   document.getElementById('crpFrom').value = today;
   document.getElementById('crpTo').value   = today;
   _crpPeriod = 'today';
@@ -9347,13 +9347,13 @@ function openCashierReport() {
 }
 
 function renderCashierReport() {
-  const today = new Date().toISOString().slice(0,10);
+  const today = todayKey();
   let fromStr, toStr;
   if (_crpPeriod === 'today') {
     fromStr = toStr = today;
   } else if (_crpPeriod === 'week') {
     const d = new Date(); d.setDate(d.getDate() - ((d.getDay()+1)%7));
-    fromStr = d.toISOString().slice(0,10); toStr = today;
+    fromStr = todayKey(d); toStr = today;
   } else if (_crpPeriod === 'month') {
     fromStr = today.slice(0,7) + '-01'; toStr = today;
   } else if (_crpPeriod === 'custom') {
@@ -9804,7 +9804,7 @@ function setHR(list) {
 
 function openHRTargetModal() {
   const today = new Date();
-  const thisMonth = today.toISOString().slice(0,7);
+  const thisMonth = monthKey(today);
   document.getElementById('hrTargetMonth').value = thisMonth;
   const salespeople = (getSalespeople ? getSalespeople() : (DB.g('pos_salespeople',[])))
     .map(sp => typeof sp === 'string' ? sp : sp.name);
@@ -9845,7 +9845,7 @@ function saveHRTargets() {
 function populateHRMonthFilter() {
   const sel = document.getElementById('hrMonthFilter'); if (!sel) return;
   const months = [...new Set(getHR().map(h=>h.month))].sort().reverse();
-  const today = new Date().toISOString().slice(0,7);
+  const today = monthKey(new Date());
   sel.innerHTML = `<option value="">الشهر الحالي (${today})</option>` +
     months.map(m => `<option value="${m}">${m}</option>`).join('');
 }
@@ -9853,14 +9853,14 @@ function populateHRMonthFilter() {
 function renderHRPage() {
   renderSellersSettings();
   populateHRMonthFilter();
-  const selMonth = document.getElementById('hrMonthFilter')?.value || new Date().toISOString().slice(0,7);
+  const selMonth = document.getElementById('hrMonthFilter')?.value || monthKey(new Date());
   const hrRec = getHR().find(h => h.month === selMonth) || { targets: {} };
   const targets = hrRec.targets || {};
   const salespeople = (getSalespeople ? getSalespeople() : (DB.g('pos_salespeople',[])))
     .map(sp => typeof sp === 'string' ? sp : sp.name);
 
   // Calculate actual sales per person for selected month
-  const allSales = getSales().filter(s => !s.isReturn && s.date && s.date.slice(0,7) === selMonth);
+  const allSales = getSales().filter(s => !s.isReturn && s.date && monthKey(s.date) === selMonth);
   const salesBySP = {};
   allSales.forEach(s => {
     const sp = s.salesperson || 'غير محدد';
@@ -10209,7 +10209,7 @@ function detectEligiblePromos() {
     if (!promo.active) return false;
     if (applied.has(promo.id)) return false;
     // date range check
-    const today = new Date().toISOString().slice(0,10);
+    const today = todayKey();
     if (promo.startDate && today < promo.startDate) return false;
     if (promo.endDate   && today > promo.endDate)   return false;
     if (promo.type === 'bundle') {
@@ -10734,7 +10734,7 @@ function openExpenseModal(id) {
   document.getElementById('expType').value      = exp?.type || 'branch';
   document.getElementById('expCategory').value  = exp?.category || 'rent';
   document.getElementById('expAmount').value    = exp?.amount || '';
-  document.getElementById('expDate').value      = exp?.date || new Date().toISOString().slice(0,10);
+  document.getElementById('expDate').value      = exp?.date || todayKey();
   document.getElementById('expNote').value      = exp?.note || '';
   // Populate branch select
   const brSel = document.getElementById('expBranchId');
@@ -10825,7 +10825,7 @@ function renderExpensesPage() {
       brSel.appendChild(o);
     });
   }
-  const selMonth  = document.getElementById('expMonthFilter')?.value  || new Date().toISOString().slice(0,7);
+  const selMonth  = document.getElementById('expMonthFilter')?.value  || monthKey(new Date());
   const selBranch = document.getElementById('expBranchFilter')?.value || '';
   let list = getExpenses().filter(e => e.month === selMonth);
   if (selBranch === 'company') list = list.filter(e => e.type === 'company');
@@ -10841,7 +10841,7 @@ function renderExpensesPage() {
   // nets its profit back out automatically. Excluding returns here (as this
   // used to) overstated "صافي الربح" by the profit on every returned item,
   // the exact same bug already fixed in the accounting page's P&L.
-  const monthSales  = getSales().filter(s=>s.date && s.date.slice(0,7)===selMonth);
+  const monthSales  = getSales().filter(s=>s.date && monthKey(s.date)===selMonth);
   const inv = Object.values(_invCacheByBranch).flat();
   const grossProfit = monthSales.reduce((acc,s)=>acc+s.items.reduce((a,i)=>{
     const c=i.cost>0?i.cost:(inv.find(x=>x.code===i.code)?.cost||0); return a+(i.price-c)*i.qty; },0)-s.disc, 0);
@@ -10858,7 +10858,7 @@ function renderExpensesPage() {
     const allMonthExp = getExpenses().filter(e=>e.month===selMonth);
     breakdown.innerHTML = BRANCH_IDS.map(b => {
       const bExp = allMonthExp.filter(e=>e.type==='branch'&&e.branchId===b).reduce((s,e)=>s+e.amount,0);
-      const bSales = getSales().filter(s=>!s.isReturn&&s.date&&s.date.slice(0,7)===selMonth&&s.branchId===b).reduce((s,x)=>s+x.total,0);
+      const bSales = getSales().filter(s=>!s.isReturn&&monthKey(s.date)===selMonth&&s.branchId===b).reduce((s,x)=>s+x.total,0);
       return `<div class="stat-card" style="border-top:3px solid var(--primary);">
         <div style="font-weight:700; font-size:13px; margin-bottom:6px;">🏬 ${getBranchName(b)}</div>
         <div style="font-size:12px; color:var(--text-muted);">مصاريف: <strong style="color:var(--danger);">${fmt(bExp)} ج</strong></div>
@@ -11438,7 +11438,7 @@ function buildReceiptESCPOS(sale) {
   if (s.shopPhone)   line('Tel: ' + s.shopPhone);
   line('--------------------------------');
   push([ESC,0x61,0x00]); // left
-  line('Date: ' + (sale.date || new Date().toISOString().slice(0,10)));
+  line('Date: ' + (sale.date || todayKey()));
   line('Inv : #' + String(sale.id||'').slice(-6));
   if (sale.salesperson) line('By  : ' + sale.salesperson);
   line('--------------------------------');
@@ -11477,7 +11477,7 @@ async function printReceiptESCPOS(sale) {
 async function testReceiptPrint() {
   if (!_serialWriter) { showToast('الطابعة غير متصلة — اضغط اتصال أولاً'); return; }
   await printReceiptESCPOS({
-    id:'TEST001', date: new Date().toISOString().slice(0,10),
+    id:'TEST001', date: todayKey(),
     salesperson:'اختبار', items:[{name:'منتج تجريبي',qty:2,price:50}],
     total:100, paid:100
   });
@@ -11595,7 +11595,7 @@ function markPayrollPaid(month, empName, isPaid) {
 function calcMonthlyPayroll(month) {
   const sps = (getSalespeople ? getSalespeople() : []);
   const hrRec = getHR().find(h => h.month === month) || {};
-  const allSales = getSales().filter(s => !s.isReturn && s.date?.slice(0,7) === month);
+  const allSales = getSales().filter(s => !s.isReturn && monthKey(s.date) === month);
   const attMonth = getAttendance().filter(a => a.date?.slice(0,7) === month);
   const stored   = getPayroll().filter(p => p.month === month);
   return sps.map(sp => {
@@ -11636,7 +11636,7 @@ function switchHRTab(tab) {
 }
 
 function getHRMonth() {
-  return document.getElementById('hrMonthFilter')?.value || new Date().toISOString().slice(0,7);
+  return document.getElementById('hrMonthFilter')?.value || monthKey(new Date());
 }
 
 function renderAttendancePane() {
@@ -11644,7 +11644,7 @@ function renderAttendancePane() {
   const sps = (getSalespeople?getSalespeople():[]).map(sp=>typeof sp==='string'?sp:sp.name);
   const [yr, mo] = month.split('-').map(Number);
   const daysInMonth = new Date(yr, mo, 0).getDate();
-  const today = new Date().toISOString().slice(0,10);
+  const today = todayKey();
   const attMap = {};
   getAttendance().filter(a=>a.date?.slice(0,7)===month).forEach(a=>{ attMap[a.empName+'_'+a.date]=a; });
   const SC = {present:'#dcfce7',absent:'#fee2e2',late:'#fef9c3',excused:'#eff6ff',permission:'#f3e8ff','':'#f3f4f6'};
@@ -12624,7 +12624,7 @@ function openExpenseRequestModal() {
   const brSel = document.getElementById('expReqBranchId');
   if (brSel) brSel.innerHTML = BRANCH_IDS.filter(b=>b!=='wh').map(b=>'<option value="'+b+'"'+(b===currentBranch?' selected':'')+'>'+getBranchName(b)+'</option>').join('');
   document.getElementById('expReqAmount').value = '';
-  document.getElementById('expReqDate').value = new Date().toISOString().slice(0,10);
+  document.getElementById('expReqDate').value = todayKey();
   document.getElementById('expReqNote').value = '';
   document.getElementById('expReqCategory').value = 'rent';
   document.getElementById('expenseRequestModal').classList.remove('hidden');
@@ -12726,7 +12726,7 @@ function openLeaveRequestModal() {
   const emps = getSalespeople ? getSalespeople() : DB.g('pos_salespeople', []);
   const empNames = emps.map(e => typeof e === 'string' ? e : e.name).filter(Boolean);
   if (empSel) empSel.innerHTML = empNames.map(n => '<option value="'+escHtml(n)+'">'+escHtml(n)+'</option>').join('');
-  document.getElementById('leaveReqDate').value = new Date().toISOString().slice(0,10);
+  document.getElementById('leaveReqDate').value = todayKey();
   document.getElementById('leaveReqType').value = 'leave';
   document.getElementById('leaveReqFromTime').value = '';
   document.getElementById('leaveReqToTime').value = '';

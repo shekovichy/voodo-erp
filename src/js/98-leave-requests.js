@@ -16,7 +16,7 @@ function openLeaveRequestModal() {
   const emps = getSalespeople ? getSalespeople() : DB.g('pos_salespeople', []);
   const empNames = emps.map(e => typeof e === 'string' ? e : e.name).filter(Boolean);
   if (empSel) empSel.innerHTML = empNames.map(n => '<option value="'+escHtml(n)+'">'+escHtml(n)+'</option>').join('');
-  document.getElementById('leaveReqDate').value = new Date().toISOString().slice(0,10);
+  document.getElementById('leaveReqDate').value = todayKey();
   document.getElementById('leaveReqType').value = 'leave';
   document.getElementById('leaveReqFromTime').value = '';
   document.getElementById('leaveReqToTime').value = '';

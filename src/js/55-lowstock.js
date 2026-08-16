@@ -55,7 +55,7 @@ function exportReorderList() {
   const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'قائمة الطلب');
-  XLSX.writeFile(wb, 'reorder_list_' + new Date().toISOString().slice(0,10) + '.xlsx');
+  XLSX.writeFile(wb, 'reorder_list_' + todayKey() + '.xlsx');
 }
 
 // ══════════════════════════════════════════════

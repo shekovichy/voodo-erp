@@ -545,12 +545,12 @@ function initFirebase() {
     const _saMonths = [];
     for (let i = 0; i < 12; i++) {
       const d = new Date(); d.setMonth(d.getMonth() - i);
-      _saMonths.push(d.toISOString().slice(0, 7));
+      _saMonths.push(monthKey(d));
     }
 
     function _applySalesBranchMonth(month, b, items) {
       _salesCache = [
-        ..._salesCache.filter(s => !(s.date.slice(0, 7) === month && (s.branchId || '') === b)),
+        ..._salesCache.filter(s => !(monthKey(s.date) === month && (s.branchId || '') === b)),
         ...items
       ];
     }
@@ -561,7 +561,7 @@ function initFirebase() {
       // cloud doc looks empty" path below (and a device's old demo sales
       // sitting in localStorage from before demo mode was removed is
       // exactly how demo sales kept reappearing after cleanup).
-      return localSalesAll.filter(s => s.date.slice(0, 7) === month && (s.branchId || currentBranch) === b && !_isDemoSale(s));
+      return localSalesAll.filter(s => monthKey(s.date) === month && (s.branchId || currentBranch) === b && !_isDemoSale(s));
     }
     // Only for the "cloud doc confirmed empty, should I re-seed it from
     // local?" decision — NOT the connectivity-error fallback below (that one
@@ -896,7 +896,7 @@ function setCRPeriod(p) {
 
 function openCashierReport() {
   toggleMobileCart(false);
-  const today = new Date().toISOString().slice(0,10);
+  const today = todayKey();
   document.getElementById('crpFrom').value = today;
   document.getElementById('crpTo').value   = today;
   _crpPeriod = 'today';
@@ -905,13 +905,13 @@ function openCashierReport() {
 }
 
 function renderCashierReport() {
-  const today = new Date().toISOString().slice(0,10);
+  const today = todayKey();
   let fromStr, toStr;
   if (_crpPeriod === 'today') {
     fromStr = toStr = today;
   } else if (_crpPeriod === 'week') {
     const d = new Date(); d.setDate(d.getDate() - ((d.getDay()+1)%7));
-    fromStr = d.toISOString().slice(0,10); toStr = today;
+    fromStr = todayKey(d); toStr = today;
   } else if (_crpPeriod === 'month') {
     fromStr = today.slice(0,7) + '-01'; toStr = today;
   } else if (_crpPeriod === 'custom') {

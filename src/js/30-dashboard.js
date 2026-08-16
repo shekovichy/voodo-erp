@@ -87,11 +87,11 @@ function buildDashboard() {
   const prevEnd    = new Date(rangeStart); prevEnd.setDate(prevEnd.getDate() - 1); prevEnd.setHours(23,59,59,999);
 
   const today = now.toDateString();
-  const thisMonth = now.toISOString().slice(0,7);
+  const thisMonth = monthKey(now);
 
   // Get prev month
   const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const prevMonth = prevMonthDate.toISOString().slice(0,7);
+  const prevMonth = monthKey(prevMonthDate);
 
   const todaySales  = sales.filter(s => new Date(s.date).toDateString() === today);
   const rangeSales  = sales.filter(s => { const d = new Date(s.date); return d >= rangeStart && d <= now; });
@@ -186,7 +186,7 @@ function buildDashboard() {
   // ── 6-month revenue trend line chart ──
   const trendMonths = Array.from({length:6}, (_,i) => {
     const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
-    return { key: d.toISOString().slice(0,7), label: d.toLocaleDateString('ar-EG',{month:'short',year:'2-digit'}) };
+    return { key: monthKey(d), label: d.toLocaleDateString('ar-EG',{month:'short',year:'2-digit'}) };
   });
   const trendData = trendMonths.map(m => netAll.filter(s=>s.date.startsWith(m.key)).reduce((s,x)=>s+x.total,0));
   if (chartTrend) chartTrend.destroy();

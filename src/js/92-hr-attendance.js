@@ -51,7 +51,7 @@ function markPayrollPaid(month, empName, isPaid) {
 function calcMonthlyPayroll(month) {
   const sps = (getSalespeople ? getSalespeople() : []);
   const hrRec = getHR().find(h => h.month === month) || {};
-  const allSales = getSales().filter(s => !s.isReturn && s.date?.slice(0,7) === month);
+  const allSales = getSales().filter(s => !s.isReturn && monthKey(s.date) === month);
   const attMonth = getAttendance().filter(a => a.date?.slice(0,7) === month);
   const stored   = getPayroll().filter(p => p.month === month);
   return sps.map(sp => {
@@ -92,7 +92,7 @@ function switchHRTab(tab) {
 }
 
 function getHRMonth() {
-  return document.getElementById('hrMonthFilter')?.value || new Date().toISOString().slice(0,7);
+  return document.getElementById('hrMonthFilter')?.value || monthKey(new Date());
 }
 
 function renderAttendancePane() {
@@ -100,7 +100,7 @@ function renderAttendancePane() {
   const sps = (getSalespeople?getSalespeople():[]).map(sp=>typeof sp==='string'?sp:sp.name);
   const [yr, mo] = month.split('-').map(Number);
   const daysInMonth = new Date(yr, mo, 0).getDate();
-  const today = new Date().toISOString().slice(0,10);
+  const today = todayKey();
   const attMap = {};
   getAttendance().filter(a=>a.date?.slice(0,7)===month).forEach(a=>{ attMap[a.empName+'_'+a.date]=a; });
   const SC = {present:'#dcfce7',absent:'#fee2e2',late:'#fef9c3',excused:'#eff6ff',permission:'#f3e8ff','':'#f3f4f6'};

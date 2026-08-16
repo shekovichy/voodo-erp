@@ -52,8 +52,8 @@ function renderPnL() {
   const month = getAccMonth();
   const pane = document.getElementById('accPane_pnl');
   if (!pane) return;
-  const sales    = getSales().filter(s=>!s.isReturn&&s.date?.slice(0,7)===month);
-  const rets     = getSales().filter(s=> s.isReturn&&s.date?.slice(0,7)===month);
+  const sales    = getSales().filter(s=>!s.isReturn&&monthKey(s.date)===month);
+  const rets     = getSales().filter(s=> s.isReturn&&monthKey(s.date)===month);
   const exps     = getExpenses().filter(e=>e.date?.slice(0,7)===month);
   const revenue  = sales.reduce((s,x)=>s+x.total,0);
   const returnAmt= rets.reduce((s,x)=>s+Math.abs(x.total||0),0);
@@ -108,15 +108,15 @@ function renderCashFlow() {
   const month = getAccMonth();
   const pane  = document.getElementById('accPane_cashflow');
   if (!pane) return;
-  const sales = getSales().filter(s=>!s.isReturn&&s.date?.slice(0,7)===month);
-  const rets  = getSales().filter(s=> s.isReturn&&s.date?.slice(0,7)===month);
+  const sales = getSales().filter(s=>!s.isReturn&&monthKey(s.date)===month);
+  const rets  = getSales().filter(s=> s.isReturn&&monthKey(s.date)===month);
   const exps  = getExpenses().filter(e=>e.date?.slice(0,7)===month);
   // _purchaseCache (not getPurchases()) — 93-accounting.js and 75-purchases.js
   // are both lazy chunks; getPurchases() would throw if this page is opened
   // before the purchases chunk has loaded. The raw cache lives in 00-core.js
   // and is kept current by the Firestore listener in 65-firebase.js regardless
   // of which chunks have loaded, so it's always safe to read directly.
-  const pos   = _purchaseCache.filter(po=>po.receivedAt&&new Date(po.receivedAt).toISOString().slice(0,7)===month&&po.status==='received');
+  const pos   = _purchaseCache.filter(po=>po.receivedAt&&monthKey(po.receivedAt)===month&&po.status==='received');
 
   const byM = {};
   sales.forEach(s=>{ const m=s.payMethod||'cash'; byM[m]=(byM[m]||0)+s.total; });
@@ -270,7 +270,7 @@ function buildJournalEntries(from, to) {
     const seen = new Set();
     const cursor = new Date(payrollFrom.getFullYear(), payrollFrom.getMonth(), 1);
     while (cursor <= to) {
-      const m = cursor.toISOString().slice(0,7);
+      const m = monthKey(cursor);
       if (!seen.has(m)) {
         seen.add(m);
         const total = calcMonthlyPayroll(m).reduce((s,p)=>s+p.net,0);
@@ -370,7 +370,7 @@ function renderBalanceSheet() {
   // المختار (من قيود buildJournalEntries)، الميزانية بتبقى مزيج غير متسق:
   // نقدية تاريخية + مخزون حالي، ومعروضة كأنها كلها "كما في نهاية {الشهر}" —
   // ده غلط لأي شهر غير الشهر الحالي فعليًا.
-  const isCurrentMonth = month === new Date().toISOString().slice(0,7);
+  const isCurrentMonth = month === monthKey(new Date());
   const inventoryValue = Object.values(_invCacheByBranch).flat().reduce((s,p)=>s+(p.cost||0)*(p.qty||0),0);
   const ar = 0; // no credit-sale feature exists — every POS sale is fully paid at checkout
   const totalAssets = cash + inventoryValue + ar;
@@ -481,15 +481,15 @@ function renderAccSummary() {
   // بيخلي التبويب ده يعرض صافي ربح مختلف عن قائمة الدخل في نفس الصفحة.
   const allSales = getSales();
   const allExp   = getExpenses();
-  const months   = [...new Set(allSales.map(s=>s.date?.slice(0,7)).filter(Boolean))].sort().reverse();
+  const months   = [...new Set(allSales.map(s=>monthKey(s.date)).filter(Boolean))].sort().reverse();
   const totalRev = allSales.reduce((s,x)=>s+x.total,0);
   const totalCOGS= allSales.reduce((s,x)=>s+(x.items||[]).reduce((ss,i)=>ss+(i.cost||0)*i.qty,0),0);
   const totalExp = allExp.reduce((s,e)=>s+(e.amount||0),0);
   const totalNP  = totalRev-totalCOGS-totalExp;
 
   const rows = months.slice(0,12).map(m=>{
-    const mS=allSales.filter(s=>s.date?.slice(0,7)===m).reduce((s,x)=>s+x.total,0);
-    const mC=allSales.filter(s=>s.date?.slice(0,7)===m).reduce((s,x)=>s+(x.items||[]).reduce((ss,i)=>ss+(i.cost||0)*i.qty,0),0);
+    const mS=allSales.filter(s=>monthKey(s.date)===m).reduce((s,x)=>s+x.total,0);
+    const mC=allSales.filter(s=>monthKey(s.date)===m).reduce((s,x)=>s+(x.items||[]).reduce((ss,i)=>ss+(i.cost||0)*i.qty,0),0);
     const mE=allExp.filter(e=>e.date?.slice(0,7)===m).reduce((s,e)=>s+(e.amount||0),0);
     const mP=mS-mC-mE;
     return `<tr style="border-bottom:1px solid var(--border);">

@@ -37,7 +37,7 @@ function buildSalesLines(from, to, branchId) {
 // ── PIVOT ANALYZER ──────────────────────────────────────────────
 const PIVOT_DIMENSIONS = {
   day:       { label: '📅 اليوم',        get: r => r.date.slice(0, 10) },
-  month:     { label: '📆 الشهر',        get: r => r.date.slice(0, 7) },
+  month:     { label: '📆 الشهر',        get: r => monthKey(r.date) },
   branch:    { label: '🏬 الفرع',        get: r => r.branchName },
   product:   { label: '📦 المنتج',       get: r => r.productName },
   category:  { label: '🏷️ الفئة',        get: r => r.category || '—' },
@@ -309,5 +309,5 @@ function exportDrillExcel() {
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'تفاصيل');
-  XLSX.writeFile(wb, 'تفاصيل_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+  XLSX.writeFile(wb, 'تفاصيل_' + todayKey() + '.xlsx');
 }

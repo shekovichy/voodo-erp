@@ -4,8 +4,8 @@
 function initSalesFilter() {
   if (!document.getElementById('salesFrom').value) {
     const d = new Date(); d.setDate(1);
-    document.getElementById('salesFrom').value = d.toISOString().slice(0,10);
-    document.getElementById('salesTo').value   = new Date().toISOString().slice(0,10);
+    document.getElementById('salesFrom').value = todayKey(d);
+    document.getElementById('salesTo').value   = todayKey();
   }
 }
 

@@ -270,7 +270,7 @@ function detectEligiblePromos() {
     if (!promo.active) return false;
     if (applied.has(promo.id)) return false;
     // date range check
-    const today = new Date().toISOString().slice(0,10);
+    const today = todayKey();
     if (promo.startDate && today < promo.startDate) return false;
     if (promo.endDate   && today > promo.endDate)   return false;
     if (promo.type === 'bundle') {

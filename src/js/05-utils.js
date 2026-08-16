@@ -403,7 +403,7 @@ function exportReportExcel(type) {
   ws['!cols'] = [{wch:30},{wch:15},{wch:15},{wch:15},{wch:15},{wch:10}];
 
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
-  const date = new Date().toISOString().slice(0,10);
+  const date = todayKey();
   XLSX.writeFile(wb, sheetName + '_' + date + '.xlsx');
   showToast('✅ تم تصدير ' + sheetName + ' كـ Excel');
 }
@@ -533,7 +533,7 @@ async function backupToGoogleDrive(silent) {
   // 'pos_branch_names'...) so the uploaded backup was mostly empty arrays —
   // it looked like a backup but restored nothing.
   const backup = _buildFullBackup();
-  const fileName = 'VoodoERP_Backup_' + new Date().toISOString().slice(0,10) + '.json';
+  const fileName = 'VoodoERP_Backup_' + todayKey() + '.json';
   const blob = new Blob([JSON.stringify(backup,null,2)], {type:'application/json'});
   try {
     const form = new FormData();
@@ -561,7 +561,7 @@ function toggleAutoBackup(enabled) {
 async function checkAutoBackup(force) {
   if (!DB.g('autoBackupEnabled',false) && !force) return;
   const last = DB.g('lastDriveBackup','');
-  const today = new Date().toISOString().slice(0,10);
+  const today = todayKey();
   if (!force && last && last.startsWith(today)) return;
   if (_gdriveToken) {
     const ok = await backupToGoogleDrive(true);

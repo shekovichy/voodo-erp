@@ -378,7 +378,7 @@ function openSupplierPaymentModal(supplierId) {
   document.getElementById('spSupplierName').textContent = sup.name;
   document.getElementById('spCurrentBalance').textContent = fmt(sup.balance || 0) + ' ج';
   document.getElementById('spAmount').value = '';
-  document.getElementById('spDate').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('spDate').value = todayKey();
   document.getElementById('spNotes').value = '';
   document.getElementById('supplierPaymentModal').classList.remove('hidden');
 }

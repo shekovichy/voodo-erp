@@ -27,7 +27,7 @@ function openExpenseModal(id) {
   document.getElementById('expType').value      = exp?.type || 'branch';
   document.getElementById('expCategory').value  = exp?.category || 'rent';
   document.getElementById('expAmount').value    = exp?.amount || '';
-  document.getElementById('expDate').value      = exp?.date || new Date().toISOString().slice(0,10);
+  document.getElementById('expDate').value      = exp?.date || todayKey();
   document.getElementById('expNote').value      = exp?.note || '';
   // Populate branch select
   const brSel = document.getElementById('expBranchId');
@@ -118,7 +118,7 @@ function renderExpensesPage() {
       brSel.appendChild(o);
     });
   }
-  const selMonth  = document.getElementById('expMonthFilter')?.value  || new Date().toISOString().slice(0,7);
+  const selMonth  = document.getElementById('expMonthFilter')?.value  || monthKey(new Date());
   const selBranch = document.getElementById('expBranchFilter')?.value || '';
   let list = getExpenses().filter(e => e.month === selMonth);
   if (selBranch === 'company') list = list.filter(e => e.type === 'company');
@@ -134,7 +134,7 @@ function renderExpensesPage() {
   // nets its profit back out automatically. Excluding returns here (as this
   // used to) overstated "صافي الربح" by the profit on every returned item,
   // the exact same bug already fixed in the accounting page's P&L.
-  const monthSales  = getSales().filter(s=>s.date && s.date.slice(0,7)===selMonth);
+  const monthSales  = getSales().filter(s=>s.date && monthKey(s.date)===selMonth);
   const inv = Object.values(_invCacheByBranch).flat();
   const grossProfit = monthSales.reduce((acc,s)=>acc+s.items.reduce((a,i)=>{
     const c=i.cost>0?i.cost:(inv.find(x=>x.code===i.code)?.cost||0); return a+(i.price-c)*i.qty; },0)-s.disc, 0);
@@ -151,7 +151,7 @@ function renderExpensesPage() {
     const allMonthExp = getExpenses().filter(e=>e.month===selMonth);
     breakdown.innerHTML = BRANCH_IDS.map(b => {
       const bExp = allMonthExp.filter(e=>e.type==='branch'&&e.branchId===b).reduce((s,e)=>s+e.amount,0);
-      const bSales = getSales().filter(s=>!s.isReturn&&s.date&&s.date.slice(0,7)===selMonth&&s.branchId===b).reduce((s,x)=>s+x.total,0);
+      const bSales = getSales().filter(s=>!s.isReturn&&monthKey(s.date)===selMonth&&s.branchId===b).reduce((s,x)=>s+x.total,0);
       return `<div class="stat-card" style="border-top:3px solid var(--primary);">
         <div style="font-weight:700; font-size:13px; margin-bottom:6px;">🏬 ${getBranchName(b)}</div>
         <div style="font-size:12px; color:var(--text-muted);">مصاريف: <strong style="color:var(--danger);">${fmt(bExp)} ج</strong></div>

@@ -15,7 +15,7 @@ function openExpenseRequestModal() {
   const brSel = document.getElementById('expReqBranchId');
   if (brSel) brSel.innerHTML = BRANCH_IDS.filter(b=>b!=='wh').map(b=>'<option value="'+b+'"'+(b===currentBranch?' selected':'')+'>'+getBranchName(b)+'</option>').join('');
   document.getElementById('expReqAmount').value = '';
-  document.getElementById('expReqDate').value = new Date().toISOString().slice(0,10);
+  document.getElementById('expReqDate').value = todayKey();
   document.getElementById('expReqNote').value = '';
   document.getElementById('expReqCategory').value = 'rent';
   document.getElementById('expenseRequestModal').classList.remove('hidden');

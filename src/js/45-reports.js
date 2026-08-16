@@ -258,12 +258,12 @@ function buildProfitReport() {
 function getDateRangeForPeriod(period) {
   var now = new Date();
   var from, to;
-  to = now.toISOString().slice(0,10);
+  to = todayKey(now);
   if (period === 'today') {
     from = to;
   } else if (period === 'week') {
     var d = new Date(now); d.setDate(d.getDate() - d.getDay());
-    from = d.toISOString().slice(0,10);
+    from = todayKey(d);
   } else if (period === 'month') {
     from = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-01';
   } else if (period === 'year') {

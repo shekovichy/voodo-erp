@@ -566,7 +566,7 @@ function buildForecastedStock() {
 // category (keys = EXP_CATS from 88-abc-expenses.js). Actuals come from the
 // same sources the dashboard/accounting already use: net sales revenue and
 // recorded expenses. Admin-only (budgets are admin-write in firestore.rules).
-let _saBudgetMonth = new Date().toISOString().slice(0, 7);
+let _saBudgetMonth = monthKey(new Date());
 
 function buildBudgetVsActual() {
   const pane = document.getElementById('sa-pane-budget');
@@ -608,7 +608,7 @@ function buildBudgetVsActual() {
 
   // Actuals
   const actualRevenue = getSales()
-    .filter(s => (s.date||'').slice(0,7) === month)
+    .filter(s => monthKey(s.date) === month)
     .reduce((s,x) => s + x.total, 0); // returns are negative → nets automatically
   const actualByCat = {};
   getExpenses().filter(e => e.month === month).forEach(e => {
@@ -664,7 +664,7 @@ function _saBudgetRow(label, budgeted, actual, isRevenue) {
 }
 
 function _saBudgetMonthChanged() {
-  _saBudgetMonth = document.getElementById('saBudgetMonth').value || new Date().toISOString().slice(0,7);
+  _saBudgetMonth = document.getElementById('saBudgetMonth').value || monthKey(new Date());
   document.getElementById('saBudgetEditorCard').style.display = 'none';
   buildBudgetVsActual();
 }

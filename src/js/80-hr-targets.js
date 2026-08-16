@@ -11,7 +11,7 @@ function setHR(list) {
 
 function openHRTargetModal() {
   const today = new Date();
-  const thisMonth = today.toISOString().slice(0,7);
+  const thisMonth = monthKey(today);
   document.getElementById('hrTargetMonth').value = thisMonth;
   const salespeople = (getSalespeople ? getSalespeople() : (DB.g('pos_salespeople',[])))
     .map(sp => typeof sp === 'string' ? sp : sp.name);
@@ -52,7 +52,7 @@ function saveHRTargets() {
 function populateHRMonthFilter() {
   const sel = document.getElementById('hrMonthFilter'); if (!sel) return;
   const months = [...new Set(getHR().map(h=>h.month))].sort().reverse();
-  const today = new Date().toISOString().slice(0,7);
+  const today = monthKey(new Date());
   sel.innerHTML = `<option value="">الشهر الحالي (${today})</option>` +
     months.map(m => `<option value="${m}">${m}</option>`).join('');
 }
@@ -60,14 +60,14 @@ function populateHRMonthFilter() {
 function renderHRPage() {
   renderSellersSettings();
   populateHRMonthFilter();
-  const selMonth = document.getElementById('hrMonthFilter')?.value || new Date().toISOString().slice(0,7);
+  const selMonth = document.getElementById('hrMonthFilter')?.value || monthKey(new Date());
   const hrRec = getHR().find(h => h.month === selMonth) || { targets: {} };
   const targets = hrRec.targets || {};
   const salespeople = (getSalespeople ? getSalespeople() : (DB.g('pos_salespeople',[])))
     .map(sp => typeof sp === 'string' ? sp : sp.name);
 
   // Calculate actual sales per person for selected month
-  const allSales = getSales().filter(s => !s.isReturn && s.date && s.date.slice(0,7) === selMonth);
+  const allSales = getSales().filter(s => !s.isReturn && s.date && monthKey(s.date) === selMonth);
   const salesBySP = {};
   allSales.forEach(s => {
     const sp = s.salesperson || 'غير محدد';

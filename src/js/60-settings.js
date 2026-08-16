@@ -722,7 +722,7 @@ function wipeBranchSales() {
       const batch = _db.batch();
       for (let i = 0; i < 12; i++) {
         const d = new Date(); d.setMonth(d.getMonth() - i);
-        const month = d.toISOString().slice(0, 7);
+        const month = monthKey(d);
         batch.delete(_db.collection('pos_sales').doc(month).collection('branches').doc(b));
       }
       batch.commit().catch(function (e) { console.error('wipeBranchSales:', e); });

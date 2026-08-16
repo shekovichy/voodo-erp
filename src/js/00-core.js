@@ -459,7 +459,7 @@ const getSales = () => _salesCache;
 function addSale(sale) {
   _salesCache.push(sale);
   if (!_fbReady) { _setLocalSales(_salesCache); return; }
-  const month = sale.date.slice(0, 7); // YYYY-MM
+  const month = monthKey(sale.date); // شهر الفرع مش UTC
   const branchId = sale.branchId || currentBranch;
   // Branch-scoped subcollection, NOT a flat pos_sales/{month} doc. Firestore
   // security rules operate at the document level — they can allow or deny
@@ -498,7 +498,7 @@ function setSales(v) {
   const months = [];
   for (let i = 0; i < 24; i++) {
     const d = new Date(); d.setMonth(d.getMonth() - i);
-    months.push(d.toISOString().slice(0, 7));
+    months.push(monthKey(d));
   }
   const batch = _db.batch();
   months.forEach(month => {

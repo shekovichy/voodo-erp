@@ -170,7 +170,7 @@ function buildReceiptESCPOS(sale) {
   if (s.shopPhone)   line('Tel: ' + s.shopPhone);
   line('--------------------------------');
   push([ESC,0x61,0x00]); // left
-  line('Date: ' + (sale.date || new Date().toISOString().slice(0,10)));
+  line('Date: ' + (sale.date || todayKey()));
   line('Inv : #' + String(sale.id||'').slice(-6));
   if (sale.salesperson) line('By  : ' + sale.salesperson);
   line('--------------------------------');
@@ -209,7 +209,7 @@ async function printReceiptESCPOS(sale) {
 async function testReceiptPrint() {
   if (!_serialWriter) { showToast('الطابعة غير متصلة — اضغط اتصال أولاً'); return; }
   await printReceiptESCPOS({
-    id:'TEST001', date: new Date().toISOString().slice(0,10),
+    id:'TEST001', date: todayKey(),
     salesperson:'اختبار', items:[{name:'منتج تجريبي',qty:2,price:50}],
     total:100, paid:100
   });
