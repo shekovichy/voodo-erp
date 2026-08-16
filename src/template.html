@@ -1485,9 +1485,23 @@
             <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">⚠️ خطوة تقنية لمرة واحدة — نفس فكرة ترحيل المبيعات فوق، بس للمخزون. متعملهاش إلا بعد التنسيق الكامل، ولازم تسبق نشر قواعد Firestore الجديدة مباشرة.</p>
             <button class="btn btn-primary btn-sm" onclick="previewInventoryMigration()">🔍 فحص وترحيل المخزون</button>
           </div>
+          <div class="card" id="bwCard" style="border:1px solid #fecaca;">
+            <div class="card-title">🗑️ حذف بيانات فرع واحد</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
+              للمالك فقط. بيمسح فرع واحد بس — باقي الفروع ما بتتأثرش. مفيش تراجع،
+              فخد <strong>نسخة احتياطية</strong> من تحت الأول.
+            </p>
+            <div class="flex gap-8" style="align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+              <select class="form-control" id="bwBranch" onchange="bwRefreshCounts()" style="width:190px;"></select>
+              <button class="btn btn-danger btn-sm" onclick="wipeBranchInventory()">🗑️ امسح مخزون الفرع</button>
+              <button class="btn btn-danger btn-sm" onclick="wipeBranchSales()">🗑️ امسح مبيعات الفرع</button>
+            </div>
+            <div id="bwCounts" style="background:#fef2f2;border-radius:8px;padding:10px 12px;margin-bottom:8px;"></div>
+            <div id="bwMsg"></div>
+          </div>
           <div class="card">
             <div class="card-title">🗑️ إعادة تعيين البيانات</div>
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">⚠️ سيحذف هذا كل بيانات المبيعات والمخزون نهائياً ولا يمكن التراجع</p>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">⚠️ سيحذف هذا كل بيانات المبيعات والمخزون <strong>في كل الفروع</strong> نهائياً ولا يمكن التراجع</p>
             <div class="flex gap-8">
               <button class="btn btn-danger btn-sm" onclick="resetSales()">حذف المبيعات فقط</button>
               <button class="btn btn-danger btn-sm" onclick="resetAll()">حذف كل البيانات</button>

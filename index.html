@@ -2203,9 +2203,23 @@ body.warehouse-mode #cartFab {
             <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">⚠️ خطوة تقنية لمرة واحدة — نفس فكرة ترحيل المبيعات فوق، بس للمخزون. متعملهاش إلا بعد التنسيق الكامل، ولازم تسبق نشر قواعد Firestore الجديدة مباشرة.</p>
             <button class="btn btn-primary btn-sm" onclick="previewInventoryMigration()">🔍 فحص وترحيل المخزون</button>
           </div>
+          <div class="card" id="bwCard" style="border:1px solid #fecaca;">
+            <div class="card-title">🗑️ حذف بيانات فرع واحد</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
+              للمالك فقط. بيمسح فرع واحد بس — باقي الفروع ما بتتأثرش. مفيش تراجع،
+              فخد <strong>نسخة احتياطية</strong> من تحت الأول.
+            </p>
+            <div class="flex gap-8" style="align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+              <select class="form-control" id="bwBranch" onchange="bwRefreshCounts()" style="width:190px;"></select>
+              <button class="btn btn-danger btn-sm" onclick="wipeBranchInventory()">🗑️ امسح مخزون الفرع</button>
+              <button class="btn btn-danger btn-sm" onclick="wipeBranchSales()">🗑️ امسح مبيعات الفرع</button>
+            </div>
+            <div id="bwCounts" style="background:#fef2f2;border-radius:8px;padding:10px 12px;margin-bottom:8px;"></div>
+            <div id="bwMsg"></div>
+          </div>
           <div class="card">
             <div class="card-title">🗑️ إعادة تعيين البيانات</div>
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">⚠️ سيحذف هذا كل بيانات المبيعات والمخزون نهائياً ولا يمكن التراجع</p>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">⚠️ سيحذف هذا كل بيانات المبيعات والمخزون <strong>في كل الفروع</strong> نهائياً ولا يمكن التراجع</p>
             <div class="flex gap-8">
               <button class="btn btn-danger btn-sm" onclick="resetSales()">حذف المبيعات فقط</button>
               <button class="btn btn-danger btn-sm" onclick="resetAll()">حذف كل البيانات</button>
@@ -5394,7 +5408,7 @@ function _showPageImpl(page) {
   if (page === 'sales')      { initSalesFilter(); renderSales(); }
   if (page === 'reports')    { buildSalesReport(); setTimeout(()=>showVLTab('catreport'),100); }
   if (page === 'suspended')  renderSuspendedPage();
-  if (page === 'settings')   { renderLastBackupInfo(); initGoogleDriveUI(); document.getElementById('sVipThreshold').value = _settingsCache.vipThreshold || 1000; populateBranchNameInputs(); }
+  if (page === 'settings')   { renderLastBackupInfo(); initGoogleDriveUI(); document.getElementById('sVipThreshold').value = _settingsCache.vipThreshold || 1000; populateBranchNameInputs(); renderBranchWipeUI(); }
   if (page === 'userperms')  { renderUserAccountsSettings(); renderLegacyLoginCleanup(); }
   if (page === 'customers')  renderCustomers();
   if (page === 'promos')     renderPromosPage();
@@ -8189,6 +8203,116 @@ function _resetAllConfirmed() {
   showMsg('sSettingsMsg','تم حذف كل البيانات','danger');
 }
 
+
+// ══════════════════════════════════════════════════════════════════
+// حذف بيانات فرع واحد (المالك فقط)
+//
+// The existing resetSales/resetAll are all-or-nothing across every branch.
+// Clearing one branch — a warehouse stocked by mistake, a branch that closed,
+// a test branch — meant wiping the lot. These do one branch at a time.
+//
+// Guarded harder than the old buttons, because they act on live data and
+// there is no undo: owner only, a count of exactly what is about to go, the
+// branch name typed out by hand, and an audit entry written BEFORE the delete
+// so the record survives even if the delete half-fails.
+// ══════════════════════════════════════════════════════════════════
+function renderBranchWipeUI() {
+  const sel = document.getElementById('bwBranch');
+  if (!sel) return;
+  const names = getBranches();
+  sel.innerHTML = BRANCH_IDS.map(function (b) {
+    return '<option value="' + b + '">' + escHtml(names[b] || BRANCH_DEFAULTS[b] || b) + '</option>';
+  }).join('');
+  bwRefreshCounts();
+}
+
+// What's actually there, so the confirmation isn't abstract.
+function bwRefreshCounts() {
+  const b  = document.getElementById('bwBranch').value;
+  const el = document.getElementById('bwCounts');
+  if (!b || !el) return;
+  const inv    = getInv(b);
+  const value  = inv.reduce(function (t, p) { return t + (parseFloat(p.cost) || 0) * (parseInt(p.qty) || 0); }, 0);
+  const sales  = getSales().filter(function (s) { return s.branchId === b; });
+  const rev    = sales.reduce(function (t, s) { return t + (parseFloat(s.total) || 0); }, 0);
+  el.innerHTML =
+      '<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;">'
+    + '<span>📦 <strong>' + inv.length + '</strong> صنف بقيمة <strong>' + fmt(value) + ' ج</strong></span>'
+    + '<span>🧾 <strong>' + sales.length + '</strong> فاتورة بإجمالي <strong>' + fmt(rev) + ' ج</strong></span>'
+    + '</div>';
+}
+
+function _bwConfirm(branchId, what, countText, run) {
+  if (!isRealOwner) { showMsg('bwMsg', 'حذف بيانات الفرع للمالك فقط', 'danger'); return; }
+  const name = getBranchName(branchId);
+  showPromptModal(
+    '⚠️ حذف ' + what + ' فرع "' + name + '" نهائياً — ' + countText + '.\n'
+    + 'مفيش تراجع. اكتب اسم الفرع بالظبط للتأكيد:',
+    '',
+    function (typed) {
+      if ((typed || '').trim() !== name) {
+        showMsg('bwMsg', 'الاسم مش مطابق — ما اتحذفش حاجة', 'warning');
+        return;
+      }
+      run();
+      bwRefreshCounts();
+      renderInventory();
+    }
+  );
+}
+
+function wipeBranchInventory() {
+  const b   = document.getElementById('bwBranch').value;
+  const inv = getInv(b);
+  if (!inv.length) { showMsg('bwMsg', 'الفرع ده مفيهوش مخزون أصلاً', 'warning'); return; }
+  const value = inv.reduce(function (t, p) { return t + (parseFloat(p.cost) || 0) * (parseInt(p.qty) || 0); }, 0);
+
+  _bwConfirm(b, 'مخزون', inv.length + ' صنف بقيمة ' + fmt(value) + ' ج', function () {
+    // Logged first: if the delete only partly lands, the record of what was
+    // attempted still exists.
+    addAuditLog('branch.wipe.inventory',
+      'حذف مخزون فرع ' + getBranchName(b) + ' — ' + inv.length + ' صنف بقيمة ' + fmt(value) + ' ج', b);
+
+    _invCacheByBranch[b] = [];
+    DB.s('pos_inv_' + b, []);
+    if (_fbReady && _db) {
+      // Emptied, not deleted: the listener in initFirebase subscribes to this
+      // document, and a branch whose document is missing reads as "no data
+      // yet" rather than "no stock" on every device.
+      _db.collection('pos_data').doc('inventory').collection('branches').doc(b)
+         .set({ branchId: b, items: [], updatedAt: Date.now() })
+         .catch(function (e) { console.error('wipeBranchInventory:', e); });
+    }
+    showMsg('bwMsg', '🗑️ اتمسح مخزون ' + getBranchName(b) + ' (' + inv.length + ' صنف)', 'danger');
+  });
+}
+
+function wipeBranchSales() {
+  const b     = document.getElementById('bwBranch').value;
+  const sales = getSales().filter(function (s) { return s.branchId === b; });
+  if (!sales.length) { showMsg('bwMsg', 'الفرع ده مفيهوش مبيعات', 'warning'); return; }
+  const rev = sales.reduce(function (t, s) { return t + (parseFloat(s.total) || 0); }, 0);
+
+  _bwConfirm(b, 'مبيعات', sales.length + ' فاتورة بإجمالي ' + fmt(rev) + ' ج', function () {
+    addAuditLog('branch.wipe.sales',
+      'حذف مبيعات فرع ' + getBranchName(b) + ' — ' + sales.length + ' فاتورة بإجمالي ' + fmt(rev) + ' ج', b);
+
+    // Same 24-month window setSales() uses, but only this branch's documents —
+    // the shared pos_sales/{month} parent and every other branch stay put.
+    if (_fbReady && _db) {
+      const batch = _db.batch();
+      for (let i = 0; i < 24; i++) {
+        const d = new Date(); d.setMonth(d.getMonth() - i);
+        const month = d.toISOString().slice(0, 7);
+        batch.delete(_db.collection('pos_sales').doc(month).collection('branches').doc(b));
+      }
+      batch.commit().catch(function (e) { console.error('wipeBranchSales:', e); });
+    }
+    _salesCache = getSales().filter(function (s) { return s.branchId !== b; });
+    DB.s('sales', _salesCache);
+    showMsg('bwMsg', '🗑️ اتمسحت مبيعات ' + getBranchName(b) + ' (' + sales.length + ' فاتورة)', 'danger');
+  });
+}
 
 // ══════════════════════════════════════════════
 // FIREBASE CONFIG

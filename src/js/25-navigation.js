@@ -66,7 +66,7 @@ function _showPageImpl(page) {
   if (page === 'sales')      { initSalesFilter(); renderSales(); }
   if (page === 'reports')    { buildSalesReport(); setTimeout(()=>showVLTab('catreport'),100); }
   if (page === 'suspended')  renderSuspendedPage();
-  if (page === 'settings')   { renderLastBackupInfo(); initGoogleDriveUI(); document.getElementById('sVipThreshold').value = _settingsCache.vipThreshold || 1000; populateBranchNameInputs(); }
+  if (page === 'settings')   { renderLastBackupInfo(); initGoogleDriveUI(); document.getElementById('sVipThreshold').value = _settingsCache.vipThreshold || 1000; populateBranchNameInputs(); renderBranchWipeUI(); }
   if (page === 'userperms')  { renderUserAccountsSettings(); renderLegacyLoginCleanup(); }
   if (page === 'customers')  renderCustomers();
   if (page === 'promos')     renderPromosPage();

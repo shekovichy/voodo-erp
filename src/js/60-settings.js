@@ -610,3 +610,113 @@ function _resetAllConfirmed() {
   showMsg('sSettingsMsg','تم حذف كل البيانات','danger');
 }
 
+
+// ══════════════════════════════════════════════════════════════════
+// حذف بيانات فرع واحد (المالك فقط)
+//
+// The existing resetSales/resetAll are all-or-nothing across every branch.
+// Clearing one branch — a warehouse stocked by mistake, a branch that closed,
+// a test branch — meant wiping the lot. These do one branch at a time.
+//
+// Guarded harder than the old buttons, because they act on live data and
+// there is no undo: owner only, a count of exactly what is about to go, the
+// branch name typed out by hand, and an audit entry written BEFORE the delete
+// so the record survives even if the delete half-fails.
+// ══════════════════════════════════════════════════════════════════
+function renderBranchWipeUI() {
+  const sel = document.getElementById('bwBranch');
+  if (!sel) return;
+  const names = getBranches();
+  sel.innerHTML = BRANCH_IDS.map(function (b) {
+    return '<option value="' + b + '">' + escHtml(names[b] || BRANCH_DEFAULTS[b] || b) + '</option>';
+  }).join('');
+  bwRefreshCounts();
+}
+
+// What's actually there, so the confirmation isn't abstract.
+function bwRefreshCounts() {
+  const b  = document.getElementById('bwBranch').value;
+  const el = document.getElementById('bwCounts');
+  if (!b || !el) return;
+  const inv    = getInv(b);
+  const value  = inv.reduce(function (t, p) { return t + (parseFloat(p.cost) || 0) * (parseInt(p.qty) || 0); }, 0);
+  const sales  = getSales().filter(function (s) { return s.branchId === b; });
+  const rev    = sales.reduce(function (t, s) { return t + (parseFloat(s.total) || 0); }, 0);
+  el.innerHTML =
+      '<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;">'
+    + '<span>📦 <strong>' + inv.length + '</strong> صنف بقيمة <strong>' + fmt(value) + ' ج</strong></span>'
+    + '<span>🧾 <strong>' + sales.length + '</strong> فاتورة بإجمالي <strong>' + fmt(rev) + ' ج</strong></span>'
+    + '</div>';
+}
+
+function _bwConfirm(branchId, what, countText, run) {
+  if (!isRealOwner) { showMsg('bwMsg', 'حذف بيانات الفرع للمالك فقط', 'danger'); return; }
+  const name = getBranchName(branchId);
+  showPromptModal(
+    '⚠️ حذف ' + what + ' فرع "' + name + '" نهائياً — ' + countText + '.\n'
+    + 'مفيش تراجع. اكتب اسم الفرع بالظبط للتأكيد:',
+    '',
+    function (typed) {
+      if ((typed || '').trim() !== name) {
+        showMsg('bwMsg', 'الاسم مش مطابق — ما اتحذفش حاجة', 'warning');
+        return;
+      }
+      run();
+      bwRefreshCounts();
+      renderInventory();
+    }
+  );
+}
+
+function wipeBranchInventory() {
+  const b   = document.getElementById('bwBranch').value;
+  const inv = getInv(b);
+  if (!inv.length) { showMsg('bwMsg', 'الفرع ده مفيهوش مخزون أصلاً', 'warning'); return; }
+  const value = inv.reduce(function (t, p) { return t + (parseFloat(p.cost) || 0) * (parseInt(p.qty) || 0); }, 0);
+
+  _bwConfirm(b, 'مخزون', inv.length + ' صنف بقيمة ' + fmt(value) + ' ج', function () {
+    // Logged first: if the delete only partly lands, the record of what was
+    // attempted still exists.
+    addAuditLog('branch.wipe.inventory',
+      'حذف مخزون فرع ' + getBranchName(b) + ' — ' + inv.length + ' صنف بقيمة ' + fmt(value) + ' ج', b);
+
+    _invCacheByBranch[b] = [];
+    DB.s('pos_inv_' + b, []);
+    if (_fbReady && _db) {
+      // Emptied, not deleted: the listener in initFirebase subscribes to this
+      // document, and a branch whose document is missing reads as "no data
+      // yet" rather than "no stock" on every device.
+      _db.collection('pos_data').doc('inventory').collection('branches').doc(b)
+         .set({ branchId: b, items: [], updatedAt: Date.now() })
+         .catch(function (e) { console.error('wipeBranchInventory:', e); });
+    }
+    showMsg('bwMsg', '🗑️ اتمسح مخزون ' + getBranchName(b) + ' (' + inv.length + ' صنف)', 'danger');
+  });
+}
+
+function wipeBranchSales() {
+  const b     = document.getElementById('bwBranch').value;
+  const sales = getSales().filter(function (s) { return s.branchId === b; });
+  if (!sales.length) { showMsg('bwMsg', 'الفرع ده مفيهوش مبيعات', 'warning'); return; }
+  const rev = sales.reduce(function (t, s) { return t + (parseFloat(s.total) || 0); }, 0);
+
+  _bwConfirm(b, 'مبيعات', sales.length + ' فاتورة بإجمالي ' + fmt(rev) + ' ج', function () {
+    addAuditLog('branch.wipe.sales',
+      'حذف مبيعات فرع ' + getBranchName(b) + ' — ' + sales.length + ' فاتورة بإجمالي ' + fmt(rev) + ' ج', b);
+
+    // Same 24-month window setSales() uses, but only this branch's documents —
+    // the shared pos_sales/{month} parent and every other branch stay put.
+    if (_fbReady && _db) {
+      const batch = _db.batch();
+      for (let i = 0; i < 24; i++) {
+        const d = new Date(); d.setMonth(d.getMonth() - i);
+        const month = d.toISOString().slice(0, 7);
+        batch.delete(_db.collection('pos_sales').doc(month).collection('branches').doc(b));
+      }
+      batch.commit().catch(function (e) { console.error('wipeBranchSales:', e); });
+    }
+    _salesCache = getSales().filter(function (s) { return s.branchId !== b; });
+    DB.s('sales', _salesCache);
+    showMsg('bwMsg', '🗑️ اتمسحت مبيعات ' + getBranchName(b) + ' (' + sales.length + ' فاتورة)', 'danger');
+  });
+}
