@@ -50,7 +50,62 @@ function applyBranchDashboardFilter() {
   if (cmpCard) cmpCard.style.display = isAdmin ? '' : 'none';
 }
 
+// ── Negative stock ──────────────────────────────────────────────────
+// Nothing refuses a sale for stock that isn't there: adjustStock applies the
+// delta inside a transaction (so the arithmetic is right and two tills never
+// clobber each other) but never rejects a result below zero. Two cashiers
+// selling the last unit at the same moment both succeed and the count lands at
+// -1. So does a single sale against a count that was wrong to begin with,
+// which is the likelier cause.
+//
+// Enforcing it at the point of sale would mean a cashier can't complete a sale
+// without a confirmed round-trip to the server — a real cost for shops on
+// intermittent connections, to prevent something the last full audit found
+// zero instances of across 2,992 items. This surfaces it instead: the count is
+// still wrong, but nobody has to notice it by accident months later.
+//
+// Scans EVERY branch regardless of the dashboard's branch filter — a negative
+// count in a branch you aren't looking at is exactly the one you'd miss.
+function negativeStockItems() {
+  const out = [];
+  BRANCH_IDS.forEach(b => {
+    (getInv(b) || []).forEach(p => {
+      const q = parseInt(p.qty);
+      if (q < 0) out.push({ branchId: b, code: p.code, name: p.name, qty: q });
+    });
+  });
+  return out.sort((a, z) => a.qty - z.qty);   // الأسوأ الأول
+}
+
+function renderNegativeStockAlert() {
+  const el = document.getElementById('negStockAlert');
+  if (!el) return;
+  const bad = negativeStockItems();
+  if (!bad.length) { el.classList.add('hidden'); return; }
+
+  const rows = bad.slice(0, 8).map(function (i) {
+    return '<div style="display:flex;justify-content:space-between;gap:12px;padding:4px 0;font-size:13px;border-bottom:1px solid #fecaca;">'
+      + '<span>' + escHtml(i.name) + ' <span style="color:#991b1b;font-size:11px;">(' + escHtml(i.code) + ' — ' + escHtml(getBranchName(i.branchId)) + ')</span></span>'
+      + '<strong style="color:#b91c1c;">' + i.qty + '</strong></div>';
+  }).join('');
+
+  // Worst-first means one bad branch can fill the visible rows and hide the
+  // others entirely, so the count of affected branches goes in the heading.
+  const branches = [...new Set(bad.map(i => i.branchId))];
+  const where = branches.length === 1
+    ? ' في ' + escHtml(getBranchName(branches[0]))
+    : ' في ' + branches.length + ' فروع';
+
+  el.innerHTML =
+      '<div style="font-weight:800;color:#b91c1c;margin-bottom:8px;">⚠️ ' + bad.length + ' صنف رصيده بالسالب' + where + '</div>'
+    + '<div style="font-size:12px;color:#7f1d1d;margin-bottom:8px;">اتباع منه أكتر من الموجود — يا إما العدّ كان غلط من الأول، يا إما اتباع صنف واحد من جهازين في نفس اللحظة. صحّح الكمية من المخزون أو اعمل جرد للفرع.</div>'
+    + rows
+    + (bad.length > 8 ? '<div style="font-size:12px;color:#7f1d1d;margin-top:6px;">…و' + (bad.length - 8) + ' صنف كمان</div>' : '');
+  el.classList.remove('hidden');
+}
+
 function buildDashboard() {
+  renderNegativeStockAlert();
   // Populate branch filter dropdown
   const dbf = document.getElementById('dashBranchFilter');
   if (dbf && dbf.options.length <= 1) {
