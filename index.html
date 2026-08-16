@@ -8242,15 +8242,23 @@ function bwRefreshCounts() {
     + '</div>';
 }
 
+// Branch names can carry decoration the user can't reasonably retype — the
+// warehouse is stored as "🏭 المخزن الرئيسي", so typing the words correctly was
+// rejected for a missing emoji. Compare letters and digits only: still a
+// deliberate act of typing the name, without demanding an emoji.
+function _bwNormalizeName(s) {
+  return String(s || '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().toLowerCase();
+}
+
 function _bwConfirm(branchId, what, countText, run) {
   if (!isRealOwner) { showMsg('bwMsg', 'حذف بيانات الفرع للمالك فقط', 'danger'); return; }
   const name = getBranchName(branchId);
   showPromptModal(
     '⚠️ حذف ' + what + ' فرع "' + name + '" نهائياً — ' + countText + '.\n'
-    + 'مفيش تراجع. اكتب اسم الفرع بالظبط للتأكيد:',
+    + 'مفيش تراجع. اكتب اسم الفرع للتأكيد:',
     '',
     function (typed) {
-      if ((typed || '').trim() !== name) {
+      if (_bwNormalizeName(typed) !== _bwNormalizeName(name)) {
         showMsg('bwMsg', 'الاسم مش مطابق — ما اتحذفش حاجة', 'warning');
         return;
       }
