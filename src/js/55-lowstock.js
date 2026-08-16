@@ -141,22 +141,39 @@ function buildHeatmap(sales) {
 // ══════════════════════════════════════════════
 // #18 BACKUP
 // ══════════════════════════════════════════════
-function exportBackup() {
+// Writes a snapshot to disk. `filename` and `quiet` exist for the safety copy
+// taken before a restore, which shouldn't be announced as a user backup or
+// counted as "last backup taken".
+function _downloadBackup(filename) {
   // Full snapshot (all branches + customers/suppliers/purchases/...) — the
   // old version exported only the CURRENT branch's inventory, so a restore
   // silently dropped every other branch. See _buildFullBackup() in 05-utils.js.
-  const backup = _buildFullBackup();
-  const json = JSON.stringify(backup, null, 2);
+  const json = JSON.stringify(_buildFullBackup(), null, 2);
   const blob = new Blob([json], {type:'application/json'});
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = 'voodo_erp_backup_' + new Date().toISOString().slice(0,10) + '.json';
+  a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function exportBackup() {
+  _downloadBackup('voodo_erp_backup_' + todayKey() + '.json');
   DB.s('lastBackup', new Date().toISOString());
   showMsg('sBackupMsg', 'تم تصدير النسخة الاحتياطية بنجاح');
   renderLastBackupInfo();
+}
+
+// Restoring is now a real replace, so a mistaken restore would destroy every
+// invoice recorded since the file was made. Saving the current state first
+// makes that mistake undoable: restore the wrong file, then restore this one
+// and you are back where you started. Costs one download and removes the only
+// reason to prefer the old silent merge.
+function _snapshotBeforeRestore() {
+  const name = 'voodo_erp_قبل_الاستعادة_' + todayKey() + '.json';
+  try { _downloadBackup(name); return name; }
+  catch (e) { console.error('_snapshotBeforeRestore:', e); return null; }
 }
 
 // Every OTHER restored field goes through a set*() helper that actually
@@ -234,9 +251,16 @@ function importBackup(e) {
     if (when) msg += ' بحالتها يوم ' + String(when).slice(0, 10);
     msg += '. ';
     msg += lost.length
-      ? '⚠️ ' + lost.length + ' فاتورة بإجمالي ' + fmt(lostVal) + ' ج اتسجلت بعد النسخة دي وهتتمسح نهائياً. تكمّل؟'
-      : 'مفيش فواتير أحدث من النسخة، فمفيش حاجة هتضيع. تكمّل؟';
-    showConfirmModal(msg, function () { _importBackupConfirmed(file); });
+      ? '⚠️ ' + lost.length + ' فاتورة بإجمالي ' + fmt(lostVal) + ' ج اتسجلت بعد النسخة دي وهتتمسح نهائياً. '
+      : 'مفيش فواتير أحدث من النسخة، فمفيش حاجة هتضيع. ';
+    msg += '📥 هيتنزّل ملف بحالتك الحالية الأول، فلو استعدت الملف الغلط تقدر ترجع بيه. تكمّل؟';
+    showConfirmModal(msg, function () {
+      // Before anything is touched — a restore that goes wrong is otherwise
+      // unrecoverable now that it genuinely replaces.
+      const saved = _snapshotBeforeRestore();
+      if (saved) showMsg('sBackupMsg', '📥 اتحفظت حالتك الحالية في "' + saved + '" — احتفظ بيه لحد ما تتأكد', 'warning');
+      _importBackupConfirmed(file);
+    });
   };
   peek.readAsText(file);
 }
