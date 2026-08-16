@@ -8593,9 +8593,33 @@ function emailToUsername(e) {
 // The resolved role is cached in localStorage so a POS device that
 // restarts offline can resume its session (Firebase Auth itself
 // persists the sign-in locally).
+// isOwner() in firestore.rules requires email_verified, and that claim is read
+// from the ID token, not from the account. A token minted before the address
+// was verified keeps saying false for up to an hour — so verifying the owner's
+// email and then signing in can leave the owner locked out of everything, with
+// no second route in: that account has no roles/{uid} document, isOwner() is
+// its entire authority.
+//
+// Cheap insurance: if this is the owner and the token still says unverified,
+// reload the account and force a fresh token before deciding anything. Costs
+// one round-trip on the owner's login and nothing on anyone else's. Failure is
+// ignored on purpose — offline, the cached session should still open.
+async function _refreshOwnerTokenIfStale(fbUser) {
+  if ((fbUser.email || '').toLowerCase() !== OWNER_EMAIL) return;
+  try {
+    const tok = await fbUser.getIdTokenResult();
+    if (tok.claims.email_verified === true) return;
+    await fbUser.reload();
+    await fbUser.getIdToken(true);   // true = تجاهل الكاش وهات توكن جديد
+  } catch (e) {
+    console.error('_refreshOwnerTokenIfStale:', e);
+  }
+}
+
 async function resolveRoleAndEnter(fbUser) {
   let rec = null;
   if ((fbUser.email || '').toLowerCase() === OWNER_EMAIL) {
+    await _refreshOwnerTokenIfStale(fbUser);
     rec = { role: 'admin', username: emailToUsername(fbUser.email), branchId: null, email: fbUser.email };
   } else {
     const snap = await firebase.firestore().collection('roles').doc(fbUser.uid).get();
