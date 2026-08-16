@@ -433,6 +433,28 @@ function todayKey(d) {
   return monthKey(x) + '-' + String(x.getDate()).padStart(2, '0');
 }
 
+// ── Refunds must return what was PAID, not the list price ───────────
+// A cart-level discount (manager discount, promotion) lives on the invoice as
+// `disc`, never on the lines — so `qty * item.price` is the price before that
+// discount. Refunding it handed back more cash than the customer ever paid:
+// sell at 100 with 20 off, take 80, refund 100, lose 20 on every discounted
+// return. Per-line price overrides (the approval flow) are already ON the line
+// and stay correct either way.
+//
+// The proportion is recoverable for old invoices too — sub/disc/total have
+// always been stored — so no migration is needed.
+function saleRefundRatio(sale) {
+  const sub  = parseFloat(sale && sale.sub)   || 0;
+  const disc = parseFloat(sale && sale.disc)  || 0;
+  if (!(sub > 0) || !(disc > 0)) return 1;   // no cart discount → refund in full
+  const ratio = (sub - disc) / sub;
+  return (ratio > 0 && ratio <= 1) ? ratio : 1;
+}
+// Rounded to piastres so the refund total and the per-line figures agree.
+function refundAmountFor(sale, lineTotal) {
+  return Math.round(lineTotal * saleRefundRatio(sale) * 100) / 100;
+}
+
 const getSales = () => _salesCache;
 function addSale(sale) {
   _salesCache.push(sale);

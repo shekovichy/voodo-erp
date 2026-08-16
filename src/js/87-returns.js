@@ -42,6 +42,7 @@ function calcReturnTotal() {
     const qty = parseInt(document.getElementById('ret-qty-'+idx)?.value)||0;
     total += qty * item.price;
   });
+  total = refundAmountFor(_returnOriginalSale, total);   // خصم الفاتورة بيتوزّع بالنسبة
   const sumEl = document.getElementById('returnSummary');
   const totEl = document.getElementById('returnTotalDisplay');
   if (sumEl && totEl) { totEl.textContent = fmt(total); sumEl.style.display = total > 0 ? 'block' : 'none'; }
@@ -65,11 +66,15 @@ function processReturn() {
     if (qty > 0) { returnItems.push({...item, qty:-qty}); returnTotal += qty * item.price; }
   });
   if (!returnItems.length) { showToast('اختر على الأقل صنف واحد للإرجاع'); return; }
-  showConfirmModal(`تأكيد إرجاع ${returnItems.length} صنف — المبلغ المسترد: ${fmt(returnTotal)} ج؟`, function() {
-  _processReturnConfirmed(sale, reason, returnItems, returnTotal);
+  const grossReturn = returnTotal;
+  returnTotal = refundAmountFor(sale, returnTotal);
+  const note = grossReturn !== returnTotal
+    ? ` (سعر القايمة ${fmt(grossReturn)} ج ناقص خصم الفاتورة)` : '';
+  showConfirmModal(`تأكيد إرجاع ${returnItems.length} صنف — المبلغ المسترد: ${fmt(returnTotal)} ج${note}؟`, function() {
+  _processReturnConfirmed(sale, reason, returnItems, returnTotal, grossReturn);
   });
 }
-function _processReturnConfirmed(sale, reason, returnItems, returnTotal) {
+function _processReturnConfirmed(sale, reason, returnItems, returnTotal, grossReturn) {
   // Restock into the ORIGINAL sale's branch, not whatever branch the admin is
   // currently viewing — otherwise returning a b1 invoice while viewing b2 would
   // credit the wrong branch's stock. Transactional (see adjustStock).
@@ -92,8 +97,11 @@ function _processReturnConfirmed(sale, reason, returnItems, returnTotal) {
     customerName:   sale.customerName || '',
     customerPhone:  sale.customerPhone || sale.phone || '',
     items:          returnItems,
-    sub:            -returnTotal,
-    disc:           0,
+    // زي شكل الفاتورة: total = sub - disc. السطور بسعر القايمة، فخصم
+    // الفاتورة اللي رجع لازم يتسجل هنا كمان — calcProfit بيطرح `disc`،
+    // ومع disc:0 المرتجع بخصم كان بيلغي هامش أكبر من اللي البيعة كسبته.
+    sub:            -(grossReturn || returnTotal),
+    disc:           -((grossReturn || returnTotal) - returnTotal),
     total:          -returnTotal,
     paid:           -returnTotal,
     change:         0,

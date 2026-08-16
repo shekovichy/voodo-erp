@@ -105,6 +105,7 @@ function calcCashierReturnTotal() {
     const qty = parseInt(document.getElementById('cr-qty-'+idx)?.value) || 0;
     total += qty * item.price;
   });
+  total = refundAmountFor(_crSelectedSale, total);   // خصم الفاتورة بيتوزّع بالنسبة
   const sumEl = document.getElementById('crReturnSummary');
   const totEl = document.getElementById('crReturnTotal');
   if (sumEl && totEl) { totEl.textContent = fmt(total); sumEl.style.display = total > 0 ? 'block' : 'none'; }
@@ -129,11 +130,15 @@ function processCashierReturn() {
     if (qty > 0) { returnItems.push({...item, qty: -qty}); returnTotal += qty * item.price; }
   });
   if (!returnItems.length) { showToast('اختر على الأقل صنف واحد للإرجاع'); return; }
-  showConfirmModal(`تأكيد إرجاع ${returnItems.length} صنف — المبلغ المسترد: ${fmt(returnTotal)} ج؟`, function() {
-  _processCashierReturnConfirmed(sale, reason, returnItems, returnTotal);
+  const grossReturn = returnTotal;
+  returnTotal = refundAmountFor(sale, returnTotal);
+  const note = grossReturn !== returnTotal
+    ? ` (سعر القايمة ${fmt(grossReturn)} ج ناقص خصم الفاتورة)` : '';
+  showConfirmModal(`تأكيد إرجاع ${returnItems.length} صنف — المبلغ المسترد: ${fmt(returnTotal)} ج${note}؟`, function() {
+  _processCashierReturnConfirmed(sale, reason, returnItems, returnTotal, grossReturn);
   });
 }
-function _processCashierReturnConfirmed(sale, reason, returnItems, returnTotal) {
+function _processCashierReturnConfirmed(sale, reason, returnItems, returnTotal, grossReturn) {
   // Restock into the original sale's branch (matches the branchId recorded on
   // the return record below). Transactional per-product deltas (see adjustStock).
   adjustStock(returnItems.map(ri => ({ code: ri.code, delta: Math.abs(ri.qty) })), sale.branchId || currentBranch);
@@ -152,8 +157,12 @@ function _processCashierReturnConfirmed(sale, reason, returnItems, returnTotal) 
     customerName:   sale.customerName || '',
     customerPhone:  sale.customerPhone || sale.phone || '',
     items:          returnItems,
-    sub:            -returnTotal,
-    disc:           0,
+    // Mirrors a sale's shape: total = sub - disc. The lines carry list price,
+    // so the invoice discount that was given back has to be recorded here too
+    // — calcProfit subtracts `disc`, and with disc:0 a discounted return
+    // cancelled MORE margin than the sale ever earned.
+    sub:            -(grossReturn || returnTotal),
+    disc:           -((grossReturn || returnTotal) - returnTotal),
     total:          -returnTotal,
     paid:           -returnTotal,
     change:         0,
