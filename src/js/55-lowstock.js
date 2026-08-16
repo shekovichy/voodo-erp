@@ -169,28 +169,76 @@ function exportBackup() {
 // documented as reset-only (v=[]) — so this groups the imported sales by
 // month+branch and merge-writes each into the same
 // pos_sales/{month}/branches/{branchId} structure addSale() uses.
+// Restore REPLACES, which is what the confirmation has always promised. It
+// used to arrayUnion into the existing documents while the local cache was
+// overwritten outright — so the two disagreed the moment it ran, and the next
+// snapshot pushed the merged cloud version back over the local one. Inventory
+// was already replaced wholesale (setInv), so sales were the odd one out.
+//
+// Every month/branch document in the cached window is written, empty where the
+// backup has nothing for it. Anything recorded after the backup is therefore
+// gone — which is the point of restoring, and why _salesLostByRestore() counts
+// it into the confirmation first.
 function _restoreSalesToCloud(sales) {
   if (!_fbReady) { DB.s('sales', sales); return; }
   const byMonthBranch = {};
   sales.forEach(s => {
-    const month = (s.date || '').slice(0, 7);
+    const month = monthKey(s.date);
     const b = s.branchId || currentBranch;
     if (!month) return;
     const key = month + '|' + b;
     (byMonthBranch[key] || (byMonthBranch[key] = { month, b, items: [] })).items.push(s);
   });
-  Object.values(byMonthBranch).forEach(({ month, b, items }) => {
-    _db.collection('pos_sales').doc(month).collection('branches').doc(b)
-       .set({ items: firebase.firestore.FieldValue.arrayUnion(...items), updatedAt: Date.now(), month, branchId: b }, { merge: true })
-       .catch(e => console.error('Firestore restore sales:', e));
+
+  // Same 12-month window the listener caches (65-firebase.js) — writing
+  // outside it would clear months nothing can see or count.
+  const months = [];
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(); d.setMonth(d.getMonth() - i);
+    months.push(monthKey(d));
+  }
+  const batch = _db.batch();
+  months.forEach(month => {
+    BRANCH_IDS.forEach(b => {
+      const items = (byMonthBranch[month + '|' + b] || {}).items || [];
+      batch.set(_db.collection('pos_sales').doc(month).collection('branches').doc(b),
+                { items, updatedAt: Date.now(), month, branchId: b });
+    });
   });
+  batch.commit().catch(e => console.error('Firestore restore sales:', e));
 }
 
+// Invoices that exist now and are not in the backup — the ones a restore
+// throws away. Counted before asking, not discovered afterwards.
+function _salesLostByRestore(backupSales) {
+  const keep = new Set((backupSales || []).map(s => String(s.id)));
+  return getSales().filter(s => !keep.has(String(s.id)));
+}
+
+// Reads the file before asking, so the confirmation can name what the restore
+// destroys instead of saying "will replace current data" and leaving the owner
+// to find out which invoices that meant.
 function importBackup(e) {
   const file = e.target.files[0]; if (!file) return;
-  showConfirmModal('استعادة النسخة الاحتياطية ستستبدل البيانات الحالية. هل تريد المتابعة؟', function() {
-  _importBackupConfirmed(file);
-  });
+  const peek = new FileReader();
+  peek.onload = ev => {
+    let lost = [], lostVal = 0, when = '';
+    try {
+      const data = JSON.parse(ev.target.result);
+      lost    = _salesLostByRestore(data.sales);
+      lostVal = lost.reduce((t, s) => t + (parseFloat(s.total) || 0), 0);
+      when    = data.date || data.createdAt || '';
+    } catch (err) { /* المسار الأصلي هيبلّغ عن الملف الباظ بتفصيل */ }
+
+    let msg = 'استعادة النسخة الاحتياطية هتستبدل البيانات الحالية بالكامل';
+    if (when) msg += ' بحالتها يوم ' + String(when).slice(0, 10);
+    msg += '. ';
+    msg += lost.length
+      ? '⚠️ ' + lost.length + ' فاتورة بإجمالي ' + fmt(lostVal) + ' ج اتسجلت بعد النسخة دي وهتتمسح نهائياً. تكمّل؟'
+      : 'مفيش فواتير أحدث من النسخة، فمفيش حاجة هتضيع. تكمّل؟';
+    showConfirmModal(msg, function () { _importBackupConfirmed(file); });
+  };
+  peek.readAsText(file);
 }
 function _importBackupConfirmed(file) {
   const reader = new FileReader();
