@@ -41,7 +41,8 @@ Most ERP systems require expensive servers, complex setup, and weeks of training
 ### 📦 Inventory Management
 - Multi-branch stock control (branches are added at runtime, not fixed in code)
 - Real-time stock transfers between branches
-- **Stock-take** — count a whole branch or a custom sheet, scan by barcode, review variances before anything is written
+- **Stock-take** — count a whole branch or a custom sheet, scan by barcode or search by part of a code or name, add a product you found that the system didn't know about without leaving the count
+- **Stock-take settlement** — counting and applying are separate steps: finishing a count issues a settlement valued at cost (variances, surplus/shortage/net, matched and uncounted items) that can be reviewed and corrected as often as needed, and only the owner approves it onto stock. Exports to PDF, kept permanently.
 - Low stock alerts & configurable thresholds
 - Product families & categories
 - Barcode & price tag printing

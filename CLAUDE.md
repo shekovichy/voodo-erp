@@ -81,22 +81,22 @@ grep -oE '^function [a-zA-Z0-9_]+|^const [a-zA-Z0-9_]+ = ' src/js/الملف.js
 | `src/js/02-demo-cleanup.js` | تنظيف بيانات الديمو اللي تسربت للداتا الحقيقية (مرة واحدة) | 154 |
 | `src/js/03-sales-migration.js` | ترحيل `pos_sales` من مسطح لمعزول بالفرع (مرة واحدة) | 123 |
 | `src/js/04-inventory-migration.js` | ترحيل المخزون لعزل الفروع (مرة واحدة) | 104 |
-| `src/js/05-utils.js` | fmt، showMsg، getDateRange، login/logout | 634 |
+| `src/js/05-utils.js` | fmt، showMsg، getDateRange، login/logout | 650 |
 | `src/js/06-permissions-migration.js` | backfill لـ `roles/{uid}.permissions` (مرة واحدة، آمن التكرار) | 114 |
 | `src/js/10-pos-products.js` | renderProducts، handleSearchKey | 55 |
 | `src/js/15-pos-cart.js` | addToCart، renderCart، cartTotals | 134 |
 | `src/js/20-pos-payment.js` | openPayment، completeSale، showReceipt | 266 |
 | `src/js/25-navigation.js` | showPage | 98 |
 | `src/js/30-dashboard.js` | buildDashboard، calcProfit | 263 |
-| `src/js/35-inventory.js` | renderInventory، saveProduct، importExcel | 270 |
-| `src/js/36-stocktake.js` | جرد المخزون — فرع كامل أو شيت مخصص، جلسة محفوظة | 239 |
+| `src/js/35-inventory.js` | renderInventory، saveProduct، importExcel | 294 |
+| `src/js/36-stocktake.js` | جرد المخزون + التسوية — العدّ والتطبيق خطوتين منفصلتين، سجل دائم، PDF | 783 |
 | `src/js/40-sales.js` | renderSales، viewSale | 82 |
 | `src/js/45-reports.js` | buildSalesReport، buildInventoryReport، buildProfitReport | 325 |
 | `src/js/50-kpi.js` | buildKPIReport | 91 |
 | `src/js/52-sellers-report.js` | buildSellersReport | 64 |
 | `src/js/55-lowstock.js` | updateLowStockBell، buildHeatmap، exportBackup | 242 |
-| `src/js/60-settings.js` | saveSettings، renderBranchUsersSettings، شجرة الصلاحيات | 612 |
-| `src/js/65-firebase.js` | initFirebase، Firebase listeners، suspend/cashier | 1065 |
+| `src/js/60-settings.js` | saveSettings، renderBranchUsersSettings، شجرة الصلاحيات | 730 |
+| `src/js/65-firebase.js` | initFirebase، Firebase listeners، suspend/cashier | 1094 |
 | `src/js/70-branches.js` | switchBranch، openTransferModal، getTransfers | 255 |
 | `src/js/75-purchases.js` | suppliers، purchase orders، receive goods | 546 |
 | `src/js/80-hr-targets.js` | HR targets، commission، الراتب الأساسي | 145 |
@@ -111,7 +111,7 @@ grep -oE '^function [a-zA-Z0-9_]+|^const [a-zA-Z0-9_]+ = ' src/js/الملف.js
 | `src/js/93-accounting.js` | P&L، cash flow، accounting page | 513 |
 | `src/js/94-vlookup.js` | VLOOKUP reports، category reports | 360 |
 | `src/js/95-warehouse.js` | warehouse page، warehouse transfers | 208 |
-| `src/js/96-approvals.js` | price-change approvals، suspended tabs | 373 |
+| `src/js/96-approvals.js` | price-change approvals، suspended tabs | 470 |
 | `src/js/97-expense-requests.js` | expense approval requests | 100 |
 | `src/js/98-leave-requests.js` | leave & permission requests | 129 |
 | `src/js/100-home.js` | home page، renderHomeIcons، fingerprint import | 280 |
@@ -174,6 +174,17 @@ grep -oE '^function [a-zA-Z0-9_]+|^const [a-zA-Z0-9_]+ = ' src/js/الملف.js
 
 ⚠️ **متفوّضش الخطوة دي لوكيل تاني.** في 2026-08-13 اتجربت مرتين مع وكيل متصفح: الأولى اختبر القواعد **القديمة** (ماكانش لصق الملف) وفسّر الفشل بإنه "قيد في الأداة"؛ التانية **كتب نسخة مختصرة من القواعد من دماغه** (53 سطر بدل 350) واختبرها وقال "كله تمام" — لو اتنشرت كانت هتمسح كل حماية في النظام. `test-rules.bat` موجود عشان الخطوة دي متتفوّضش أصلاً.
 4. بعد التأكد، انشر، وبعدها افتح التطبيق وتأكد إن البيانات بترجع تظهر.
+
+### مجموعات المستند-لكل-سجل (النمط المهم)
+تلات مجموعات مبنية على نفس الفكرة: **قاعدة Firestore بتحكم دوكيومنت كامل، مش عنصر جوه مصفوفة.** فأي حاجة محتاجة قاعدة عليها لازم تبقى دوكيومنت لوحدها.
+
+| المجموعة | ليه دوكيومنت لكل سجل |
+|---|---|
+| `pos_audit/{id}` | append-only حقيقي — `update`/`delete` مرفوضين للكل حتى المالك |
+| `pos_price_approvals/{id}` | كان دوكيومنت مشترك، فأي حساب معاه role كان يقدر يكتب `status:'approved'` على طلبه هو. دلوقتي القاعدة بتقول: صاحب الطلب مش هو اللي يعتمده |
+| `pos_stocktakes/{id}` | تسوية الجرد. الإنشاء لازم يبقى `status:'pending'`، الأدمن يعدّل وهي معلّقة، **والمالك بس** ينقلها لـ `applied`/`cancelled` — وأرقام العدّ مثبّتة وقت الاعتماد |
+
+⚠️ لو محتاج تفرض قاعدة على «سجل» جوه مصفوفة، القاعدة مش هتقدر. اقسم التخزين الأول.
 
 ⚠️ **مجموعة غريبة في `firestore.rules` — متمسحهاش**: `china_pricing_prices/{source}` (سطر ~272) **مالهاش أي علاقة بـ VOODO** — دي مشروع جانبي منفصل (حاسبة تسعير) بيشارك نفس مشروع Firebase عشان الخطة المجانية بتسمح بمشروع واحد بس. معزولة تماماً: مفيش تداخل مع أي مجموعة أو قاعدة بتاعة VOODO، ومحمية بـ `signedIn()`. لو مسحتها هتكسر التطبيق التاني من غير ما تلاحظ.
 
