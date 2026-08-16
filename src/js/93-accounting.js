@@ -21,7 +21,12 @@ function renderAccountingPage() {
     const opts = [];
     for (let i=0; i<12; i++) {
       const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
-      const v = d.toISOString().slice(0,7);
+      // toISOString() here read the UTC month of a LOCAL midnight, so every
+      // option was labelled one month later than the value it carried: the
+      // entry reading "أغسطس ٢٠٢٦" selected "2026-07" and the P&L below it
+      // dutifully reported July. Label and value now come from the same
+      // calendar.
+      const v = monthKey(d);
       const l = d.toLocaleString('ar-EG',{year:'numeric',month:'long'});
       opts.push(`<option value="${v}">${l}</option>`);
     }
@@ -31,7 +36,7 @@ function renderAccountingPage() {
 }
 
 function getAccMonth() {
-  return document.getElementById('accMonthFilter')?.value || new Date().toISOString().slice(0,7);
+  return document.getElementById("accMonthFilter")?.value || monthKey(new Date());
 }
 
 function renderAccTab(tab) {

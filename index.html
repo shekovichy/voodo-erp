@@ -3230,6 +3230,26 @@ function _setLocalSales(v) {
 }
 function _localSalesTs() { return DB.g('sales_ts', 0); }
 
+// ── Month keys must use the SHOP's calendar, not UTC ────────────────
+// A sale stores `date: new Date().toISOString()` — correct to store, wrong to
+// slice. Cairo runs UTC+2/+3, so 01:30 on the 1st of a month is 22:30 on the
+// previous day in UTC, and `date.slice(0,7)` filed it under the previous
+// month. Anything that buckets or filters by month has to go through here.
+//
+// Only for ISO timestamps. Fields typed into a date input (expenses,
+// attendance) are already 'YYYY-MM-DD' in local terms — slicing THOSE is
+// correct and must stay as it is.
+function monthKey(d) {
+  const x = (d instanceof Date) ? d : new Date(d);
+  if (isNaN(x.getTime())) return '';
+  return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0');
+}
+function todayKey(d) {
+  const x = (d instanceof Date) ? d : (d ? new Date(d) : new Date());
+  if (isNaN(x.getTime())) return '';
+  return monthKey(x) + '-' + String(x.getDate()).padStart(2, '0');
+}
+
 const getSales = () => _salesCache;
 function addSale(sale) {
   _salesCache.push(sale);
