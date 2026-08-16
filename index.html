@@ -3201,9 +3201,22 @@ function adjustStock(deltas, branch) {
       tx.set(ref, { items, updatedAt: Date.now(), branchId: b });
     })
   ).catch(e => {
-    console.error('Firestore adjustStock (falling back to direct write):', e);
-    ref.set({ items: _invCacheByBranch[b], updatedAt: Date.now(), branchId: b })
-       .catch(e2 => console.error('Firestore adjustStock fallback:', e2));
+    // ⚠️ NO fallback write here, deliberately. This used to `set()` the whole
+    // document from this device's cache when the transaction failed — which
+    // destroyed every sale, stock-take and edit any OTHER device had committed
+    // in the meantime. A failed transaction means "I don't know the current
+    // state"; answering that by overwriting the state with a stale copy is the
+    // worst possible response, and it was silent.
+    //
+    // Firestore already retries a contended transaction internally, so getting
+    // here means permission, or the network being gone long enough to give up.
+    // Either way the right move is to leave the server alone and let the next
+    // snapshot deliver the truth — this device's optimistic local copy is
+    // corrected rather than imposed.
+    console.error('Firestore adjustStock failed (no fallback write):', e);
+    if (typeof showToast === 'function') {
+      showToast('⚠️ تعديل المخزون ما وصلش للسحابة — راجع الكمية بعد ما النت يرجع');
+    }
   });
 }
 
@@ -8421,6 +8434,18 @@ function _bwNormalizeName(s) {
   return String(s || '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().toLowerCase();
 }
 
+// Records that THIS branch was cleared on purpose and when. Synced through
+// settings, so every other device sees it. Without this, a device still
+// holding the branch's data locally re-uploads it the moment it reconnects
+// and finds the cloud copy gone — the re-seed path that exists so a device
+// that has never synced doesn't start empty (see _reseedBlockedFor in
+// 65-firebase.js) cannot otherwise tell a deletion from a fresh install.
+function _markBranchWiped(branchId) {
+  _settingsCache.branchWipedAt = Object.assign({}, _settingsCache.branchWipedAt || {});
+  _settingsCache.branchWipedAt[branchId] = Date.now();
+  saveSettingsCache();
+}
+
 function _bwConfirm(branchId, what, countText, run) {
   if (!isRealOwner) { showMsg('bwMsg', 'حذف بيانات الفرع للمالك فقط', 'danger'); return; }
   const name = getBranchName(branchId);
@@ -8451,6 +8476,7 @@ function wipeBranchInventory() {
     // attempted still exists.
     addAuditLog('branch.wipe.inventory',
       'حذف مخزون فرع ' + getBranchName(b) + ' — ' + inv.length + ' صنف بقيمة ' + fmt(value) + ' ج', b);
+    _markBranchWiped(b);
 
     _invCacheByBranch[b] = [];
     DB.s('pos_inv_' + b, []);
@@ -8475,6 +8501,7 @@ function wipeBranchSales() {
   _bwConfirm(b, 'مبيعات', sales.length + ' فاتورة بإجمالي ' + fmt(rev) + ' ج (آخر 12 شهر)', function () {
     addAuditLog('branch.wipe.sales',
       'حذف مبيعات فرع ' + getBranchName(b) + ' — ' + sales.length + ' فاتورة بإجمالي ' + fmt(rev) + ' ج', b);
+    _markBranchWiped(b);
 
     // ⚠️ 12, not 24. The listener only caches 12 months (`_saMonths` in
     // 65-firebase.js), so getSales() — and therefore the count the owner just
@@ -8762,7 +8789,12 @@ function initFirebase() {
             // the settings listener hasn't delivered resetAt yet when this
             // fires, it reads as 0 and doesn't block — narrow race, not
             // worth blocking inventory sync on settings sync order.
-            const resetAt = _settingsCache.resetAt || 0;
+            // Includes a per-branch wipe, not just the global reset — see
+            // _reseedBlockedFor() below. Emptying rather than deleting the
+            // document already keeps wipeBranchInventory out of this branch of
+            // the code, but that is one line away from changing.
+            const resetAt = Math.max(_settingsCache.resetAt || 0,
+                                     (_settingsCache.branchWipedAt || {})[b] || 0);
             const local = (_localInvTs(b) < resetAt) ? [] : (b === 'b1'
               ? (DB.g('pos_inv_b1', null) || DB.g('inv', []))
               : DB.g(`pos_inv_${b}`, [])
@@ -9070,8 +9102,19 @@ function initFirebase() {
     // re-seed here could resurrect this device's entire pre-reset sales
     // history the moment _resetAllConfirmed() (60-settings.js) deletes the
     // last 24 months of branch docs and this device reconnects.
+    // An empty/missing cloud document means one of two opposite things: a
+    // device that has never synced (re-seed it), or data someone deleted on
+    // purpose (leave it deleted). Only a timestamp can tell them apart.
+    // resetAt covers the full reset; branchWipedAt covers wiping ONE branch
+    // (wipeBranchSales, 60-settings.js) — without it, any device still holding
+    // that branch's sales locally would upload them straight back the moment it
+    // reconnected, and the owner's deletion would quietly undo itself.
+    function _reseedBlockedFor(b) {
+      const wiped = (_settingsCache.branchWipedAt || {})[b] || 0;
+      return Math.max(_settingsCache.resetAt || 0, wiped);
+    }
     function _localSalesFallbackForReseed(month, b) {
-      if (_localSalesTs() < (_settingsCache.resetAt || 0)) return [];
+      if (_localSalesTs() < _reseedBlockedFor(b)) return [];
       return _localSalesFallback(month, b);
     }
     function _refreshSalesViews() {

@@ -382,9 +382,22 @@ function adjustStock(deltas, branch) {
       tx.set(ref, { items, updatedAt: Date.now(), branchId: b });
     })
   ).catch(e => {
-    console.error('Firestore adjustStock (falling back to direct write):', e);
-    ref.set({ items: _invCacheByBranch[b], updatedAt: Date.now(), branchId: b })
-       .catch(e2 => console.error('Firestore adjustStock fallback:', e2));
+    // ⚠️ NO fallback write here, deliberately. This used to `set()` the whole
+    // document from this device's cache when the transaction failed — which
+    // destroyed every sale, stock-take and edit any OTHER device had committed
+    // in the meantime. A failed transaction means "I don't know the current
+    // state"; answering that by overwriting the state with a stale copy is the
+    // worst possible response, and it was silent.
+    //
+    // Firestore already retries a contended transaction internally, so getting
+    // here means permission, or the network being gone long enough to give up.
+    // Either way the right move is to leave the server alone and let the next
+    // snapshot deliver the truth — this device's optimistic local copy is
+    // corrected rather than imposed.
+    console.error('Firestore adjustStock failed (no fallback write):', e);
+    if (typeof showToast === 'function') {
+      showToast('⚠️ تعديل المخزون ما وصلش للسحابة — راجع الكمية بعد ما النت يرجع');
+    }
   });
 }
 

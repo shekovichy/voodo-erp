@@ -657,6 +657,18 @@ function _bwNormalizeName(s) {
   return String(s || '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().toLowerCase();
 }
 
+// Records that THIS branch was cleared on purpose and when. Synced through
+// settings, so every other device sees it. Without this, a device still
+// holding the branch's data locally re-uploads it the moment it reconnects
+// and finds the cloud copy gone — the re-seed path that exists so a device
+// that has never synced doesn't start empty (see _reseedBlockedFor in
+// 65-firebase.js) cannot otherwise tell a deletion from a fresh install.
+function _markBranchWiped(branchId) {
+  _settingsCache.branchWipedAt = Object.assign({}, _settingsCache.branchWipedAt || {});
+  _settingsCache.branchWipedAt[branchId] = Date.now();
+  saveSettingsCache();
+}
+
 function _bwConfirm(branchId, what, countText, run) {
   if (!isRealOwner) { showMsg('bwMsg', 'حذف بيانات الفرع للمالك فقط', 'danger'); return; }
   const name = getBranchName(branchId);
@@ -687,6 +699,7 @@ function wipeBranchInventory() {
     // attempted still exists.
     addAuditLog('branch.wipe.inventory',
       'حذف مخزون فرع ' + getBranchName(b) + ' — ' + inv.length + ' صنف بقيمة ' + fmt(value) + ' ج', b);
+    _markBranchWiped(b);
 
     _invCacheByBranch[b] = [];
     DB.s('pos_inv_' + b, []);
@@ -711,6 +724,7 @@ function wipeBranchSales() {
   _bwConfirm(b, 'مبيعات', sales.length + ' فاتورة بإجمالي ' + fmt(rev) + ' ج (آخر 12 شهر)', function () {
     addAuditLog('branch.wipe.sales',
       'حذف مبيعات فرع ' + getBranchName(b) + ' — ' + sales.length + ' فاتورة بإجمالي ' + fmt(rev) + ' ج', b);
+    _markBranchWiped(b);
 
     // ⚠️ 12, not 24. The listener only caches 12 months (`_saMonths` in
     // 65-firebase.js), so getSales() — and therefore the count the owner just

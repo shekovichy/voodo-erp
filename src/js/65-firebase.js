@@ -263,7 +263,12 @@ function initFirebase() {
             // the settings listener hasn't delivered resetAt yet when this
             // fires, it reads as 0 and doesn't block — narrow race, not
             // worth blocking inventory sync on settings sync order.
-            const resetAt = _settingsCache.resetAt || 0;
+            // Includes a per-branch wipe, not just the global reset — see
+            // _reseedBlockedFor() below. Emptying rather than deleting the
+            // document already keeps wipeBranchInventory out of this branch of
+            // the code, but that is one line away from changing.
+            const resetAt = Math.max(_settingsCache.resetAt || 0,
+                                     (_settingsCache.branchWipedAt || {})[b] || 0);
             const local = (_localInvTs(b) < resetAt) ? [] : (b === 'b1'
               ? (DB.g('pos_inv_b1', null) || DB.g('inv', []))
               : DB.g(`pos_inv_${b}`, [])
@@ -571,8 +576,19 @@ function initFirebase() {
     // re-seed here could resurrect this device's entire pre-reset sales
     // history the moment _resetAllConfirmed() (60-settings.js) deletes the
     // last 24 months of branch docs and this device reconnects.
+    // An empty/missing cloud document means one of two opposite things: a
+    // device that has never synced (re-seed it), or data someone deleted on
+    // purpose (leave it deleted). Only a timestamp can tell them apart.
+    // resetAt covers the full reset; branchWipedAt covers wiping ONE branch
+    // (wipeBranchSales, 60-settings.js) — without it, any device still holding
+    // that branch's sales locally would upload them straight back the moment it
+    // reconnected, and the owner's deletion would quietly undo itself.
+    function _reseedBlockedFor(b) {
+      const wiped = (_settingsCache.branchWipedAt || {})[b] || 0;
+      return Math.max(_settingsCache.resetAt || 0, wiped);
+    }
     function _localSalesFallbackForReseed(month, b) {
-      if (_localSalesTs() < (_settingsCache.resetAt || 0)) return [];
+      if (_localSalesTs() < _reseedBlockedFor(b)) return [];
       return _localSalesFallback(month, b);
     }
     function _refreshSalesViews() {
