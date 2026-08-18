@@ -1116,7 +1116,7 @@ body.warehouse-mode #cartFab {
         <div class="card">
           <div class="table-wrap">
             <table>
-              <thead><tr><th>الكود</th><th>الاسم</th><th>الفئة</th><th>المجموعة</th><th>التكلفة</th><th>السعر قبل</th><th>السعر بعد</th><th>الكمية</th><th>الحالة</th><th>إجراءات</th></tr></thead>
+              <thead id="inventoryHead"></thead>
               <tbody id="inventoryBody"></tbody>
             </table>
           </div>
@@ -5832,6 +5832,75 @@ function invPageBranch() {
   return (ibf && ibf.value) || currentBranch;
 }
 
+
+// ── Sorting ─────────────────────────────────────────────────────────
+// 2,900 products across the catalogue and no way to order them: finding the
+// most expensive item, the deepest stock or anything without a cost meant
+// scrolling. Category and family already had filters; everything else needed
+// an ordering, so every column that holds a value is sortable by clicking it.
+//
+// Numbers sort numerically and text by Arabic collation — 'ب' after 'ا', which
+// a plain > comparison gets wrong. Blank and missing values always sink to the
+// bottom whichever direction is chosen, since "products with no cost" is a
+// thing you go looking for, not noise you want mixed into the middle.
+const INV_COLS = [
+  { key: 'code',        label: 'الكود',      type: 'text' },
+  { key: 'name',        label: 'الاسم',      type: 'text' },
+  { key: 'category',    label: 'الفئة',      type: 'text' },
+  { key: 'family',      label: 'المجموعة',   type: 'text' },
+  { key: 'cost',        label: 'التكلفة',    type: 'num'  },
+  { key: 'priceBefore', label: 'السعر قبل',  type: 'num'  },
+  { key: 'priceAfter',  label: 'السعر بعد',  type: 'num'  },
+  { key: 'qty',         label: 'الكمية',     type: 'num'  },
+];
+let _invSort = { key: null, dir: 1 };   // dir: 1 تصاعدي، -1 تنازلي
+
+function sortInventory(key) {
+  // Third click on the same column clears the sort and restores the original
+  // order, so there is a way back to "as imported" without reloading.
+  if (_invSort.key !== key)      _invSort = { key, dir: 1 };
+  else if (_invSort.dir === 1)   _invSort.dir = -1;
+  else                           _invSort = { key: null, dir: 1 };
+  renderInventory();
+}
+
+function _renderInvHead() {
+  const head = document.getElementById('inventoryHead');
+  if (!head) return;
+  const cells = INV_COLS.map(function (c) {
+    const on  = _invSort.key === c.key;
+    const ind = on ? (_invSort.dir === 1 ? ' ▲' : ' ▼') : '';
+    return '<th onclick="sortInventory(&quot;' + c.key + '&quot;)" title="اضغط للترتيب"'
+      + ' style="cursor:pointer;user-select:none;' + (on ? 'color:#93c5fd;' : '') + '">'
+      + c.label + '<span style="font-size:10px;">' + ind + '</span></th>';
+  }).join('');
+  head.innerHTML = '<tr>' + cells + '<th>الحالة</th><th>إجراءات</th></tr>';
+}
+
+function _applyInvSort(items) {
+  if (!_invSort.key) return items;
+  const col = INV_COLS.find(function (c) { return c.key === _invSort.key; });
+  if (!col) return items;
+  const d = _invSort.dir;
+  return items.slice().sort(function (a, z) {
+    let av = a[col.key], zv = z[col.key];
+    if (col.type === 'num') {
+      av = parseFloat(av); zv = parseFloat(zv);
+      const an = isNaN(av), zn = isNaN(zv);
+      if (an && zn) return 0;
+      if (an) return 1;              // الفاضي تحت دايماً
+      if (zn) return -1;
+      return (av - zv) * d;
+    }
+    av = (av || '').toString().trim();
+    zv = (zv || '').toString().trim();
+    if (!av && !zv) return 0;
+    if (!av) return 1;
+    if (!zv) return -1;
+    return av.localeCompare(zv, 'ar') * d;
+  });
+}
+
 function renderInventory() {
   // Stock-taking is an admin-only job by policy. Until now that rested
   // entirely on the inventory tab itself being hidden from cashiers by the
@@ -5877,6 +5946,9 @@ function renderInventory() {
   const _ff = document.getElementById('invFamFilter');
   if (_cf) { const _cv=_cf.value; const _cats=[...new Set(inv.map(x=>x.category).filter(Boolean))].sort(); _cf.innerHTML='<option value="">كل الفئات</option>'+_cats.map(c=>`<option value="${escHtml(c)}" ${c===_cv?'selected':''}>${escHtml(c)}</option>`).join(''); _cf.value=_cv; }
   if (_ff) { const _fv=_ff.value; const _fams=[...new Set(inv.map(x=>x.family).filter(Boolean))].sort(); _ff.innerHTML='<option value="">كل المجموعات</option>'+_fams.map(f=>`<option value="${escHtml(f)}" ${f===_fv?'selected':''}>${escHtml(f)}</option>`).join(''); _ff.value=_fv; }
+
+  _renderInvHead();
+  items = _applyInvSort(items);
 
   document.getElementById('inventoryBody').innerHTML = !items.length
     ? '<tr><td colspan="10" class="text-center text-muted" style="padding:40px;">لا توجد منتجات</td></tr>'
