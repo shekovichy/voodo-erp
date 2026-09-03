@@ -7,3 +7,8 @@ ui-debug.log
 # وثائق تخطيط شخصية — محلية عن قصد (شوف 845a756)
 تقارير السيستم*.md
 مقارنة شاملة*.md
+
+# WhatsApp bot (functions/) — تبعيات وأسرار محلية
+functions/node_modules/
+functions/.env
+functions/.env.*

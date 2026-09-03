@@ -1,0 +1,16 @@
+{
+  "name": "voodo-whatsapp-bot",
+  "private": true,
+  "description": "المرحلة 1: رد تلقائي على واتساب بأسعار وتوفر المنتجات — بدون AI، بحث مباشر في مخزون Firestore. سيرفر منفصل تماماً عن تطبيق الكاشير (src/) — نفس مشروع Firebase بس.",
+  "engines": { "node": "20" },
+  "main": "index.js",
+  "scripts": {
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log",
+    "shell": "firebase functions:shell"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "firebase-functions": "^5.1.0"
+  }
+}
