@@ -314,6 +314,28 @@ async function main() {
     assertFails(setDoc(doc(admin(), 'pos_audit/x1'), { a: 1 }).then(() =>
       setDoc(doc(admin(), 'pos_audit/x1'), { a: 2 }))));
 
+  console.log('\n\x1b[1mتعليقات الزوّار (Talk to us) — Ship To Sell / china_pricing_feedback\x1b[0m');
+  const visitor  = () => env.authenticatedContext('uid_visitor',  {}).firestore();
+  const visitor2 = () => env.authenticatedContext('uid_visitor2', {}).firestore();
+  await check('زائر (مسجل دخول مجهول) يقدر يبعت رسالة',
+    assertSucceeds(setDoc(doc(visitor(), 'china_pricing_feedback/f1'),
+      { message: 'فكرة حلوة', name: '', createdAt: Date.now() })));
+  await check('⭐ غير مسجل دخول خالص مايقدرش يبعت',
+    assertFails(setDoc(doc(anon(), 'china_pricing_feedback/f2'), { message: 'x', createdAt: Date.now() })));
+  await env.withSecurityRulesDisabled(async ctx => {
+    await setDoc(doc(ctx.firestore(), 'china_pricing_feedback/f3'), { message: 'رأي زائر تاني', createdAt: Date.now() });
+  });
+  await check('⭐ زائر مايقدرش يقرا رسالة زائر تاني',
+    assertFails(getDoc(doc(visitor2(), 'china_pricing_feedback/f3'))));
+  await check('⭐ ولا حتى رسالته هو بعد ما بعتها (create بس، مش read)',
+    assertFails(getDoc(doc(visitor(), 'china_pricing_feedback/f1'))));
+  await check('المالك بس يقدر يقرا الرسايل',
+    assertSucceeds(getDoc(doc(owner(), 'china_pricing_feedback/f3'))));
+  await check('⭐ حتى المالك مايعدلش رسالة بعد إرسالها (append-only)',
+    assertFails(setDoc(doc(owner(), 'china_pricing_feedback/f3'), { message: 'معدّلة' })));
+  await check('⭐ ولا يمسحها',
+    assertFails(require('firebase/firestore').deleteDoc(doc(owner(), 'china_pricing_feedback/f3'))));
+
   console.log('\n' + '─'.repeat(52));
   if (fail) {
     console.log('\x1b[31m\x1b[1m  ' + fail + ' فشل\x1b[0m · ' + pass + ' نجح');

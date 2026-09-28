@@ -494,6 +494,21 @@ service cloud.firestore {
       allow read, write: if signedIn();
     }
 
+    // ── CHINA PRICING CALCULATOR — VISITOR FEEDBACK ("Talk to us") ──
+    // Same isolation rationale as china_pricing_prices above — unrelated side
+    // project, shares this Firebase project only for the free tier. Visitors
+    // submit anonymously (create-only — no read), so one visitor can never
+    // browse another's message; only the real owner account (isOwner(), the
+    // exact same email/password login used for voodo-erp) can read them
+    // back, from that app's hidden #admin view. Append-only like pos_audit —
+    // a raw message someone sent in should never be silently editable or
+    // deletable from a client, owner included.
+    match /china_pricing_feedback/{id} {
+      allow create: if signedIn();
+      allow read: if isOwner();
+      allow update, delete: if false;
+    }
+
     // ── Deny everything else ──────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;
